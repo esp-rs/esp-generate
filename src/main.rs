@@ -192,6 +192,14 @@ impl Chip {
         }
         .to_string()
     }
+
+    pub fn architecture_name(&self) -> String {
+        match self {
+            Chip::Esp32 | Chip::Esp32S2 | Chip::Esp32S3 => "xtensa",
+            _ => "riscv",
+        }
+        .to_string()
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -217,7 +225,7 @@ fn main() {
         process::exit(-1);
     }
 
-    let selected = if !args.headless {
+    let mut selected = if !args.headless {
         let repository = tui::Repository::new(OPTIONS, &args.option);
         // TUI stuff ahead
         let terminal = tui::init_terminal().unwrap();
@@ -236,6 +244,8 @@ fn main() {
     } else {
         args.option.clone()
     };
+
+    selected.push(args.chip.architecture_name());
 
     let mut variables = vec![
         ("project-name".to_string(), args.name.clone()),

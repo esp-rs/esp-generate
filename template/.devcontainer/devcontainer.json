@@ -1,0 +1,49 @@
+//INCLUDEFILE dev-container
+{
+  "name": "{{ crate_name }}",
+  // Select between image and build properties to pull or build the image.
+  // "image": "docker.io/espressif/idf-rust:{{ mcu }}_latest",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "CONTAINER_USER": "esp",
+      "CONTAINER_GROUP": "esp",
+      "ESP_BOARD": "{{ mcu }}"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "editor.formatOnPaste": true,
+        "editor.formatOnSave": true,
+        "editor.formatOnSaveMode": "file",
+        "editor.formatOnType": true,
+        "lldb.executable": "/usr/bin/lldb",
+        "files.watcherExclude": {
+          "**/target/**": true
+        },
+        "rust-analyzer.checkOnSave.command": "clippy",
+        "rust-analyzer.checkOnSave.allTargets": false,
+        "[rust]": {
+          "editor.defaultFormatter": "rust-lang.rust-analyzer"
+        }
+      },
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "serayuzgur.crates",
+        "mutantdino.resourcemonitor",
+        "yzhang.markdown-all-in-one",
+        "ms-vscode.cpptools",
+        "actboy168.tasks",
+        "Wokwi.wokwi-vscode"
+      ]
+    }
+  },
+  "forwardPorts": [
+    8000,
+    3333
+  ],
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/esp/{{ crate_name }},type=bind,consistency=cached",
+  "workspaceFolder": "/home/esp/{{ crate_name }}"
+}

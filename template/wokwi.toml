@@ -1,0 +1,6 @@
+#INCLUDEFILE wokwi
+[wokwi]
+version = 1
+gdbServerPort = 3333
+elf = "target/{{ rust_target }}/debug/{{ project-name }}"
+firmware = "target/{{ rust_target }}/debug/{{ project-name }}"

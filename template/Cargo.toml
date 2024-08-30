@@ -1,0 +1,97 @@
+[package]
+#REPLACE project-name project-name
+name = "project-name"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+esp-backtrace = { version = "0.13.0", features = [
+    #REPLACE esp32c6 mcu
+    "esp32c6",
+    "exception-handler",
+    "panic-handler",
+    #IF !probe-rs
+    "println",
+    #ENDIF
+    #IF probe-rs
+    #+"defmt",
+    #ENDIF
+]}
+
+esp-hal = { version = "0.19.0", features = [
+    #REPLACE esp32c6 mcu
+    "esp32c6",
+    #IF probe-rs
+    #+"defmt",
+    #ENDIF
+    #IF embassy
+    "async",
+    #ENDIF
+] }
+#IF !probe-rs
+#REPLACE esp32c6 mcu
+esp-println = { version = "0.10.0", features = ["esp32c6", "log"] }
+#ENDIF
+#IF !probe-rs
+log = { version = "0.4.21" }
+#ENDIF
+#IF alloc
+esp-alloc = { version = "0.4.0" }
+#ENDIF
+#IF wifi
+embedded-io = "0.6.1"
+esp-wifi = { version = "0.7.1", default-features=false, features = [
+    #REPLACE esp32c6 mcu
+    "esp32c6",
+    "phy-enable-usb",
+    "utils",
+    "wifi",
+    #IF probe-rs
+    #+"defmt",
+    #ENDIF
+    #IF !probe-rs
+    "log",
+    #ENDIF
+] }
+heapless = { version = "0.8.0", default-features = false }
+smoltcp = { version = "0.11.0", default-features = false, features = [
+    "medium-ethernet",
+    "proto-dhcpv4",
+    "proto-igmp",
+    "proto-ipv4",
+    "socket-dhcpv4",
+    "socket-icmp",
+    "socket-raw",
+    "socket-tcp",
+    "socket-udp",
+] }
+#ENDIF
+#IF probe-rs
+#+defmt            = "0.3.8"
+#+defmt-rtt        = "0.4.1"
+#ENDIF
+#IF embassy
+embassy-executor = { version = "0.5.0",  features = [
+    #IF probe-rs
+    "defmt"
+    #ENDIF
+] }
+embassy-time     = { version = "0.3.1",  features = ["generic-queue-8"] }
+#REPLACE esp32c6 mcu
+esp-hal-embassy  = { version = "0.2.0",  features = ["esp32c6"] }
+static_cell      = { version = "2.1.0",  features = ["nightly"] }
+#ENDIF
+
+[profile.dev]
+# Rust debug is too slow.
+# For debug builds always builds with some optimization
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1        # LLVM can perform better optimizations using a single thread
+debug = 2
+debug-assertions = false
+incremental = false
+lto = 'fat'
+opt-level = 's'
+overflow-checks = false

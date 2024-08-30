@@ -1,0 +1,14 @@
+[package]
+name = "esp-generate"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.3.0", features = ["derive"] }
+
+ratatui = { version = "0.26.1", features = ["crossterm"] }
+crossterm = { version = "0.27" }
+
+[build-dependencies]
+walkdir = "2.5.0"
+quote = "1.0.37"

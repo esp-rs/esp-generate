@@ -1,0 +1,3 @@
+**/target
+src/template_files.rs
+template/Cargo.lock

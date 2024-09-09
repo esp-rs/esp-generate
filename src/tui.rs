@@ -12,17 +12,24 @@ use super::GeneratorOptionItem;
 const TODO_HEADER_BG: Color = tailwind::BLUE.c950;
 const NORMAL_ROW_COLOR: Color = tailwind::SLATE.c950;
 const SELECTED_STYLE_FG: Color = tailwind::BLUE.c300;
+const DISABLED_STYLE_FG: Color = tailwind::GRAY.c600;
 const TEXT_COLOR: Color = tailwind::SLATE.c200;
 
 pub struct Repository {
+    chip: super::Chip,
     options: &'static [GeneratorOptionItem],
     path: Vec<usize>,
     selected: Vec<String>,
 }
 
 impl Repository {
-    pub fn new(options: &'static [GeneratorOptionItem], selected: &[String]) -> Self {
+    pub fn new(
+        chip: super::Chip,
+        options: &'static [GeneratorOptionItem],
+        selected: &[String],
+    ) -> Self {
         Self {
+            chip,
             options,
             path: Vec::new(),
             selected: Vec::from(selected),
@@ -51,14 +58,45 @@ impl Repository {
         match current {
             GeneratorOptionItem::Category(_) => todo!(),
             GeneratorOptionItem::Option(option) => {
+                if !option.chips.is_empty() && !option.chips.contains(&self.chip) {
+                    return;
+                }
+
                 let name = option.name;
 
                 match self.selected.iter().position(|v| v == name) {
                     None => {
                         self.selected.push(name.to_string());
+                        // for enable in option.enables {
+                        //     if !self.selected.contains(&enable.to_string()) {
+                        //         self.selected.push(enable.to_string());
+                        //     }
+                        // }
+                        // for disable in option.disables {
+                        //     if self.selected.contains(&disable.to_string()) {
+                        //         let idx = self.selected.iter().position(|v| v == disable).unwrap();
+                        //         self.selected.remove(idx);
+                        //     }
+                        // }
                     }
                     Some(i) => {
                         self.selected.remove(i);
+                    }
+                }
+
+                let currently_selected = self.selected.clone();
+                for option in currently_selected {
+                    let option = find_option(option, self.options).unwrap();
+                    for enable in option.enables {
+                        if !self.selected.contains(&enable.to_string()) {
+                            self.selected.push(enable.to_string());
+                        }
+                    }
+                    for disable in option.disables {
+                        if self.selected.contains(&disable.to_string()) {
+                            let idx = self.selected.iter().position(|v| v == disable).unwrap();
+                            self.selected.remove(idx);
+                        }
                     }
                 }
             }
@@ -84,26 +122,48 @@ impl Repository {
         "".to_string()
     }
 
-    fn get_current_level_desc(&self) -> Vec<String> {
+    fn get_current_level_desc(&self) -> Vec<(bool, String)> {
         self.current_level()
             .iter()
             .map(|v| {
-                format!(
-                    " {} {}",
-                    if self.selected.contains(&v.name()) {
-                        "✅"
-                    } else {
-                        if v.is_category() {
-                            "▶️"
+                (
+                    v.chips().is_empty() || v.chips().contains(&self.chip),
+                    format!(
+                        " {} {}",
+                        if self.selected.contains(&v.name()) {
+                            "✅"
                         } else {
-                            "  "
-                        }
-                    },
-                    v.title(),
+                            if v.is_category() {
+                                "▶️"
+                            } else {
+                                "  "
+                            }
+                        },
+                        v.title(),
+                    ),
                 )
             })
             .collect()
     }
+}
+
+fn find_option(
+    option: String,
+    options: &'static [super::GeneratorOptionItem],
+) -> Option<&'static super::GeneratorOption> {
+    for item in options {
+        match item {
+            GeneratorOptionItem::Category(category) => {
+                return find_option(option, category.options)
+            }
+            GeneratorOptionItem::Option(item) => {
+                if item.name == option {
+                    return Some(item);
+                }
+            }
+        }
+    }
+    None
 }
 
 pub fn init_terminal() -> std::io::Result<Terminal<impl Backend>> {
@@ -137,7 +197,10 @@ impl App {
 }
 
 impl App {
-    pub fn run(&mut self, mut terminal: Terminal<impl Backend>) -> std::io::Result<Option<Vec<String>>> {
+    pub fn run(
+        &mut self,
+        mut terminal: Terminal<impl Backend>,
+    ) -> std::io::Result<Option<Vec<String>>> {
         loop {
             self.draw(&mut terminal)?;
 
@@ -239,7 +302,13 @@ impl App {
             .repository
             .get_current_level_desc()
             .into_iter()
-            .map(|v| ListItem::new(v))
+            .map(|v| {
+                ListItem::new(v.1).style(if v.0 {
+                    Style::default()
+                } else {
+                    Style::default().fg(DISABLED_STYLE_FG)
+                })
+            })
             .collect();
 
         // Create a List from all list items and highlight the currently selected one

@@ -9,6 +9,9 @@ mod tui;
 pub struct GeneratorOption {
     name: &'static str,
     display_name: &'static str,
+    enables: &'static [&'static str],
+    disables: &'static [&'static str],
+    chips: &'static [Chip],
 }
 
 #[derive(Clone, Copy)]
@@ -44,28 +47,71 @@ impl GeneratorOptionItem {
             GeneratorOptionItem::Option(_) => false,
         }
     }
+
+    fn chips(&self) -> &'static [Chip] {
+        match self {
+            GeneratorOptionItem::Category(_) => &[],
+            GeneratorOptionItem::Option(option) => option.chips,
+        }
+    }
 }
 
 static OPTIONS: &[GeneratorOptionItem] = &[
     GeneratorOptionItem::Option(GeneratorOption {
         name: "alloc",
         display_name: "Alloc",
+        enables: &[],
+        disables: &[],
+        chips: &[],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "wifi",
         display_name: "Wifi",
+        enables: &["alloc"],
+        disables: &["ble"],
+        chips: &[
+            Chip::Esp32,
+            Chip::Esp32S2,
+            Chip::Esp32S3,
+            Chip::Esp32C2,
+            Chip::Esp32C3,
+            Chip::Esp32C6,
+        ],
+    }),
+    GeneratorOptionItem::Option(GeneratorOption {
+        name: "ble",
+        display_name: "BLE",
+        enables: &["alloc"],
+        disables: &["wifi"],
+        chips: &[
+            Chip::Esp32,
+            Chip::Esp32S3,
+            Chip::Esp32C2,
+            Chip::Esp32C3,
+            Chip::Esp32C6,
+            Chip::Esp32H2,
+        ],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "embassy",
         display_name: "Embassy",
+        enables: &[],
+        disables: &[],
+        chips: &[],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "probe-rs",
         display_name: "Flash via probe-rs, use defmt",
+        enables: &[],
+        disables: &[],
+        chips: &[],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "stack_protector",
         display_name: "Enable stack-smash protection (Nightly only)",
+        enables: &[],
+        disables: &[],
+        chips: &[],
     }),
     GeneratorOptionItem::Category(GeneratorOptionCategory {
         name: "optional",
@@ -74,96 +120,47 @@ static OPTIONS: &[GeneratorOptionItem] = &[
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "wokwi",
                 display_name: "Wokwi Support",
+                enables: &[],
+                disables: &[],
+                chips: &[],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "dev-container",
                 display_name: "Dev-Container Support",
+                enables: &[],
+                disables: &[],
+                chips: &[],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "ci",
                 display_name: "Add GitHub CI",
+                enables: &[],
+                disables: &[],
+                chips: &[],
             }),
         ],
     }),
 ];
 
 static CHIP_VARS: &[(Chip, &[(&'static str, &'static str)])] = &[
-    (
-        Chip::Esp32,
-        &[
-            ("xtensa", "xtensa"),
-            ("rust_target", "xtensa-esp32-none-elf"),
-            (
-                "esp_wifi_timer",
-                "esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG1, &clocks, None).timer0",
-            ),
-        ],
-    ),
-    (
-        Chip::Esp32S2,
-        &[
-            ("xtensa", "xtensa"),
-            ("rust_target", "xtensa-esp32s2-none-elf"),
-            (
-                "esp_wifi_timer",
-                "esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG1, &clocks, None).timer0",
-            ),
-        ],
-    ),
-    (
-        Chip::Esp32S3,
-        &[
-            ("xtensa", "xtensa"),
-            ("rust_target", "xtensa-esp32s3-none-elf"),
-            (
-                "esp_wifi_timer",
-                "esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG1, &clocks, None).timer0",
-            ),
-        ],
-    ),
+    (Chip::Esp32, &[("rust_target", "xtensa-esp32-none-elf")]),
+    (Chip::Esp32S2, &[("rust_target", "xtensa-esp32s2-none-elf")]),
+    (Chip::Esp32S3, &[("rust_target", "xtensa-esp32s3-none-elf")]),
     (
         Chip::Esp32C2,
-        &[
-            ("riscv", "riscv"),
-            ("rust_target", "riscv32imc-unknown-none-elf"),
-            (
-                "esp_wifi_timer",
-                "esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0",
-            ),
-        ],
+        &[("rust_target", "riscv32imc-unknown-none-elf")],
     ),
     (
         Chip::Esp32C3,
-        &[
-            ("riscv", "riscv"),
-            ("rust_target", "riscv32imc-unknown-none-elf"),
-            (
-                "esp_wifi_timer",
-                "esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0",
-            ),
-        ],
+        &[("rust_target", "riscv32imc-unknown-none-elf")],
     ),
     (
         Chip::Esp32C6,
-        &[
-            ("riscv", "riscv"),
-            ("rust_target", "riscv32imac-unknown-none-elf"),
-            (
-                "esp_wifi_timer",
-                "esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0",
-            ),
-        ],
+        &[("rust_target", "riscv32imac-unknown-none-elf")],
     ),
     (
         Chip::Esp32H2,
-        &[
-            ("riscv", "riscv"),
-            ("rust_target", "riscv32imac-unknown-none-elf"),
-            (
-                "esp_wifi_timer",
-                "esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0",
-            ),
-        ],
+        &[("rust_target", "riscv32imac-unknown-none-elf")],
     ),
 ];
 
@@ -225,8 +222,10 @@ fn main() {
         process::exit(-1);
     }
 
+    // TODO verify valid options are given on command line
+
     let mut selected = if !args.headless {
-        let repository = tui::Repository::new(OPTIONS, &args.option);
+        let repository = tui::Repository::new(args.chip, OPTIONS, &args.option);
         // TUI stuff ahead
         let terminal = tui::init_terminal().unwrap();
 

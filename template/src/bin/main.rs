@@ -3,9 +3,14 @@
 #![no_main]
 
 use esp_backtrace as _;
-use esp_hal::{
-    clock::ClockControl, delay::Delay, peripherals::Peripherals, prelude::*, system::SystemControl,
-};
+use esp_hal::{delay::Delay, prelude::*};
+//IF wifi
+use esp_hal::timer::timg::TimerGroup;
+//ENDIF
+//IF ble
+//+ use esp_hal::timer::timg::TimerGroup;
+//ENDIF
+
 //IF probe-rs
 //+ use defmt_rtt as _;
 //+ use defmt::info;
@@ -16,53 +21,45 @@ use log::info;
 
 //IF alloc
 extern crate alloc;
-use core::mem::MaybeUninit;
-
-#[global_allocator]
-static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
-
-fn init_heap() {
-    const HEAP_SIZE: usize = 32 * 1024;
-    static mut HEAP: MaybeUninit<[u8; HEAP_SIZE]> = MaybeUninit::uninit();
-
-    unsafe {
-        ALLOCATOR.init(HEAP.as_mut_ptr() as *mut u8, HEAP_SIZE);
-    }
-}
 //ENDIF
 
 #[entry]
 fn main() -> ! {
-    let peripherals = Peripherals::take();
-    let system = SystemControl::new(peripherals.SYSTEM);
-
-    let clocks = ClockControl::max(system.clock_control).freeze();
-    let delay = Delay::new(&clocks);
-
-    //IF alloc
-    init_heap();
-    //ENDIF
-
     //IF !probe-rs
     esp_println::logger::init_logger_from_env();
     //ENDIF
 
+    //IF alloc
+    esp_alloc::heap_allocator!(72 * 1024);
+    //ENDIF
+
     //IF wifi
-    #[rustfmt::skip]
-    let timer = esp_hal::timer::PeriodicTimer::new(
-        //REPLACE esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0 esp_wifi_timer
-        esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0.into(),
-    );
+    let peripherals = esp_hal::init(esp_hal::Config::default());
+
+    let timg0 = TimerGroup::new(peripherals.TIMG0);
     let _init = esp_wifi::initialize(
         esp_wifi::EspWifiInitFor::Wifi,
-        timer,
+        timg0.timer0,
         esp_hal::rng::Rng::new(peripherals.RNG),
         peripherals.RADIO_CLK,
-        &clocks,
     )
     .unwrap();
     //ENDIF
 
+    //IF ble
+    //+ let peripherals = esp_hal::init(esp_hal::Config::default());
+    //+
+    //+ let timg0 = TimerGroup::new(peripherals.TIMG0);
+    //+ let _init = esp_wifi::initialize(
+    //+         esp_wifi::EspWifiInitFor::Ble,
+    //+ timg0.timer0,
+    //+ esp_hal::rng::Rng::new(peripherals.RNG),
+    //+ peripherals.RADIO_CLK,
+    //+ )
+    //+ .unwrap();
+    //ENDIF
+
+    let delay = Delay::new();
     loop {
         info!("Hello world!");
         delay.delay(500.millis());

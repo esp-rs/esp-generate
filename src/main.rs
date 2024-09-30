@@ -142,7 +142,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     }),
 ];
 
-static CHIP_VARS: &[(Chip, &[(&'static str, &'static str)])] = &[
+static CHIP_VARS: &[(Chip, &[(&str, &str)])] = &[
     (Chip::Esp32, &[("rust_target", "xtensa-esp32-none-elf")]),
     (Chip::Esp32S2, &[("rust_target", "xtensa-esp32s2-none-elf")]),
     (Chip::Esp32S3, &[("rust_target", "xtensa-esp32s3-none-elf")]),
@@ -176,9 +176,9 @@ pub enum Chip {
     Esp32H2,
 }
 
-impl Chip {
-    pub fn to_string(&self) -> String {
-        match self {
+impl std::fmt::Display for Chip {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let chip = match self {
             Chip::Esp32 => "esp32",
             Chip::Esp32S2 => "esp32s2",
             Chip::Esp32S3 => "esp32s3",
@@ -186,10 +186,12 @@ impl Chip {
             Chip::Esp32C3 => "esp32c3",
             Chip::Esp32C6 => "esp32c6",
             Chip::Esp32H2 => "esp32h2",
-        }
-        .to_string()
+        };
+        write!(f, "{}", chip)
     }
+}
 
+impl Chip {
     pub fn architecture_name(&self) -> String {
         match self {
             Chip::Esp32 | Chip::Esp32S2 | Chip::Esp32S3 => "xtensa",
@@ -293,7 +295,7 @@ fn main() {
 fn process_file(
     path: &str,
     contents: &str,
-    options: &Vec<String>,
+    options: &[String],
     variables: &Vec<(String, String)>,
 ) -> Option<String> {
     if path.ends_with("Cargo.lock") {
@@ -319,8 +321,8 @@ fn process_file(
             };
 
             if let Some(cond) = cond {
-                let include_file = if cond.starts_with("!") {
-                    !options.contains(&cond[1..].to_string())
+                let include_file = if let Some(stripped) = cond.strip_prefix("!") {
+                    !options.contains(&stripped.to_string())
                 } else {
                     options.contains(&cond.to_string())
                 };
@@ -363,8 +365,8 @@ fn process_file(
             }
         } else if line.trim().starts_with("#IF ") {
             let cond = line.trim().strip_prefix("#IF ").unwrap();
-            if cond.starts_with("!") {
-                include.push(!options.contains(&cond[1..].to_string()) && *include.last().unwrap());
+            if let Some(stripped) = cond.strip_prefix("!") {
+                include.push(!options.contains(&stripped.to_string()) && *include.last().unwrap());
             } else {
                 include.push(options.contains(&cond.to_string()) && *include.last().unwrap());
             }
@@ -372,8 +374,8 @@ fn process_file(
             include.pop();
         } else if line.trim().starts_with("//IF ") {
             let cond = line.trim().strip_prefix("//IF ").unwrap();
-            if cond.starts_with("!") {
-                include.push(!options.contains(&cond[1..].to_string()) && *include.last().unwrap());
+            if let Some(stripped) = cond.strip_prefix("!") {
+                include.push(!options.contains(&stripped.to_string()) && *include.last().unwrap());
             } else {
                 include.push(options.contains(&cond.to_string()) && *include.last().unwrap());
             }
@@ -391,7 +393,7 @@ fn process_file(
             }
 
             if let (Some(replace), Some(replacement)) = (replace, replacement) {
-                line = line.replace(&replace, &replacement);
+                line = line.replace(&replace, replacement);
             }
 
             res.push_str(&line);

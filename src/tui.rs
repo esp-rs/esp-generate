@@ -132,12 +132,10 @@ impl Repository {
                         " {} {}",
                         if self.selected.contains(&v.name()) {
                             "✅"
+                        } else if v.is_category() {
+                            "▶️"
                         } else {
-                            if v.is_category() {
-                                "▶️"
-                            } else {
-                                "  "
-                            }
+                            "  "
                         },
                         v.title(),
                     ),

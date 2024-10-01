@@ -320,35 +320,37 @@ fn process_file(
     let mut scope = rhai::Scope::new();
     scope.push("options", options.to_vec());
 
-    // Define a custom function to check if condition is in options.
-    // The condtion is a string and may have && or || operators.
+    // Define a custom function to check if conditions of the options.
     engine.register_fn(
         "contains_option",
         |options: Vec<String>, cond: String| -> bool {
-            let mut result = false;
-            let mut or = false;
+            let mut result = true;
+            let mut temp;
+            let mut negate = false;
+            let mut current_op = "&&"; // Start with AND logic by default
+
             for part in cond.split_whitespace() {
-                if part == "&&" {
-                    continue;
-                } else if part == "||" {
-                    or = true;
-                    continue;
-                }
+                match part {
+                    "&&" => current_op = "&&",
+                    "||" => current_op = "||",
+                    "!" => negate = true,
+                    _ => {
+                        temp = options.contains(&part.to_string());
 
-                let part = part.to_string();
-                let part = if part.starts_with("!") {
-                    !options.contains(&part.strip_prefix('!').unwrap().to_string())
-                } else {
-                    options.contains(&part)
-                };
+                        if negate {
+                            temp = !temp;
+                            negate = false;
+                        }
 
-                if or {
-                    result |= part;
-                    or = false;
-                } else {
-                    result = part;
+                        match current_op {
+                            "&&" => result = result && temp,
+                            "||" => result = result || temp,
+                            _ => unreachable!(),
+                        }
+                    }
                 }
             }
+
             result
         },
     );

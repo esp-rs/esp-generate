@@ -224,7 +224,8 @@ fn main() {
         process::exit(-1);
     }
 
-    // TODO verify valid options are given on command line
+    // Validate options
+    process_options(&args);
 
     let mut selected = if !args.headless {
         let repository = tui::Repository::new(args.chip, OPTIONS, &args.option);
@@ -408,4 +409,21 @@ fn process_file(
     }
 
     Some(res)
+}
+
+fn process_options(args: &Args) {
+    for option in &args.option {
+        // Find the matching option in OPTIONS
+        if let Some(option_item) = OPTIONS.iter().find(|item| item.name() == *option) {
+            // Check if the chip is supported
+            if !option_item.chips().iter().any(|chip| chip == &args.chip) {
+                eprintln!(
+                    "Error: Option {:?} is not supported for chip {:?}",
+                    option, args.chip
+                );
+            }
+        } else {
+            eprintln!("Error: Option {:?} not found", option);
+        }
+    }
 }

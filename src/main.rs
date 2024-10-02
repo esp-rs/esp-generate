@@ -323,35 +323,8 @@ fn process_file(
     // Define a custom function to check if conditions of the options.
     engine.register_fn(
         "contains_option",
-        |options: Vec<String>, cond: String| -> bool {
-            let mut result = true;
-            let mut temp;
-            let mut negate = false;
-            let mut current_op = "&&"; // Start with AND logic by default
-
-            for part in cond.split_whitespace() {
-                match part {
-                    "&&" => current_op = "&&",
-                    "||" => current_op = "||",
-                    "!" => negate = true,
-                    _ => {
-                        temp = options.contains(&part.to_string());
-
-                        if negate {
-                            temp = !temp;
-                            negate = false;
-                        }
-
-                        match current_op {
-                            "&&" => result = result && temp,
-                            "||" => result = result || temp,
-                            _ => unreachable!(),
-                        }
-                    }
-                }
-            }
-
-            result
+        |cond: &str, options: Vec<String>| -> bool {
+            options.iter().any(|option| cond.contains(option))
         },
     );
 
@@ -382,7 +355,6 @@ fn process_file(
         first_line = false;
 
         // that's a bad workaround
-        // Why do we require this, we dont use it (?)
         if trimmed == "#[rustfmt::skip]" {
             println!("Skipping rustfmt");
             continue;
@@ -409,17 +381,9 @@ fn process_file(
                 trimmed.strip_prefix("//IF ").unwrap()
             };
 
-            scope.push_dynamic("cond", cond.into());
-
-            let result = engine
-                .eval_with_scope::<bool>(&mut scope, "contains_option(options, cond)")
-                .unwrap();
-
-            if cond.starts_with("!") {
-                include.push(!result && *include.last().unwrap());
-            } else {
-                include.push(result && *include.last().unwrap());
-            }
+            let cond = process_contains_option(cond.to_string(), &mut scope, &engine);
+            let res = engine.eval::<bool>(&cond).unwrap();
+            include.push(res && *include.last().unwrap());
         } else if trimmed.starts_with("#ENDIF") || trimmed.starts_with("//ENDIF") {
             include.pop();
         // Trim #+ and //+
@@ -447,4 +411,30 @@ fn process_file(
     }
 
     Some(res)
+}
+
+fn process_contains_option(
+    mut cond: String,
+    scope: &mut rhai::Scope,
+    engine: &rhai::Engine,
+) -> String {
+    while cond.contains("contains_option") {
+        if let Some(arg_part) = cond.split("contains_option(").nth(1) {
+            if let Some(arg) = arg_part.split(')').next() {
+                scope.push("cond", arg.to_string());
+                cond = cond.replacen(&format!("contains_option({})", arg), "contains_option", 1);
+                // Check if the arg is in the options
+                let res = engine
+                    .eval_with_scope::<bool>(scope, "contains_option(cond, options)")
+                    .unwrap();
+                // Replace the res with the condition to evaluate a logical expression
+                cond = cond.replacen("contains_option", &res.to_string(), 1);
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+    cond
 }

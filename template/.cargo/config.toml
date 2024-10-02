@@ -1,32 +1,32 @@
 #REPLACE riscv32imac-unknown-none-elf rust_target
 [target.riscv32imac-unknown-none-elf]
-#IF !probe-rs
+#IF !contains_option(probe-rs)
 runner = "espflash flash --monitor"
 #ENDIF
-#IF probe-rs
+#IF contains_option(probe-rs)
 #REPLACE esp32c6 mcu
 #+runner = "probe-rs run --chip=esp32c6"
 #ENDIF
 
 [env]
-#IF !probe-rs
+#IF !contains_option(probe-rs)
 ESP_LOGLEVEL="INFO"
 #ENDIF
-#IF probe-rs
+#IF contains_option(probe-rs)
 DEFMT_LOG="info"
 #ENDIF
 
 [build]
 rustflags = [
-#IF xtensa
+#IF contains_option(xtensa)
   "-C", "link-arg=-nostartfiles",
 #ENDIF
-#IF riscv
+#IF contains_option(riscv)
   # Required to obtain backtraces (e.g. when using the "esp-backtrace" crate.)
   # NOTE: May negatively impact performance of produced code
   "-C", "force-frame-pointers",
 #ENDIF
-#IF stack-protector
+#IF contains_option(stack-protector)
   "-Z", "stack-protector=all",
 #ENDIF
 ]
@@ -35,9 +35,9 @@ rustflags = [
 target = "riscv32imac-unknown-none-elf"
 
 [unstable]
-#IF alloc
+#IF contains_option(alloc)
 build-std = ["alloc", "core"]
 #ENDIF
-#IF !alloc
+#IF !contains_option(alloc)
 #+build-std = ["core"]
 #ENDIF

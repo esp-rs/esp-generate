@@ -321,12 +321,11 @@ fn process_file(
     scope.push("options", options.to_vec());
 
     // Define a custom function to check if conditions of the options.
-    engine.register_fn(
-        "contains_option",
-        |cond: &str, options: Vec<String>| -> bool {
-            options.iter().any(|option| cond.contains(option))
-        },
-    );
+    let options_clone: Vec<String> = options.iter().map(|v| v.to_owned()).collect();
+    engine.register_fn("option", move |cond: &str| -> bool {
+        let cond = cond.to_string();
+        options_clone.contains(&cond)
+    });
 
     for line in contents.lines() {
         let trimmed: &str = line.trim();
@@ -380,9 +379,7 @@ fn process_file(
             } else {
                 trimmed.strip_prefix("//IF ").unwrap()
             };
-
-            let cond = process_contains_option(cond.to_string(), &mut scope, &engine);
-            let res = engine.eval::<bool>(&cond).unwrap();
+            let res = engine.eval::<bool>(cond).unwrap();
             include.push(res && *include.last().unwrap());
         } else if trimmed.starts_with("#ENDIF") || trimmed.starts_with("//ENDIF") {
             include.pop();
@@ -411,30 +408,4 @@ fn process_file(
     }
 
     Some(res)
-}
-
-fn process_contains_option(
-    mut cond: String,
-    scope: &mut rhai::Scope,
-    engine: &rhai::Engine,
-) -> String {
-    while cond.contains("contains_option") {
-        if let Some(arg_part) = cond.split("contains_option(").nth(1) {
-            if let Some(arg) = arg_part.split(')').next() {
-                scope.push("cond", arg.to_string());
-                cond = cond.replacen(&format!("contains_option({})", arg), "contains_option", 1);
-                // Check if the arg is in the options
-                let res = engine
-                    .eval_with_scope::<bool>(scope, "contains_option(cond, options)")
-                    .unwrap();
-                // Replace the res with the condition to evaluate a logical expression
-                cond = cond.replacen("contains_option", &res.to_string(), 1);
-            } else {
-                break;
-            }
-        } else {
-            break;
-        }
-    }
-    cond
 }

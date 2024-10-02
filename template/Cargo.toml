@@ -10,10 +10,10 @@ esp-backtrace = { version = "0.14.1", features = [
     "esp32c6",
     "exception-handler",
     "panic-handler",
-    #IF !contains_option(probe-rs)
+    #IF !option("probe-rs")
     "println",
     #ENDIF
-    #IF contains_option(probe-rs)
+    #IF option("probe-rs")
     #+"defmt",
     #ENDIF
 ]}
@@ -21,21 +21,21 @@ esp-backtrace = { version = "0.14.1", features = [
 esp-hal = { version = "0.20.1", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
-    #IF contains_option(probe-rs)
+    #IF option("probe-rs")
     #+"defmt",
     #ENDIF
 ] }
-#IF !contains_option(probe-rs)
+#IF !option("probe-rs")
 #REPLACE esp32c6 mcu
 esp-println = { version = "0.11.0", features = ["esp32c6", "log"] }
 #ENDIF
-#IF !contains_option(probe-rs)
+#IF !option("probe-rs")
 log = { version = "0.4.21" }
 #ENDIF
-#IF contains_option(alloc)
+#IF option("alloc")
 esp-alloc = { version = "0.4.0" }
 #ENDIF
-#IF contains_option(wifi)
+#IF option("wifi")
 embedded-io = "0.6.1"
 esp-wifi = { version = "0.9.1", default-features=false, features = [
     #REPLACE esp32c6 mcu
@@ -44,10 +44,10 @@ esp-wifi = { version = "0.9.1", default-features=false, features = [
     "utils",
     "wifi",
     "esp-alloc",
-    #IF contains_option(probe-rs)
+    #IF option("probe-rs")
     #+"defmt",
     #ENDIF
-    #IF !contains_option(probe-rs)
+    #IF !option("probe-rs")
     "log",
     #ENDIF
 ] }
@@ -64,7 +64,7 @@ smoltcp = { version = "0.11.0", default-features = false, features = [
     "socket-udp",
 ] }
 #ENDIF
-#IF contains_option(ble)
+#IF option("ble")
 #+ embedded-io = "0.6.1"
 #+ esp-wifi = { version = "0.9.1", default-features=false, features = [
 #REPLACE esp32c6 mcu
@@ -72,23 +72,23 @@ smoltcp = { version = "0.11.0", default-features = false, features = [
 #+     "phy-enable-usb",
 #+     "ble",
 #+     "esp-alloc",
-#IF contains_option(probe-rs)
+#IF option("probe-rs")
 #+     #+"defmt",
 #ENDIF
-#IF !contains_option(probe-rs)
+#IF !option("probe-rs")
 #+     "log",
 #ENDIF
 #+ ] }
 #+ heapless = { version = "0.8.0", default-features = false }
 #+ bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
 #ENDIF
-#IF contains_option(probe-rs)
+#IF option("probe-rs")
 #+defmt            = "0.3.8"
 #+defmt-rtt        = "0.4.1"
 #ENDIF
-#IF contains_option(embassy)
+#IF option("embassy")
 embassy-executor = { version = "0.6.0",  features = [
-    #IF contains_option(probe-rs)
+    #IF option("probe-rs")
     "defmt"
     #ENDIF
 ] }

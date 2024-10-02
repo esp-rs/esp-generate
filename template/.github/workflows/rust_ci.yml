@@ -30,7 +30,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Setup Rust
-#IF contains_option(riscv)
+#IF option("riscv")
         uses: dtolnay/rust-toolchain@v1
         with:
 #REPLACE riscv32imac-unknown-none-elf rust_target
@@ -38,7 +38,7 @@ jobs:
           toolchain: stable
           components: rust-src, rustfmt, clippy
 #ENDIF
-#IF contains_option(xtensa)
+#IF option("xtensa")
 #+        uses: esp-rs/xtensa-toolchain@v1.5
 #+        with:
 #+          default: true

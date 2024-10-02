@@ -246,7 +246,7 @@ impl App {
 
     fn draw(&mut self, terminal: &mut Terminal<impl Backend>) -> std::io::Result<()> {
         terminal.draw(|f| {
-            f.render_widget(self, f.size());
+            f.render_widget(self, f.area());
         })?;
 
         Ok(())

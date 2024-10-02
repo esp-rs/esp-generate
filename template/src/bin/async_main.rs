@@ -4,18 +4,18 @@
 
 use esp_backtrace as _;
 use esp_hal::prelude::*;
-//IF probe-rs
+//IF option("probe-rs")
 //+ use defmt_rtt as _;
 //+ use defmt::info;
 //ENDIF
-//IF !probe-rs
+//IF !option("probe-rs")
 use log::info;
 //ENDIF
 
 use embassy_executor::Spawner;
 use embassy_time::{Duration, Timer};
 
-//IF alloc
+//IF option("alloc")
 extern crate alloc;
 //ENDIF
 
@@ -27,11 +27,11 @@ async fn main(spawner: Spawner) {
         config
     });
 
-    //IF alloc
+    //IF option("alloc")
     esp_alloc::heap_allocator!(72 * 1024);
     //ENDIF
 
-    //IF !probe-rs
+    //IF !option("probe-rs")
     esp_println::logger::init_logger_from_env();
     //ENDIF
 
@@ -39,7 +39,7 @@ async fn main(spawner: Spawner) {
     esp_hal_embassy::init(timg0.timer0);
     info!("Embassy initialized!");
 
-    //IF wifi
+    //IF option("wifi")
     let timg1 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG1);
     let _init = esp_wifi::initialize(
         esp_wifi::EspWifiInitFor::Wifi,
@@ -50,7 +50,7 @@ async fn main(spawner: Spawner) {
     .unwrap();
     //ENDIF
 
-    //IF ble
+    //IF option("ble")
     //+ let peripherals = esp_hal::init(esp_hal::Config::default());
     //+
     //+ let timg1 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG1);
@@ -61,7 +61,7 @@ async fn main(spawner: Spawner) {
     //+ peripherals.RADIO_CLK,
     //+ )
     //+ .unwrap();
-    //ENDIF    
+    //ENDIF
 
     // TODO: Spawn some tasks
     let _ = spawner;

@@ -1,12 +1,12 @@
 fn main() {
     println!("cargo:rustc-link-arg-bins=-Tlinkall.x");
-    //IF wifi
+    //IF option("wifi")
     println!("cargo:rustc-link-arg-bins=-Trom_functions.x");
     //ENDIF
-    //IF ble
+    //IF option("ble")
     println!("cargo:rustc-link-arg-bins=-Trom_functions.x");
-    //ENDIF    
-    //IF probe-rs
+    //ENDIF
+    //IF option("probe-rs")
     println!("cargo:rustc-link-arg-bins=-Tdefmt.x");
     //ENDIF
 }

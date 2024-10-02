@@ -274,6 +274,7 @@ fn main() {
         }
     }
 
+    // Run cargo fmt
     process::Command::new("cargo")
         .arg("fmt")
         .arg("--")
@@ -285,6 +286,7 @@ fn main() {
         .output()
         .unwrap();
 
+    // Run git init
     process::Command::new("git")
         .arg("init")
         .current_dir(&args.name)
@@ -293,10 +295,14 @@ fn main() {
 }
 
 fn process_file(
+    // Path to the file
     path: &str,
+    // Raw content of the file
     contents: &str,
+    // Selected options
     options: &[String],
-    variables: &Vec<(String, String)>,
+    // Variables and its value in a tuple
+    variables: &[(String, String)],
 ) -> Option<String> {
     if path.ends_with("Cargo.lock") {
         return None;
@@ -309,16 +315,27 @@ fn process_file(
     let mut include = vec![true];
     let mut first_line = true;
 
+    // Create a new Rhai engine and scope
+    let mut engine = rhai::Engine::new();
+    let mut scope = rhai::Scope::new();
+    scope.push("options", options.to_vec());
+
+    // Define a custom function to check if conditions of the options.
+    let options_clone: Vec<String> = options.iter().map(|v| v.to_owned()).collect();
+    engine.register_fn("option", move |cond: &str| -> bool {
+        let cond = cond.to_string();
+        options_clone.contains(&cond)
+    });
+
     for line in contents.lines() {
+        let trimmed: &str = line.trim();
+
+        // We check for the first line to see if we should include the file
         if first_line {
-            let trimmed = line.trim();
-            let cond = if trimmed.starts_with("//INCLUDEFILE ") {
-                Some(trimmed.strip_prefix("//INCLUDEFILE ").unwrap())
-            } else if trimmed.starts_with("#INCLUDEFILE ") {
-                Some(trimmed.strip_prefix("#INCLUDEFILE ").unwrap())
-            } else {
-                None
-            };
+            // Determine if the line starts with a known include directive
+            let cond = trimmed
+                .strip_prefix("//INCLUDEFILE ")
+                .or_else(|| trimmed.strip_prefix("#INCLUDEFILE "));
 
             if let Some(cond) = cond {
                 let include_file = if let Some(stripped) = cond.strip_prefix("!") {
@@ -337,58 +354,44 @@ fn process_file(
         first_line = false;
 
         // that's a bad workaround
-        if line.trim() == "#[rustfmt::skip]" {
+        if trimmed == "#[rustfmt::skip]" {
+            println!("Skipping rustfmt");
             continue;
         }
 
-        if line.trim().starts_with("#REPLACE ") {
-            let what = line.trim().strip_prefix("#REPLACE ").unwrap();
+        // Check if we should replace the next line with the key/value of a variable
+        if let Some(what) = trimmed
+            .strip_prefix("#REPLACE ")
+            .or_else(|| trimmed.strip_prefix("//REPLACE "))
+        {
             let mut split = what.split_terminator(" ");
             replace = Some(split.next().unwrap().to_string());
             let var = split.next().unwrap().to_string();
-            for (key, value) in variables {
-                if key == &var {
-                    replacement = Some(value);
-                    break;
-                }
+
+            // Find the replacement value from the variables map
+            if let Some((_, value)) = variables.iter().find(|(key, _)| key == &var) {
+                replacement = Some(value);
             }
-        } else if line.trim().starts_with("//REPLACE ") {
-            let what = line.trim().strip_prefix("//REPLACE ").unwrap();
-            let mut split = what.split_terminator(" ");
-            replace = Some(split.next().unwrap().to_string());
-            let var = split.next().unwrap().to_string();
-            for (key, value) in variables {
-                if key == &var {
-                    replacement = Some(value);
-                    break;
-                }
-            }
-        } else if line.trim().starts_with("#IF ") {
-            let cond = line.trim().strip_prefix("#IF ").unwrap();
-            if let Some(stripped) = cond.strip_prefix("!") {
-                include.push(!options.contains(&stripped.to_string()) && *include.last().unwrap());
+        // Check if we should include the next line(s)
+        } else if trimmed.starts_with("#IF ") || trimmed.starts_with("//IF ") {
+            let cond = if trimmed.starts_with("#IF ") {
+                trimmed.strip_prefix("#IF ").unwrap()
             } else {
-                include.push(options.contains(&cond.to_string()) && *include.last().unwrap());
-            }
-        } else if line.trim().starts_with("#ENDIF") {
+                trimmed.strip_prefix("//IF ").unwrap()
+            };
+            let res = engine.eval::<bool>(cond).unwrap();
+            include.push(res && *include.last().unwrap());
+        } else if trimmed.starts_with("#ENDIF") || trimmed.starts_with("//ENDIF") {
             include.pop();
-        } else if line.trim().starts_with("//IF ") {
-            let cond = line.trim().strip_prefix("//IF ").unwrap();
-            if let Some(stripped) = cond.strip_prefix("!") {
-                include.push(!options.contains(&stripped.to_string()) && *include.last().unwrap());
-            } else {
-                include.push(options.contains(&cond.to_string()) && *include.last().unwrap());
-            }
-        } else if line.trim().starts_with("//ENDIF") {
-            include.pop();
+        // Trim #+ and //+
         } else if *include.last().unwrap() {
             let mut line = line.to_string();
 
-            if line.trim().starts_with("#+") {
+            if trimmed.starts_with("#+") {
                 line = line.replace("#+", "").to_string();
             }
 
-            if line.trim().starts_with("//+") {
+            if trimmed.starts_with("//+") {
                 line = line.replace("//+", "").to_string();
             }
 

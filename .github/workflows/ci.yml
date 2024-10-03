@@ -43,13 +43,18 @@ jobs:
         options: [
           "",
           "-o alloc",
-          "-o wifi",
-          "-o ble",
+          "-o wifi -o alloc",
+          "-o ble -o alloc",
           "-o embassy",
           "-o probe-rs",
           "-o stack_protector"
         ]
-
+        # Exclude some combinations that are not supported
+        exclude:
+          - chip: "esp32h2"
+            options: "-o wifi -o alloc"
+          - chip: "esp32s2"
+            options: "-o ble -o alloc"
     steps:
       - uses: actions/checkout@v4
 

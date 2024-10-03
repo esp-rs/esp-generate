@@ -107,7 +107,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
         chips: &[],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
-        name: "stack_protector",
+        name: "stack-protector",
         display_name: "Enable stack-smash protection (Nightly only)",
         enables: &[],
         disables: &[],

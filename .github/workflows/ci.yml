@@ -47,7 +47,7 @@ jobs:
           "-o ble -o alloc",
           "-o embassy",
           "-o probe-rs",
-          "-o stack_protector"
+          "-o stack-protector"
         ]
         # Exclude some combinations that are not supported
         exclude:
@@ -74,7 +74,7 @@ jobs:
           components: clippy,rustfmt,rust-src
 
       # Rust toolchain for RISC-V:
-      - if: matrix.chip != 'esp32' && matrix.chip != 'esp32s2' && matrix.chip != 'esp32s3' && matrix.options == '-o stack_protector'
+      - if: matrix.chip != 'esp32' && matrix.chip != 'esp32s2' && matrix.chip != 'esp32s3' && matrix.options == '-o stack-protector'
         uses: dtolnay/rust-toolchain@nightly
         with:
           target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf

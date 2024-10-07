@@ -382,6 +382,10 @@ fn process_file(
             };
             let res = engine.eval::<bool>(cond).unwrap();
             include.push(res && *include.last().unwrap());
+        } else if trimmed.starts_with("#ELSE") || trimmed.starts_with("//ELSE") {
+            let res = !*include.last().unwrap();
+            include.pop();
+            include.push(res);
         } else if trimmed.starts_with("#ENDIF") || trimmed.starts_with("//ENDIF") {
             include.pop();
         // Trim #+ and //+

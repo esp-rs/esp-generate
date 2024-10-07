@@ -10,11 +10,10 @@ esp-backtrace = { version = "0.14.1", features = [
     "esp32c6",
     "exception-handler",
     "panic-handler",
-    #IF !option("probe-rs")
-    "println",
-    #ENDIF
     #IF option("probe-rs")
     #+"defmt",
+    #ELSE
+    "println",
     #ENDIF
 ]}
 
@@ -28,8 +27,6 @@ esp-hal = { version = "0.20.1", features = [
 #IF !option("probe-rs")
 #REPLACE esp32c6 mcu
 esp-println = { version = "0.11.0", features = ["esp32c6", "log"] }
-#ENDIF
-#IF !option("probe-rs")
 log = { version = "0.4.21" }
 #ENDIF
 #IF option("alloc")

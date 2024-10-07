@@ -1,19 +1,17 @@
 #REPLACE riscv32imac-unknown-none-elf rust_target
 [target.riscv32imac-unknown-none-elf]
-#IF !option("probe-rs")
-runner = "espflash flash --monitor"
-#ENDIF
 #IF option("probe-rs")
 #REPLACE esp32c6 mcu
-#+runner = "probe-rs run --chip=esp32c6"
+runner = "probe-rs run --chip=esp32c6"
+#ELSE
+#+runner = "espflash flash --monitor"
 #ENDIF
 
 [env]
-#IF !option("probe-rs")
-ESP_LOGLEVEL="INFO"
-#ENDIF
 #IF option("probe-rs")
 DEFMT_LOG="info"
+#ELSE
+ESP_LOGLEVEL="INFO"
 #ENDIF
 
 [build]
@@ -37,7 +35,6 @@ target = "riscv32imac-unknown-none-elf"
 [unstable]
 #IF option("alloc")
 build-std = ["alloc", "core"]
-#ENDIF
-#IF !option("alloc")
+#ELSE
 #+build-std = ["core"]
 #ENDIF

@@ -93,13 +93,6 @@ static OPTIONS: &[GeneratorOptionItem] = &[
         ],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
-        name: "embassy",
-        display_name: "Embassy",
-        enables: &[],
-        disables: &[],
-        chips: &[],
-    }),
-    GeneratorOptionItem::Option(GeneratorOption {
         name: "probe-rs",
         display_name: "Flash via probe-rs, use defmt",
         enables: &[],
@@ -164,6 +157,24 @@ static CHIP_VARS: &[(Chip, &[(&str, &str)])] = &[
     ),
 ];
 
+#[derive(Clone, Copy, Debug, PartialEq, ValueEnum, Default)]
+#[value(rename_all = "LOWER_CASE")]
+pub enum Template {
+    #[default]
+    Blocking,
+    Embassy,
+}
+
+impl std::fmt::Display for Template {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let template = match self {
+            Template::Blocking => "blocking",
+            Template::Embassy => "embassy",
+        };
+        write!(f, "{}", template)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, ValueEnum)]
 #[value(rename_all = "LOWER_CASE")]
 pub enum Chip {
@@ -204,15 +215,23 @@ impl Chip {
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
+    /// Name of the project
     name: String,
 
     #[arg(short, long)]
+    /// Target chip
     chip: Chip,
 
-    #[arg(long)]
+    #[arg(short, long, default_value = "blocking")]
+    /// Template to use.
+    template: Template,
+
+    #[arg(short, long)]
+    /// Run in headless mode
     headless: bool,
 
     #[arg(short, long)]
+    /// Options to enable
     option: Vec<String>,
 }
 
@@ -246,7 +265,9 @@ fn main() {
     } else {
         args.option.clone()
     };
-
+    // Add the template to the selected options
+    selected.push(args.template.to_string());
+    // Add the architecture to the selected options
     selected.push(args.chip.architecture_name());
 
     let mut variables = vec![

@@ -42,10 +42,10 @@ jobs:
           ]
         options: [
           "",
+          "--template embassy",
           "-o alloc",
           "-o wifi -o alloc",
           "-o ble -o alloc",
-          "-o embassy",
           "-o probe-rs",
           "-o stack-protector"
         ]

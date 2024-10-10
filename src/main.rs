@@ -59,14 +59,14 @@ impl GeneratorOptionItem {
 static OPTIONS: &[GeneratorOptionItem] = &[
     GeneratorOptionItem::Option(GeneratorOption {
         name: "alloc",
-        display_name: "Alloc",
+        display_name: "Enables allocations via the `esp-alloc` crate.",
         enables: &[],
         disables: &[],
         chips: &[],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "wifi",
-        display_name: "Wifi",
+        display_name: "Enables Wi-Fi via the `esp-wifi` crate. Requires `alloc`.",
         enables: &["alloc"],
         disables: &["ble"],
         chips: &[
@@ -80,7 +80,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "ble",
-        display_name: "BLE",
+        display_name: "Enables BLE via the `esp-wifi` crate. Requires `alloc`.",
         enables: &["alloc"],
         disables: &["wifi"],
         chips: &[
@@ -94,21 +94,21 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "embassy",
-        display_name: "Embassy",
+        display_name: "Adds `embassy` framework support.",
         enables: &[],
         disables: &[],
         chips: &[],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "probe-rs",
-        display_name: "Flash via probe-rs, use defmt",
+        display_name: "Enables `defmt` and flashes using `probe-rs` instead of `espflash`.",
         enables: &[],
         disables: &[],
         chips: &[],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "stack-protector",
-        display_name: "Enable stack-smash protection (Nightly only)",
+        display_name: "Enable stack-smash protection (`nightly` only).",
         enables: &[],
         disables: &[],
         chips: &[],
@@ -119,21 +119,21 @@ static OPTIONS: &[GeneratorOptionItem] = &[
         options: &[
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "wokwi",
-                display_name: "Wokwi Support",
+                display_name: "Adds support for Wokwi simulation using VS Code Wokwi extension.",
                 enables: &[],
                 disables: &[],
                 chips: &[],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "dev-container",
-                display_name: "Dev-Container Support",
+                display_name: "Adds support for VS Code Dev Containers and GitHub Codespaces.",
                 enables: &[],
                 disables: &[],
                 chips: &[],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "ci",
-                display_name: "Add GitHub CI",
+                display_name: "Adds GitHub Actions support with some basics checks.",
                 enables: &[],
                 disables: &[],
                 chips: &[],
@@ -428,8 +428,6 @@ fn process_options(args: &Args) {
                     option, args.chip
                 );
             }
-        } else {
-            eprintln!("Error: Option {:?} not found", option);
         }
     }
 }

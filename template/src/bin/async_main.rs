@@ -39,28 +39,22 @@ async fn main(spawner: Spawner) {
     esp_hal_embassy::init(timg0.timer0);
     info!("Embassy initialized!");
 
-    //IF option("wifi")
+    //IF option("wifi") || option("ble")
+    let peripherals = esp_hal::init(esp_hal::Config::default());
+
     let timg1 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG1);
-    let _init = esp_wifi::initialize(
+    let _init = esp_wifi::init(
+        //IF option("wifi")
         esp_wifi::EspWifiInitFor::Wifi,
+        //ENDIF
+        //IF option("ble")
+        //+esp_wifi::EspWifiInitFor::Ble,
+        //ENDIF
         timg1.timer0,
         esp_hal::rng::Rng::new(peripherals.RNG),
         peripherals.RADIO_CLK,
     )
     .unwrap();
-    //ENDIF
-
-    //IF option("ble")
-    //+ let peripherals = esp_hal::init(esp_hal::Config::default());
-    //+
-    //+ let timg1 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG1);
-    //+ let _init = esp_wifi::initialize(
-    //+         esp_wifi::EspWifiInitFor::Ble,
-    //+ timg1.timer0,
-    //+ esp_hal::rng::Rng::new(peripherals.RNG),
-    //+ peripherals.RADIO_CLK,
-    //+ )
-    //+ .unwrap();
     //ENDIF
 
     // TODO: Spawn some tasks

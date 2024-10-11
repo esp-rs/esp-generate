@@ -17,7 +17,7 @@ esp-backtrace = { version = "0.14.1", features = [
     #ENDIF
 ]}
 
-esp-hal = { version = "0.20.1", features = [
+esp-hal = { version = "0.21.0", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("probe-rs")
@@ -26,20 +26,25 @@ esp-hal = { version = "0.20.1", features = [
 ] }
 #IF !option("probe-rs")
 #REPLACE esp32c6 mcu
-esp-println = { version = "0.11.0", features = ["esp32c6", "log"] }
+esp-println = { version = "0.12.0", features = ["esp32c6", "log"] }
 log = { version = "0.4.21" }
 #ENDIF
 #IF option("alloc")
-esp-alloc = { version = "0.4.0" }
+esp-alloc = { version = "0.5.0" }
 #ENDIF
-#IF option("wifi")
+#IF option("wifi") || option("ble")
 embedded-io = "0.6.1"
-esp-wifi = { version = "0.9.1", default-features=false, features = [
+esp-wifi = { version = "0.10.1", default-features=false, features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     "phy-enable-usb",
     "utils",
+    #IF option("wifi")
     "wifi",
+    #ENDIF
+    #IF option("ble")
+    "ble",
+    #ENDIF
     "esp-alloc",
     #IF option("probe-rs")
     #+"defmt",
@@ -62,21 +67,6 @@ smoltcp = { version = "0.11.0", default-features = false, features = [
 ] }
 #ENDIF
 #IF option("ble")
-#+ embedded-io = "0.6.1"
-#+ esp-wifi = { version = "0.9.1", default-features=false, features = [
-#REPLACE esp32c6 mcu
-#+     "esp32c6",
-#+     "phy-enable-usb",
-#+     "ble",
-#+     "esp-alloc",
-#IF option("probe-rs")
-#+     #+"defmt",
-#ENDIF
-#IF !option("probe-rs")
-#+     "log",
-#ENDIF
-#+ ] }
-#+ heapless = { version = "0.8.0", default-features = false }
 #+ bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
 #ENDIF
 #IF option("probe-rs")
@@ -91,7 +81,7 @@ embassy-executor = { version = "0.6.0",  features = [
 ] }
 embassy-time     = { version = "0.3.1",  features = ["generic-queue-8"] }
 #REPLACE esp32c6 mcu
-esp-hal-embassy  = { version = "0.3.0",  features = ["esp32c6"] }
+esp-hal-embassy  = { version = "0.4.0",  features = ["esp32c6"] }
 static_cell      = { version = "2.1.0",  features = ["nightly"] }
 #ENDIF
 
@@ -108,9 +98,3 @@ incremental = false
 lto = 'fat'
 opt-level = 's'
 overflow-checks = false
-
-[patch.crates-io]
-esp-hal = { git = "https://github.com/esp-rs/esp-hal.git", rev = "be82a6521a5859129ca4f98e54e4d4d6cedffe76"}
-esp-wifi = { git = "https://github.com/esp-rs/esp-hal.git", rev = "be82a6521a5859129ca4f98e54e4d4d6cedffe76"}
-esp-hal-embassy = { git = "https://github.com/esp-rs/esp-hal.git", rev = "be82a6521a5859129ca4f98e54e4d4d6cedffe76"}
-esp-alloc = { git = "https://github.com/esp-rs/esp-hal.git", rev = "be82a6521a5859129ca4f98e54e4d4d6cedffe76"}

@@ -389,7 +389,7 @@ fn process_file(
         } else if trimmed.starts_with("#ENDIF") || trimmed.starts_with("//ENDIF") {
             include.pop();
         // Trim #+ and //+
-        } else if *include.last().unwrap() {
+        } else if include.iter().all(|v| *v) {
             let mut line = line.to_string();
 
             if trimmed.starts_with("#+") {
@@ -429,5 +429,158 @@ fn process_options(args: &Args) {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_nested_if_else1() {
+        let res = process_file(
+            "/foo",
+            r#"
+        #IF option("opt1")
+        opt1
+        #IF option("opt2")
+        opt2
+        #ELSE
+        !opt2
+        #ENDIF
+        #ELSE
+        !opt1
+        #ENDIF
+        "#,
+            &["opt1".to_string(), "opt2".to_string()],
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(
+            r#"
+        opt1
+        opt2
+        "#
+            .trim(),
+            res.trim()
+        );
+    }
+
+    #[test]
+    fn test_nested_if_else2() {
+        let res = process_file(
+            "/foo",
+            r#"
+        #IF option("opt1")
+        opt1
+        #IF option("opt2")
+        opt2
+        #ELSE
+        !opt2
+        #ENDIF
+        #ELSE
+        !opt1
+        #ENDIF
+        "#,
+            &[],
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(
+            r#"
+        !opt1
+        "#
+            .trim(),
+            res.trim()
+        );
+    }
+
+    #[test]
+    fn test_nested_if_else3() {
+        let res = process_file(
+            "/foo",
+            r#"
+        #IF option("opt1")
+        opt1
+        #IF option("opt2")
+        opt2
+        #ELSE
+        !opt2
+        #ENDIF
+        #ELSE
+        !opt1
+        #ENDIF
+        "#,
+            &["opt1".to_string()],
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(
+            r#"
+        opt1
+        !opt2
+        "#
+            .trim(),
+            res.trim()
+        );
+    }
+
+    #[test]
+    fn test_nested_if_else4() {
+        let res = process_file(
+            "/foo",
+            r#"
+        #IF option("opt1")
+        #IF option("opt2")
+        opt2
+        #ELSE
+        !opt2
+        #ENDIF
+        opt1
+        #ENDIF
+        "#,
+            &["opt1".to_string()],
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(
+            r#"
+        !opt2
+        opt1
+        "#
+            .trim(),
+            res.trim()
+        );
+    }
+
+    #[test]
+    fn test_nested_if_else5() {
+        let res = process_file(
+            "/foo",
+            r#"
+        #IF option("opt1")
+        #IF option("opt2")
+        opt2
+        #ELSE
+        !opt2
+        #ENDIF
+        opt1
+        #ENDIF
+        "#,
+            &["opt2".to_string()],
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(
+            r#"
+        "#
+            .trim(),
+            res.trim()
+        );
     }
 }

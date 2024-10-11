@@ -1,10 +1,9 @@
 [toolchain]
 #IF option("riscv")
-#IF !option("stack-protector")
-#+channel = "stable"
-#ENDIF
 #IF option("stack-protector")
 channel = "nightly"
+#ELSE
+#+channel = "stable"
 #ENDIF
 components = ["rust-src"]
 #REPLACE riscv32imac-unknown-none-elf rust_target

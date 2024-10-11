@@ -32,30 +32,22 @@ fn main() -> ! {
     esp_alloc::heap_allocator!(72 * 1024);
     //ENDIF
 
-    //IF option("wifi")
+    //IF option("wifi") || option("ble")
     let peripherals = esp_hal::init(esp_hal::Config::default());
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    let _init = esp_wifi::initialize(
+    let _init = esp_wifi::init(
+        //IF option("wifi")
         esp_wifi::EspWifiInitFor::Wifi,
+        //ENDIF
+        //IF option("ble")
+        //+esp_wifi::EspWifiInitFor::Ble,
+        //ENDIF
         timg0.timer0,
         esp_hal::rng::Rng::new(peripherals.RNG),
         peripherals.RADIO_CLK,
     )
     .unwrap();
-    //ENDIF
-
-    //IF option("ble")
-    //+ let peripherals = esp_hal::init(esp_hal::Config::default());
-    //+
-    //+ let timg0 = TimerGroup::new(peripherals.TIMG0);
-    //+ let _init = esp_wifi::initialize(
-    //+         esp_wifi::EspWifiInitFor::Ble,
-    //+ timg0.timer0,
-    //+ esp_hal::rng::Rng::new(peripherals.RNG),
-    //+ peripherals.RADIO_CLK,
-    //+ )
-    //+ .unwrap();
     //ENDIF
 
     let delay = Delay::new();

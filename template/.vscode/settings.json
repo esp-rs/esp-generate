@@ -1,0 +1,5 @@
+{
+    "rust-analyzer.cargo.allTargets": false,
+    //REPLACE riscv32imac-unknown-none-elf rust_target
+    "rust-analyzer.cargo.target": "riscv32imac-unknown-none-elf",
+}

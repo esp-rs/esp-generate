@@ -11,7 +11,7 @@ runner = "probe-rs run --chip=esp32c6"
 #IF option("probe-rs")
 DEFMT_LOG="info"
 #ELSE
-ESP_LOGLEVEL="INFO"
+ESP_LOG="INFO"
 #ENDIF
 
 [build]

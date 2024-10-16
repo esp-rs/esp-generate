@@ -13,7 +13,7 @@ Template generation tool to create `no_std` applications targeting Espressif's l
 To generate a proect using this template:
 1. Install `esp-generate`:
 ```
-cargo install esp-generate --git https://github.com/esp-rs/esp-template
+cargo install esp-generate --git https://github.com/esp-rs/esp-generate.git
 ```
 2. Generate a project. There are two options:
      1. Using TUI:

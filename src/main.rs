@@ -1,6 +1,7 @@
 use std::{env, path::PathBuf, process};
 
-use clap::{Parser, ValueEnum};
+use clap::Parser;
+use esp_metadata::Chip;
 
 mod template_files;
 mod tui;
@@ -42,10 +43,7 @@ impl GeneratorOptionItem {
     }
 
     fn is_category(&self) -> bool {
-        match self {
-            GeneratorOptionItem::Category(_) => true,
-            GeneratorOptionItem::Option(_) => false,
-        }
+        matches!(self, GeneratorOptionItem::Category(_))
     }
 
     fn chips(&self) -> &'static [Chip] {
@@ -71,11 +69,11 @@ static OPTIONS: &[GeneratorOptionItem] = &[
         disables: &["ble"],
         chips: &[
             Chip::Esp32,
-            Chip::Esp32S2,
-            Chip::Esp32S3,
-            Chip::Esp32C2,
-            Chip::Esp32C3,
-            Chip::Esp32C6,
+            Chip::Esp32c2,
+            Chip::Esp32c3,
+            Chip::Esp32c6,
+            Chip::Esp32s2,
+            Chip::Esp32s3,
         ],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
@@ -85,11 +83,11 @@ static OPTIONS: &[GeneratorOptionItem] = &[
         disables: &["wifi"],
         chips: &[
             Chip::Esp32,
-            Chip::Esp32S3,
-            Chip::Esp32C2,
-            Chip::Esp32C3,
-            Chip::Esp32C6,
-            Chip::Esp32H2,
+            Chip::Esp32c2,
+            Chip::Esp32c3,
+            Chip::Esp32c6,
+            Chip::Esp32h2,
+            Chip::Esp32s3,
         ],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
@@ -144,62 +142,25 @@ static OPTIONS: &[GeneratorOptionItem] = &[
 
 static CHIP_VARS: &[(Chip, &[(&str, &str)])] = &[
     (Chip::Esp32, &[("rust_target", "xtensa-esp32-none-elf")]),
-    (Chip::Esp32S2, &[("rust_target", "xtensa-esp32s2-none-elf")]),
-    (Chip::Esp32S3, &[("rust_target", "xtensa-esp32s3-none-elf")]),
     (
-        Chip::Esp32C2,
+        Chip::Esp32c2,
         &[("rust_target", "riscv32imc-unknown-none-elf")],
     ),
     (
-        Chip::Esp32C3,
+        Chip::Esp32c3,
         &[("rust_target", "riscv32imc-unknown-none-elf")],
     ),
     (
-        Chip::Esp32C6,
+        Chip::Esp32c6,
         &[("rust_target", "riscv32imac-unknown-none-elf")],
     ),
     (
-        Chip::Esp32H2,
+        Chip::Esp32h2,
         &[("rust_target", "riscv32imac-unknown-none-elf")],
     ),
+    (Chip::Esp32s2, &[("rust_target", "xtensa-esp32s2-none-elf")]),
+    (Chip::Esp32s3, &[("rust_target", "xtensa-esp32s3-none-elf")]),
 ];
-
-#[derive(Clone, Copy, Debug, PartialEq, ValueEnum)]
-#[value(rename_all = "LOWER_CASE")]
-pub enum Chip {
-    Esp32,
-    Esp32S2,
-    Esp32S3,
-    Esp32C2,
-    Esp32C3,
-    Esp32C6,
-    Esp32H2,
-}
-
-impl std::fmt::Display for Chip {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let chip = match self {
-            Chip::Esp32 => "esp32",
-            Chip::Esp32S2 => "esp32s2",
-            Chip::Esp32S3 => "esp32s3",
-            Chip::Esp32C2 => "esp32c2",
-            Chip::Esp32C3 => "esp32c3",
-            Chip::Esp32C6 => "esp32c6",
-            Chip::Esp32H2 => "esp32h2",
-        };
-        write!(f, "{}", chip)
-    }
-}
-
-impl Chip {
-    pub fn architecture_name(&self) -> String {
-        match self {
-            Chip::Esp32 | Chip::Esp32S2 | Chip::Esp32S3 => "xtensa",
-            _ => "riscv",
-        }
-        .to_string()
-    }
-}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -247,7 +208,11 @@ fn main() {
         args.option.clone()
     };
 
-    selected.push(args.chip.architecture_name());
+    selected.push(if args.chip.is_riscv() {
+        "riscv".to_string()
+    } else {
+        "xtensa".to_string()
+    });
 
     let mut variables = vec![
         ("project-name".to_string(), args.name.clone()),

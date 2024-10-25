@@ -40,8 +40,6 @@ async fn main(spawner: Spawner) {
     info!("Embassy initialized!");
 
     //IF option("wifi") || option("ble")
-    let peripherals = esp_hal::init(esp_hal::Config::default());
-
     let timg1 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG1);
     let _init = esp_wifi::init(
         //IF option("wifi")

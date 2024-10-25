@@ -175,12 +175,25 @@ struct Args {
 
     #[arg(short, long)]
     option: Vec<String>,
+
+    #[arg(short = 'O', long)]
+    output_path: Option<PathBuf>,
 }
 
 fn main() {
     let args = Args::parse();
 
-    if env::current_dir().unwrap().join(&args.name).exists() {
+    let path = &args
+        .output_path
+        .clone()
+        .unwrap_or_else(|| env::current_dir().unwrap());
+
+    if !path.is_dir() {
+        eprintln!("Output path must be a directory");
+        process::exit(-1);
+    }
+
+    if path.join(&args.name).exists() {
         eprintln!("Directory already exists");
         process::exit(-1);
     }
@@ -190,6 +203,7 @@ fn main() {
 
     let mut selected = if !args.headless {
         let repository = tui::Repository::new(args.chip, OPTIONS, &args.option);
+
         // TUI stuff ahead
         let terminal = tui::init_terminal().unwrap();
 
@@ -227,7 +241,7 @@ fn main() {
         }
     }
 
-    let dir = PathBuf::from(&args.name);
+    let dir = path.join(&args.name);
     std::fs::create_dir(&dir).unwrap();
 
     for &(file_path, contents) in template_files::TEMPLATE_FILES.iter() {
@@ -248,14 +262,14 @@ fn main() {
         .arg("group_imports=StdExternalCrate")
         .arg("--config")
         .arg("imports_granularity=Module")
-        .current_dir(&args.name)
+        .current_dir(path.join(&args.name))
         .output()
         .unwrap();
 
     // Run git init
     process::Command::new("git")
         .arg("init")
-        .current_dir(&args.name)
+        .current_dir(path.join(&args.name))
         .output()
         .unwrap();
 }

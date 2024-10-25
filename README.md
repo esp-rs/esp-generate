@@ -11,23 +11,29 @@ Template generation tool to create `no_std` applications targeting Espressif's l
 ## Quickstart
 
 To generate a proect using this template:
+
 1. Install `esp-generate`:
+
 ```
 cargo install esp-generate --git https://github.com/esp-rs/esp-generate.git
 ```
-2. Generate a project. There are two options:
-     1. Using TUI:
-        ```
-        esp-generate --chip esp32 tests
-        ```
-        Replace the chip and project name accordingly and choose the different options using the TUI.
 
-     2. Adding the options to the `esp-generate command:
-        ```
-        esp-generate --chip esp32 -o wifi -o alloc tests
-        ```
-        Replace the chip and project name accordingly and choose the different options using the `-o/--option` flag.
-        For a full list of available options, see [Usage](#usage) section.
+2. Generate a project. There are two options:
+
+   1. Using TUI:
+
+      ```
+      esp-generate --chip esp32 tests
+      ```
+
+      Replace the chip and project name accordingly and choose the different options using the TUI.
+
+   2. Adding the options to the `esp-generate command:
+      ```
+      esp-generate --chip esp32 -o wifi -o alloc tests
+      ```
+      Replace the chip and project name accordingly and choose the different options using the `-o/--option` flag.
+      For a full list of available options, see [Usage](#usage) section.
 
 ## Usage
 
@@ -52,7 +58,6 @@ Options:
 - `ble`: Enables BLE via the `esp-wifi` crate. Requires `alloc`.
 - `embassy`: Adds `embassy` framework support.
 - `probe-rs`: Enables `defmt` and flashes using `probe-rs` instead of `espflash`.
-- `stack-protector`: Enable stack-smash protection (`nightly` only).
 - `optional`: Enables the following set of options:
   - `wokwi`: Adds support for Wokwi simulation using [VS Code Wokwi extension].
   - `dev-container`: Adds support for [VS Code Dev Containers] and [GitHub Codespaces].

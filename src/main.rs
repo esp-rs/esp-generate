@@ -391,16 +391,23 @@ fn process_options(args: &Args) {
     for option in &args.option {
         // Find the matching option in OPTIONS
         if let Some(option_item) = OPTIONS.iter().find(|item| item.name() == *option) {
-            // Check if the chip is supported. If the chip list is empty, all chips are supported
+            // Check if the chip is supported. If the chip list is empty,
+            // all chips are supported:
             if !option_item.chips().iter().any(|chip| chip == &args.chip)
                 && !option_item.chips().is_empty()
             {
                 eprintln!(
-                    "Error: Option {:?} is not supported for chip {:?}",
+                    "Error: Option '{}' is not supported for chip {}",
                     option, args.chip
                 );
+                process::exit(-1);
             }
         }
+    }
+
+    if args.option.contains(&String::from("ble")) && args.option.contains(&String::from("wifi")) {
+        eprintln!("Error: Options 'ble' and 'wifi' are mutually exclusive");
+        process::exit(-1);
     }
 }
 

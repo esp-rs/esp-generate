@@ -24,42 +24,19 @@ concurrency:
 
 jobs:
   verify:
-    name: "${{ matrix.chip }} | ${{ matrix.options }}"
-
+    name: "Check ${{ matrix.chip }}"
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        chip: [
-            "esp32",
-            "esp32c2",
-            "esp32c3",
-            "esp32c6",
-            "esp32h2",
-            "esp32s2",
-            "esp32s3",
-          ]
-        options: [
-          "",
-          "-o alloc",
-          "-o wifi -o alloc",
-          "-o ble -o alloc",
-          "-o embassy",
-          "-o probe-rs",
-          "-o stack-protector"
-        ]
-        # Exclude some combinations that are not supported
-        exclude:
-          - chip: "esp32h2"
-            options: "-o wifi -o alloc"
-          - chip: "esp32s2"
-            options: "-o ble -o alloc"
+        chip: [esp32, esp32c2, esp32c3, esp32c6, esp32h2, esp32s2, esp32s3]
+
     steps:
       - uses: actions/checkout@v4
 
       # Rust toolchain for Xtensa:
-      - if: matrix.chip == 'esp32' || matrix.chip == 'esp32s2' || matrix.chip == 'esp32s3'
+      - if: ${{ contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.chip) }}
         uses: esp-rs/xtensa-toolchain@v1.5
         with:
           default: true
@@ -67,27 +44,23 @@ jobs:
           ldproxy: false
 
       # Rust toolchain for RISC-V:
-      - if: matrix.chip != 'esp32' && matrix.chip != 'esp32s2' && matrix.chip != 'esp32s3'
+      - if: ${{ !contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.chip) }}
         uses: dtolnay/rust-toolchain@stable
-        with:
-          target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
-          components: clippy,rustfmt,rust-src
-
-      # Rust toolchain for RISC-V:
-      - if: matrix.chip != 'esp32' && matrix.chip != 'esp32s2' && matrix.chip != 'esp32s3' && matrix.options == '-o stack-protector'
-        uses: dtolnay/rust-toolchain@nightly
         with:
           target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
           components: clippy,rustfmt,rust-src
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Generate project
-        run: cargo run --release -- --chip ${{ matrix.chip }}  --headless ${{ matrix.options }} test
+      - name: Generate and check project
+        run: cd xtask && cargo run -- check ${{ matrix.chip }}
 
-      - name: Build and check the project
-        working-directory: test
-        run: |
-            cargo fmt -- --check
-            cargo clippy --no-deps -- -Dwarnings
-            cargo build --release
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run tests
+        run: cargo test

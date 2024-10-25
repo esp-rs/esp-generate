@@ -28,7 +28,7 @@ cargo install esp-generate --git https://github.com/esp-rs/esp-generate.git
 
       Replace the chip and project name accordingly and choose the different options using the TUI.
 
-   2. Adding the options to the `esp-generate command:
+   2. Adding the options to the `esp-generate` command:
       ```
       esp-generate --chip esp32 -o wifi -o alloc tests
       ```

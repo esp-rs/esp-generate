@@ -53,7 +53,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Generate and check project
-        run: cd xtask && cargo run -- check ${{ matrix.chip }}
+        run: cd xtask && cargo run -- check ${{ matrix.chip }} --all
 
   test:
     runs-on: ubuntu-latest

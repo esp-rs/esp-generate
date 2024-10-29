@@ -6,6 +6,8 @@ on:
   pull_request:
     paths-ignore:
       - "**/README.md"
+  schedule:
+    - cron: "50 7 * * *"
   workflow_dispatch:
 
 env:
@@ -53,7 +55,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Generate and check project
-        run: cd xtask && cargo run -- check ${{ matrix.chip }} --all
+        if: github.event_name != 'schedule' &&  github.event_name != 'workflow_dispatch'
+        run: cd xtask && cargo run -- check ${{ matrix.chip }}
+
+      - name: Generate and check project (all combinations)
+        if: github.event_name == 'schedule' ||  github.event_name == 'workflow_dispatch'
+        run: cd xtask && cargo run -- check ${{ matrix.chip }} --all-combinations
+
 
   test:
     runs-on: ubuntu-latest

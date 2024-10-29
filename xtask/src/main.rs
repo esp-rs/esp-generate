@@ -23,7 +23,7 @@ enum Commands {
         chip: Chip,
         /// Verify all possible options combinations
         #[arg(short, long)]
-        all: bool,
+        all_combinations: bool,
     },
 }
 
@@ -38,18 +38,21 @@ fn main() -> Result<()> {
     let workspace = workspace.parent().unwrap().canonicalize()?;
 
     match Cli::parse().command {
-        Commands::Check { chip, all } => check(&workspace, chip, all),
+        Commands::Check {
+            chip,
+            all_combinations,
+        } => check(&workspace, chip, all_combinations),
     }
 }
 
 // ----------------------------------------------------------------------------
 // CHECK
 
-fn check(workspace: &Path, chip: Chip, all: bool) -> Result<()> {
+fn check(workspace: &Path, chip: Chip, all_combinations: bool) -> Result<()> {
     log::info!("CHECK: {chip}");
 
     const PROJECT_NAME: &str = "test";
-    for options in options_for_chip(chip, all) {
+    for options in options_for_chip(chip, all_combinations) {
         log::info!("WITH OPTIONS: {options:?}");
 
         // We will generate the project in a temporary directory, to avoid
@@ -92,7 +95,7 @@ fn check(workspace: &Path, chip: Chip, all: bool) -> Result<()> {
     Ok(())
 }
 
-fn options_for_chip(chip: Chip, all: bool) -> Vec<Vec<String>> {
+fn options_for_chip(chip: Chip, all_combinations: bool) -> Vec<Vec<String>> {
     let default_options: Vec<Vec<String>> = vec![
         vec![], // No options
         vec!["alloc".into()],
@@ -115,7 +118,7 @@ fn options_for_chip(chip: Chip, all: bool) -> Vec<Vec<String>> {
             .collect::<Vec<_>>(),
         _ => default_options,
     };
-    if !all {
+    if !all_combinations {
         return available_options;
     } else {
         // Return all the combination of availble options

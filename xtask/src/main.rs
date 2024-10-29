@@ -54,7 +54,8 @@ fn check(workspace: &Path, chip: Chip, all: bool) -> Result<()> {
 
         // We will generate the project in a temporary directory, to avoid
         // making a mess when this subcommand is executed locally:
-        let project_path = tempfile::tempdir()?.into_path();
+        let project_dir = tempfile::tempdir()?;
+        let project_path = project_dir.path();
         log::info!("PROJECT PATH: {project_path:?}");
 
         // Generate a project targeting the specified chip and using the
@@ -84,6 +85,8 @@ fn check(workspace: &Path, chip: Chip, all: bool) -> Result<()> {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .output()?;
+
+        project_dir.close()?;
     }
 
     Ok(())

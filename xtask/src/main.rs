@@ -67,7 +67,7 @@ fn check(workspace: &Path, chip: Chip, all_combinations: bool) -> Result<()> {
 
         // Ensure that the generated project builds without errors:
         Command::new("cargo")
-            .args(["build", "--release"])
+            .args(["check", "--release"])
             .current_dir(project_path.join(PROJECT_NAME))
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())

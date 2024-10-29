@@ -9,6 +9,11 @@ on:
   schedule:
     - cron: "50 7 * * *"
   workflow_dispatch:
+    inputs:
+      all_combinations:
+        description: 'Checks all combinations of options'
+        required: true
+        type: boolean
 
 env:
   CARGO_TERM_COLOR: always
@@ -55,11 +60,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Generate and check project
-        if: github.event_name != 'schedule' &&  github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'schedule' &&  !inputs.all_combinations
         run: cd xtask && cargo run -- check ${{ matrix.chip }}
 
       - name: Generate and check project (all combinations)
-        if: github.event_name == 'schedule' ||  github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'schedule' ||  inputs.all_combinations
         run: cd xtask && cargo run -- check ${{ matrix.chip }} --all-combinations
 
 

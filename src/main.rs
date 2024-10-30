@@ -1,4 +1,8 @@
-use std::{env, path::PathBuf, process};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    process,
+};
 
 use clap::Parser;
 use esp_metadata::Chip;
@@ -255,16 +259,20 @@ fn main() {
         .arg("group_imports=StdExternalCrate")
         .arg("--config")
         .arg("imports_granularity=Module")
-        .current_dir(path.join(&args.name))
+        .current_dir(&dir)
         .output()
         .unwrap();
 
-    // Run git init
-    process::Command::new("git")
-        .arg("init")
-        .current_dir(path.join(&args.name))
-        .output()
-        .unwrap();
+    if should_initialize_git_repo(&dir) {
+        // Run git init
+        process::Command::new("git")
+            .arg("init")
+            .current_dir(&dir)
+            .output()
+            .unwrap();
+    } else {
+        eprintln!("Current directory is already in a git repository, skipping git initialization");
+    }
 }
 
 fn process_file(
@@ -409,6 +417,23 @@ fn process_options(args: &Args) {
         eprintln!("Error: Options 'ble' and 'wifi' are mutually exclusive");
         process::exit(-1);
     }
+}
+
+fn should_initialize_git_repo(mut path: &Path) -> bool {
+    loop {
+        let dotgit_path = path.join(".git");
+        if dotgit_path.exists() && dotgit_path.is_dir() {
+            return false;
+        }
+
+        if let Some(parent) = path.parent() {
+            path = parent;
+        } else {
+            break;
+        }
+    }
+
+    true
 }
 
 #[cfg(test)]

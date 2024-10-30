@@ -5,6 +5,7 @@ use std::{
 };
 
 use clap::Parser;
+use env_logger::{Builder, Env};
 use esp_metadata::Chip;
 
 mod template_files;
@@ -178,6 +179,10 @@ struct Args {
 }
 
 fn main() {
+    Builder::from_env(Env::default().default_filter_or(log::LevelFilter::Info.as_str()))
+        .format_target(false)
+        .init();
+
     let args = Args::parse();
 
     let path = &args
@@ -186,12 +191,12 @@ fn main() {
         .unwrap_or_else(|| env::current_dir().unwrap());
 
     if !path.is_dir() {
-        eprintln!("Output path must be a directory");
+        log::error!("Output path must be a directory");
         process::exit(-1);
     }
 
     if path.join(&args.name).exists() {
-        eprintln!("Directory already exists");
+        log::error!("Directory already exists");
         process::exit(-1);
     }
 
@@ -271,7 +276,7 @@ fn main() {
             .output()
             .unwrap();
     } else {
-        eprintln!("Current directory is already in a git repository, skipping git initialization");
+        log::warn!("Current directory is already in a git repository, skipping git initialization");
     }
 }
 
@@ -336,7 +341,7 @@ fn process_file(
 
         // that's a bad workaround
         if trimmed == "#[rustfmt::skip]" {
-            println!("Skipping rustfmt");
+            log::info!("Skipping rustfmt");
             continue;
         }
 
@@ -404,9 +409,10 @@ fn process_options(args: &Args) {
             if !option_item.chips().iter().any(|chip| chip == &args.chip)
                 && !option_item.chips().is_empty()
             {
-                eprintln!(
-                    "Error: Option '{}' is not supported for chip {}",
-                    option, args.chip
+                log::error!(
+                    "Option '{}' is not supported for chip {}",
+                    option,
+                    args.chip
                 );
                 process::exit(-1);
             }
@@ -414,7 +420,7 @@ fn process_options(args: &Args) {
     }
 
     if args.option.contains(&String::from("ble")) && args.option.contains(&String::from("wifi")) {
-        eprintln!("Error: Options 'ble' and 'wifi' are mutually exclusive");
+        log::error!("Options 'ble' and 'wifi' are mutually exclusive");
         process::exit(-1);
     }
 }

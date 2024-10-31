@@ -256,10 +256,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     fs::create_dir(&project_dir)?;
 
     for &(file_path, contents) in template_files::TEMPLATE_FILES.iter() {
-        if file_path == "Cargo.lock" {
-            continue;
-        }
-
         if let Some(processed) = process_file(contents, &selected, &variables) {
             let file_path = project_dir.join(file_path);
 

@@ -1,8 +1,9 @@
 use std::{
     env,
+    error::Error,
     fs,
     path::{Path, PathBuf},
-    process,
+    process::{self, Command},
 };
 
 use clap::Parser;
@@ -33,6 +34,7 @@ pub enum GeneratorOptionItem {
     Category(GeneratorOptionCategory),
     Option(GeneratorOption),
 }
+
 impl GeneratorOptionItem {
     fn title(&self) -> String {
         match self {
@@ -185,7 +187,7 @@ struct Args {
     output_path: Option<PathBuf>,
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     Builder::from_env(Env::default().default_filter_or(log::LevelFilter::Info.as_str()))
         .format_target(false)
         .init();
@@ -214,12 +216,12 @@ fn main() {
         let repository = tui::Repository::new(args.chip, OPTIONS, &args.option);
 
         // TUI stuff ahead
-        let terminal = tui::init_terminal().unwrap();
+        let terminal = tui::init_terminal()?;
 
         // create app and run it
-        let selected = tui::App::new(repository).run(terminal).unwrap();
+        let selected = tui::App::new(repository).run(terminal)?;
 
-        tui::restore_terminal().unwrap();
+        tui::restore_terminal()?;
         // done with the TUI
 
         if let Some(selected) = selected {
@@ -266,28 +268,30 @@ fn main() {
         }
     }
 
-    // Run cargo fmt
-    process::Command::new("cargo")
-        .arg("fmt")
-        .arg("--")
-        .arg("--config")
-        .arg("group_imports=StdExternalCrate")
-        .arg("--config")
-        .arg("imports_granularity=Module")
-        .current_dir(&dir)
-        .output()
-        .unwrap();
+    // Run cargo fmt:
+    Command::new("cargo")
+        .args([
+            "fmt",
+            "--",
+            "--config",
+            "group_imports=StdExternalCrate",
+            "--config",
+            "imports_granularity=Module",
+        ])
+        .current_dir(&project_dir)
+        .output()?;
 
-    if should_initialize_git_repo(&dir) {
-        // Run git init
-        process::Command::new("git")
+    if should_initialize_git_repo(&project_dir) {
+        // Run git init:
+        Command::new("git")
             .arg("init")
-            .current_dir(&dir)
-            .output()
-            .unwrap();
+            .current_dir(&project_dir)
+            .output()?;
     } else {
         log::warn!("Current directory is already in a git repository, skipping git initialization");
     }
+
+    Ok(())
 }
 
 fn process_file(

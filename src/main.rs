@@ -1,7 +1,9 @@
 use std::{
     env,
+    error::Error,
+    fs,
     path::{Path, PathBuf},
-    process,
+    process::{self, Command},
 };
 
 use clap::Parser;
@@ -32,6 +34,7 @@ pub enum GeneratorOptionItem {
     Category(GeneratorOptionCategory),
     Option(GeneratorOption),
 }
+
 impl GeneratorOptionItem {
     fn title(&self) -> String {
         match self {
@@ -163,22 +166,28 @@ static CHIP_VARS: &[(Chip, &[(&str, &str)])] = &[
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
+    /// Name of the project to generate
     name: String,
 
+    /// Chip to target
     #[arg(short, long)]
     chip: Chip,
 
+    /// Run in headless mode (i.e. do not use the TUI)
     #[arg(long)]
     headless: bool,
 
+    // TODO: Can we list the options and/or point users to some documentation?
+    /// Generation options
     #[arg(short, long)]
     option: Vec<String>,
 
+    /// Directory in which to generate the project
     #[arg(short = 'O', long)]
     output_path: Option<PathBuf>,
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     Builder::from_env(Env::default().default_filter_or(log::LevelFilter::Info.as_str()))
         .format_target(false)
         .init();
@@ -207,12 +216,12 @@ fn main() {
         let repository = tui::Repository::new(args.chip, OPTIONS, &args.option);
 
         // TUI stuff ahead
-        let terminal = tui::init_terminal().unwrap();
+        let terminal = tui::init_terminal()?;
 
         // create app and run it
-        let selected = tui::App::new(repository).run(terminal).unwrap();
+        let selected = tui::App::new(repository).run(terminal)?;
 
-        tui::restore_terminal().unwrap();
+        tui::restore_terminal()?;
         // done with the TUI
 
         if let Some(selected) = selected {
@@ -243,57 +252,49 @@ fn main() {
         }
     }
 
-    let dir = path.join(&args.name);
-    std::fs::create_dir(&dir).unwrap();
+    let project_dir = path.join(&args.name);
+    fs::create_dir(&project_dir)?;
 
     for &(file_path, contents) in template_files::TEMPLATE_FILES.iter() {
-        let path = dir.join(file_path);
+        if let Some(processed) = process_file(contents, &selected, &variables) {
+            let file_path = project_dir.join(file_path);
 
-        let processed = process_file(file_path, contents, &selected, &variables);
-        if let Some(processed) = processed {
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, processed).unwrap();
+            fs::create_dir_all(file_path.parent().unwrap())?;
+            fs::write(file_path, processed)?;
         }
     }
 
-    // Run cargo fmt
-    process::Command::new("cargo")
-        .arg("fmt")
-        .arg("--")
-        .arg("--config")
-        .arg("group_imports=StdExternalCrate")
-        .arg("--config")
-        .arg("imports_granularity=Module")
-        .current_dir(&dir)
-        .output()
-        .unwrap();
+    // Run cargo fmt:
+    Command::new("cargo")
+        .args([
+            "fmt",
+            "--",
+            "--config",
+            "group_imports=StdExternalCrate",
+            "--config",
+            "imports_granularity=Module",
+        ])
+        .current_dir(&project_dir)
+        .output()?;
 
-    if should_initialize_git_repo(&dir) {
-        // Run git init
-        process::Command::new("git")
+    if should_initialize_git_repo(&project_dir) {
+        // Run git init:
+        Command::new("git")
             .arg("init")
-            .current_dir(&dir)
-            .output()
-            .unwrap();
+            .current_dir(&project_dir)
+            .output()?;
     } else {
         log::warn!("Current directory is already in a git repository, skipping git initialization");
     }
+
+    Ok(())
 }
 
 fn process_file(
-    // Path to the file
-    path: &str,
-    // Raw content of the file
-    contents: &str,
-    // Selected options
-    options: &[String],
-    // Variables and its value in a tuple
-    variables: &[(String, String)],
+    contents: &str,                 // Raw content of the file
+    options: &[String],             // Selected options
+    variables: &[(String, String)], // Variables and their values in tuples
 ) -> Option<String> {
-    if path.ends_with("Cargo.lock") {
-        return None;
-    }
-
     let mut res = String::new();
 
     let mut replace = None;
@@ -449,7 +450,6 @@ mod test {
     #[test]
     fn test_nested_if_else1() {
         let res = process_file(
-            "/foo",
             r#"
         #IF option("opt1")
         opt1
@@ -480,7 +480,6 @@ mod test {
     #[test]
     fn test_nested_if_else2() {
         let res = process_file(
-            "/foo",
             r#"
         #IF option("opt1")
         opt1
@@ -510,7 +509,6 @@ mod test {
     #[test]
     fn test_nested_if_else3() {
         let res = process_file(
-            "/foo",
             r#"
         #IF option("opt1")
         opt1
@@ -541,7 +539,6 @@ mod test {
     #[test]
     fn test_nested_if_else4() {
         let res = process_file(
-            "/foo",
             r#"
         #IF option("opt1")
         #IF option("opt2")
@@ -570,7 +567,6 @@ mod test {
     #[test]
     fn test_nested_if_else5() {
         let res = process_file(
-            "/foo",
             r#"
         #IF option("opt1")
         #IF option("opt2")

@@ -22,11 +22,27 @@ pub struct GeneratorOption {
     chips: &'static [Chip],
 }
 
+impl GeneratorOption {
+    fn options(&self) -> Vec<String> {
+        vec![self.name.to_string()]
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct GeneratorOptionCategory {
     name: &'static str,
     display_name: &'static str,
     options: &'static [GeneratorOptionItem],
+}
+
+impl GeneratorOptionCategory {
+    fn options(&self) -> Vec<String> {
+        let mut res = Vec::new();
+        for option in self.options {
+            res.extend(option.options());
+        }
+        res
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -47,6 +63,13 @@ impl GeneratorOptionItem {
         match self {
             GeneratorOptionItem::Category(category) => category.name.to_string(),
             GeneratorOptionItem::Option(option) => option.name.to_string(),
+        }
+    }
+
+    fn options(&self) -> Vec<String> {
+        match self {
+            GeneratorOptionItem::Category(category) => category.options(),
+            GeneratorOptionItem::Option(option) => option.options(),
         }
     }
 
@@ -155,9 +178,14 @@ struct Args {
     #[arg(long)]
     headless: bool,
 
-    // TODO: Can we list the options and/or point users to some documentation?
     /// Generation options
-    #[arg(short, long)]
+    #[arg(short, long, help = {
+        let mut all_options = Vec::new();
+        for option in OPTIONS {
+            all_options.extend(option.options());
+        }
+        format!("Generation options: {}",all_options.join(","))
+    })]
     option: Vec<String>,
 
     /// Directory in which to generate the project

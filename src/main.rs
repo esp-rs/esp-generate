@@ -141,28 +141,6 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     }),
 ];
 
-static CHIP_VARS: &[(Chip, &[(&str, &str)])] = &[
-    (Chip::Esp32, &[("rust_target", "xtensa-esp32-none-elf")]),
-    (
-        Chip::Esp32c2,
-        &[("rust_target", "riscv32imc-unknown-none-elf")],
-    ),
-    (
-        Chip::Esp32c3,
-        &[("rust_target", "riscv32imc-unknown-none-elf")],
-    ),
-    (
-        Chip::Esp32c6,
-        &[("rust_target", "riscv32imac-unknown-none-elf")],
-    ),
-    (
-        Chip::Esp32h2,
-        &[("rust_target", "riscv32imac-unknown-none-elf")],
-    ),
-    (Chip::Esp32s2, &[("rust_target", "xtensa-esp32s2-none-elf")]),
-    (Chip::Esp32s3, &[("rust_target", "xtensa-esp32s3-none-elf")]),
-];
-
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -244,13 +222,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ("mcu".to_string(), args.chip.to_string()),
     ];
 
-    for (chip, vars) in CHIP_VARS {
-        if chip == &args.chip {
-            for (key, value) in vars.iter() {
-                variables.push((key.to_string(), value.to_string()))
-            }
-        }
-    }
+    variables.push(("rust_target".to_string(), args.chip.target().to_string()));
 
     let project_dir = path.join(&args.name);
     fs::create_dir(&project_dir)?;

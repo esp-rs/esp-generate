@@ -34,6 +34,14 @@ esp-alloc = { version = "0.5.0" }
 #ENDIF
 #IF option("wifi") || option("ble")
 embedded-io = "0.6.1"
+
+#IF option("embassy")
+embedded-io-async = "0.6.1"
+#IF option("wifi")
+embassy-net = { version = "0.4.0", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet"] }
+#ENDIF
+#ENDIF
+
 esp-wifi = { version = "0.10.1", default-features=false, features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
@@ -41,6 +49,7 @@ esp-wifi = { version = "0.10.1", default-features=false, features = [
     "utils",
     #IF option("wifi")
     "wifi",
+    "wifi-default",
     #ENDIF
     #IF option("ble")
     "ble",
@@ -51,6 +60,12 @@ esp-wifi = { version = "0.10.1", default-features=false, features = [
     #ENDIF
     #IF !option("probe-rs")
     "log",
+    #ENDIF
+    #IF option("embassy")
+    "async",
+    #ENDIF
+    #IF option("wifi")
+    "embassy-net",
     #ENDIF
 ] }
 heapless = { version = "0.8.0", default-features = false }
@@ -75,6 +90,7 @@ smoltcp = { version = "0.11.0", default-features = false, features = [
 #ENDIF
 #IF option("embassy")
 embassy-executor = { version = "0.6.0",  features = [
+    "task-arena-size-12288",
     #IF option("probe-rs")
     "defmt"
     #ENDIF

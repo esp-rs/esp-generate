@@ -163,17 +163,23 @@ static CHIP_VARS: &[(Chip, &[(&str, &str)])] = &[
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
+    /// Name of the project to generate
     name: String,
 
+    /// Chip to target
     #[arg(short, long)]
     chip: Chip,
 
+    /// Run in headless mode (i.e. do not use the TUI)
     #[arg(long)]
     headless: bool,
 
+    // TODO: Can we list the options and/or point users to some documentation?
+    /// Generation options
     #[arg(short, long)]
     option: Vec<String>,
 
+    /// Directory in which to generate the project
     #[arg(short = 'O', long)]
     output_path: Option<PathBuf>,
 }

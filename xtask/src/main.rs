@@ -21,6 +21,9 @@ enum Commands {
         /// Target chip to check
         #[arg(value_enum)]
         chip: Chip,
+        /// Verify all possible options combinations
+        #[arg(short, long)]
+        all_combinations: bool,
     },
 }
 
@@ -35,23 +38,27 @@ fn main() -> Result<()> {
     let workspace = workspace.parent().unwrap().canonicalize()?;
 
     match Cli::parse().command {
-        Commands::Check { chip } => check(&workspace, chip),
+        Commands::Check {
+            chip,
+            all_combinations,
+        } => check(&workspace, chip, all_combinations),
     }
 }
 
 // ----------------------------------------------------------------------------
 // CHECK
 
-fn check(workspace: &Path, chip: Chip) -> Result<()> {
+fn check(workspace: &Path, chip: Chip, all_combinations: bool) -> Result<()> {
     log::info!("CHECK: {chip}");
 
     const PROJECT_NAME: &str = "test";
-    for options in options_for_chip(chip) {
+    for options in options_for_chip(chip, all_combinations) {
         log::info!("WITH OPTIONS: {options:?}");
 
         // We will generate the project in a temporary directory, to avoid
         // making a mess when this subcommand is executed locally:
-        let project_path = tempfile::tempdir()?.into_path();
+        let project_dir = tempfile::tempdir()?;
+        let project_path = project_dir.path();
         log::info!("PROJECT PATH: {project_path:?}");
 
         // Generate a project targeting the specified chip and using the
@@ -60,7 +67,7 @@ fn check(workspace: &Path, chip: Chip) -> Result<()> {
 
         // Ensure that the generated project builds without errors:
         Command::new("cargo")
-            .args(["build", "--release"])
+            .args(["check", "--release"])
             .current_dir(project_path.join(PROJECT_NAME))
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
@@ -81,12 +88,14 @@ fn check(workspace: &Path, chip: Chip) -> Result<()> {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .output()?;
+
+        project_dir.close()?;
     }
 
     Ok(())
 }
 
-fn options_for_chip(chip: Chip) -> Vec<Vec<String>> {
+fn options_for_chip(chip: Chip, all_combinations: bool) -> Vec<Vec<String>> {
     let default_options: Vec<Vec<String>> = vec![
         vec![], // No options
         vec!["alloc".into()],
@@ -96,7 +105,7 @@ fn options_for_chip(chip: Chip) -> Vec<Vec<String>> {
         vec!["probe-rs".into()],
     ];
 
-    match chip {
+    let available_options = match chip {
         Chip::Esp32h2 => default_options
             .iter()
             .filter(|opts| !opts.contains(&"wifi".to_string()))
@@ -108,6 +117,29 @@ fn options_for_chip(chip: Chip) -> Vec<Vec<String>> {
             .cloned()
             .collect::<Vec<_>>(),
         _ => default_options,
+    };
+    if !all_combinations {
+        return available_options;
+    } else {
+        // Return all the combination of availble options
+        let mut result = vec![];
+        for i in 0..(1 << available_options.len()) {
+            let mut options = vec![];
+            for j in 0..available_options.len() {
+                if i & (1 << j) != 0 {
+                    options.extend(available_options[j].clone());
+                }
+            }
+            result.push(options);
+        }
+        // Filter all the items that contains wifi and ble
+        let result = result
+            .into_iter()
+            .filter(|opts| {
+                !opts.contains(&"wifi".to_string()) || !opts.contains(&"ble".to_string())
+            })
+            .collect::<Vec<_>>();
+        return result;
     }
 }
 

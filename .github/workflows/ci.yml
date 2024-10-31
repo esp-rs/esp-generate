@@ -6,6 +6,7 @@ on:
   pull_request:
     paths-ignore:
       - "**/README.md"
+  merge_group:
   schedule:
     - cron: "50 7 * * *"
   workflow_dispatch:

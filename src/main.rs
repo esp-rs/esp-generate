@@ -1,5 +1,6 @@
 use std::{
     env,
+    fs,
     path::{Path, PathBuf},
     process,
 };
@@ -249,16 +250,19 @@ fn main() {
         }
     }
 
-    let dir = path.join(&args.name);
-    std::fs::create_dir(&dir).unwrap();
+    let project_dir = path.join(&args.name);
+    fs::create_dir(&project_dir)?;
 
     for &(file_path, contents) in template_files::TEMPLATE_FILES.iter() {
-        let path = dir.join(file_path);
+        if file_path == "Cargo.lock" {
+            continue;
+        }
 
-        let processed = process_file(file_path, contents, &selected, &variables);
-        if let Some(processed) = processed {
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, processed).unwrap();
+        if let Some(processed) = process_file(contents, &selected, &variables) {
+            let file_path = project_dir.join(file_path);
+
+            fs::create_dir_all(file_path.parent().unwrap())?;
+            fs::write(file_path, processed)?;
         }
     }
 
@@ -287,19 +291,10 @@ fn main() {
 }
 
 fn process_file(
-    // Path to the file
-    path: &str,
-    // Raw content of the file
-    contents: &str,
-    // Selected options
-    options: &[String],
-    // Variables and its value in a tuple
-    variables: &[(String, String)],
+    contents: &str,                 // Raw content of the file
+    options: &[String],             // Selected options
+    variables: &[(String, String)], // Variables and their values in tuples
 ) -> Option<String> {
-    if path.ends_with("Cargo.lock") {
-        return None;
-    }
-
     let mut res = String::new();
 
     let mut replace = None;
@@ -455,7 +450,6 @@ mod test {
     #[test]
     fn test_nested_if_else1() {
         let res = process_file(
-            "/foo",
             r#"
         #IF option("opt1")
         opt1
@@ -486,7 +480,6 @@ mod test {
     #[test]
     fn test_nested_if_else2() {
         let res = process_file(
-            "/foo",
             r#"
         #IF option("opt1")
         opt1
@@ -516,7 +509,6 @@ mod test {
     #[test]
     fn test_nested_if_else3() {
         let res = process_file(
-            "/foo",
             r#"
         #IF option("opt1")
         opt1
@@ -547,7 +539,6 @@ mod test {
     #[test]
     fn test_nested_if_else4() {
         let res = process_file(
-            "/foo",
             r#"
         #IF option("opt1")
         #IF option("opt2")
@@ -576,7 +567,6 @@ mod test {
     #[test]
     fn test_nested_if_else5() {
         let res = process_file(
-            "/foo",
             r#"
         #IF option("opt1")
         #IF option("opt2")

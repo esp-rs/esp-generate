@@ -1,13 +1,14 @@
-use std::io::stdout;
+use std::{error::Error, io};
 
-use crossterm::ExecutableCommand;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    ExecutableCommand,
 };
+use esp_metadata::Chip;
 use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 
-use super::GeneratorOptionItem;
+use super::{GeneratorOption, GeneratorOptionItem};
 
 const TODO_HEADER_BG: Color = tailwind::BLUE.c950;
 const NORMAL_ROW_COLOR: Color = tailwind::SLATE.c950;
@@ -15,19 +16,17 @@ const SELECTED_STYLE_FG: Color = tailwind::BLUE.c300;
 const DISABLED_STYLE_FG: Color = tailwind::GRAY.c600;
 const TEXT_COLOR: Color = tailwind::SLATE.c200;
 
+type AppResult<T> = Result<T, Box<dyn Error>>;
+
 pub struct Repository {
-    chip: super::Chip,
+    chip: Chip,
     options: &'static [GeneratorOptionItem],
     path: Vec<usize>,
     selected: Vec<String>,
 }
 
 impl Repository {
-    pub fn new(
-        chip: super::Chip,
-        options: &'static [GeneratorOptionItem],
-        selected: &[String],
-    ) -> Self {
+    pub fn new(chip: Chip, options: &'static [GeneratorOptionItem], selected: &[String]) -> Self {
         Self {
             chip,
             options,
@@ -42,7 +41,7 @@ impl Repository {
         for &index in &self.path {
             current = match current[index] {
                 GeneratorOptionItem::Category(category) => category.options,
-                GeneratorOptionItem::Option(_) => todo!(),
+                GeneratorOptionItem::Option(_) => unreachable!(),
             }
         }
 
@@ -56,32 +55,16 @@ impl Repository {
     fn toggle_current(&mut self, index: usize) {
         let current = self.current_level()[index];
         match current {
-            GeneratorOptionItem::Category(_) => todo!(),
+            GeneratorOptionItem::Category(_) => unreachable!(),
             GeneratorOptionItem::Option(option) => {
                 if !option.chips.is_empty() && !option.chips.contains(&self.chip) {
                     return;
                 }
 
-                let name = option.name;
-
-                match self.selected.iter().position(|v| v == name) {
-                    None => {
-                        self.selected.push(name.to_string());
-                        // for enable in option.enables {
-                        //     if !self.selected.contains(&enable.to_string()) {
-                        //         self.selected.push(enable.to_string());
-                        //     }
-                        // }
-                        // for disable in option.disables {
-                        //     if self.selected.contains(&disable.to_string()) {
-                        //         let idx = self.selected.iter().position(|v| v == disable).unwrap();
-                        //         self.selected.remove(idx);
-                        //     }
-                        // }
-                    }
-                    Some(i) => {
-                        self.selected.remove(i);
-                    }
+                if let Some(i) = self.selected.iter().position(|v| v == option.name) {
+                    self.selected.remove(i);
+                } else {
+                    self.selected.push(option.name.to_string());
                 }
 
                 let currently_selected = self.selected.clone();
@@ -104,25 +87,18 @@ impl Repository {
     }
 
     fn is_option(&self, index: usize) -> bool {
-        match self.current_level()[index] {
-            GeneratorOptionItem::Category(_) => false,
-            GeneratorOptionItem::Option(_) => true,
-        }
+        matches!(self.current_level()[index], GeneratorOptionItem::Option(_))
     }
 
     fn up(&mut self) {
         self.path.pop();
     }
 
-    fn get_count(&self) -> usize {
+    fn count(&self) -> usize {
         self.current_level().len()
     }
 
-    fn current_title(&self) -> String {
-        "".to_string()
-    }
-
-    fn get_current_level_desc(&self) -> Vec<(bool, String)> {
+    fn current_level_desc(&self) -> Vec<(bool, String)> {
         self.current_level()
             .iter()
             .map(|v| {
@@ -147,8 +123,8 @@ impl Repository {
 
 fn find_option(
     option: String,
-    options: &'static [super::GeneratorOptionItem],
-) -> Option<&'static super::GeneratorOption> {
+    options: &'static [GeneratorOptionItem],
+) -> Option<&'static GeneratorOption> {
     for item in options {
         match item {
             GeneratorOptionItem::Category(category) => {
@@ -164,17 +140,17 @@ fn find_option(
     None
 }
 
-pub fn init_terminal() -> std::io::Result<Terminal<impl Backend>> {
+pub fn init_terminal() -> AppResult<Terminal<impl Backend>> {
     enable_raw_mode()?;
-    stdout().execute(EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(stdout());
+    io::stdout().execute(EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(io::stdout());
     let terminal = Terminal::new(backend)?;
     Ok(terminal)
 }
 
-pub fn restore_terminal() -> std::io::Result<()> {
+pub fn restore_terminal() -> AppResult<()> {
     disable_raw_mode()?;
-    stdout().execute(LeaveAlternateScreen)?;
+    io::stdout().execute(LeaveAlternateScreen)?;
     Ok(())
 }
 
@@ -187,6 +163,7 @@ impl App {
     pub fn new(repository: Repository) -> Self {
         let mut initial_state = ListState::default();
         initial_state.select(Some(0));
+
         Self {
             repository,
             state: initial_state,
@@ -195,10 +172,7 @@ impl App {
 }
 
 impl App {
-    pub fn run(
-        &mut self,
-        mut terminal: Terminal<impl Backend>,
-    ) -> std::io::Result<Option<Vec<String>>> {
+    pub fn run(&mut self, mut terminal: Terminal<impl Backend>) -> AppResult<Option<Vec<String>>> {
         loop {
             self.draw(&mut terminal)?;
 
@@ -225,7 +199,7 @@ impl App {
                         }
                         Char('j') | Down => {
                             if self.state.selected().unwrap_or_default()
-                                < self.repository.get_count() - 1
+                                < self.repository.count() - 1
                             {
                                 self.state
                                     .select(Some(self.state.selected().unwrap_or_default() + 1));
@@ -244,7 +218,7 @@ impl App {
         }
     }
 
-    fn draw(&mut self, terminal: &mut Terminal<impl Backend>) -> std::io::Result<()> {
+    fn draw(&mut self, terminal: &mut Terminal<impl Backend>) -> AppResult<()> {
         terminal.draw(|f| {
             f.render_widget(self, f.area());
         })?;
@@ -258,37 +232,45 @@ impl Widget for &mut App {
         // Create a space for header, todo list and the footer.
         let vertical = Layout::vertical([
             Constraint::Length(2),
-            Constraint::Min(0),
+            Constraint::Fill(1),
             Constraint::Length(2),
         ]);
         let [header_area, rest_area, footer_area] = vertical.areas(area);
 
-        // Create two chunks with equal vertical screen space. One for the list and the other for
-        // the info block.
+        // Create two chunks with equal vertical screen space. One for the list and the
+        // other for the info block.
         let vertical = Layout::vertical([Constraint::Percentage(100)]);
         let [upper_item_list_area] = vertical.areas(rest_area);
 
-        render_title(header_area, buf);
+        self.render_title(header_area, buf);
         self.render_item(upper_item_list_area, buf);
-        render_footer(footer_area, buf);
+        self.render_footer(footer_area, buf);
     }
 }
 
 impl App {
+    fn render_title(&self, area: Rect, buf: &mut Buffer) {
+        Paragraph::new("esp-generate")
+            .bold()
+            .centered()
+            .render(area, buf);
+    }
+
     fn render_item(&mut self, area: Rect, buf: &mut Buffer) {
-        // We create two blocks, one is for the header (outer) and the other is for list (inner).
+        // We create two blocks, one is for the header (outer) and the other is for the
+        // list (inner).
         let outer_block = Block::default()
             .borders(Borders::NONE)
             .fg(TEXT_COLOR)
             .bg(TODO_HEADER_BG)
-            .title(self.repository.current_title())
             .title_alignment(Alignment::Center);
         let inner_block = Block::default()
             .borders(Borders::NONE)
             .fg(TEXT_COLOR)
             .bg(NORMAL_ROW_COLOR);
 
-        // We get the inner area from outer_block. We'll use this area later to render the table.
+        // We get the inner area from outer_block. We'll use this area later to render
+        // the table.
         let outer_area = area;
         let inner_area = outer_block.inner(outer_area);
 
@@ -298,7 +280,7 @@ impl App {
         // Iterate through all elements in the `items` and stylize them.
         let items: Vec<ListItem> = self
             .repository
-            .get_current_level_desc()
+            .current_level_desc()
             .into_iter()
             .map(|v| {
                 ListItem::new(v.1).style(if v.0 {
@@ -321,23 +303,15 @@ impl App {
             .highlight_spacing(HighlightSpacing::Always);
 
         // We can now render the item list
-        // (look careful we are using StatefulWidget's render.)
+        // (look carefully, we are using StatefulWidget's render.)
         // ratatui::widgets::StatefulWidget::render as stateful_render
         StatefulWidget::render(items, inner_area, buf, &mut self.state);
     }
-}
 
-fn render_title(area: Rect, buf: &mut Buffer) {
-    Paragraph::new("esp-generate")
-        .bold()
-        .centered()
+    fn render_footer(&self, area: Rect, buf: &mut Buffer) {
+        Paragraph::new(
+            "\nUse ↓↑ to move, ← to go up, → to go deeper or change the value, s/S to save and generate, ESC/q to cancel"
+        ).centered()
         .render(area, buf);
-}
-
-fn render_footer(area: Rect, buf: &mut Buffer) {
-    Paragraph::new(
-        "\nUse ↓↑ to move, ← to go up, → to go deeper or change the value, s/S to save and generate, ESC/q to cancel",
-    )
-    .centered()
-    .render(area, buf);
+    }
 }

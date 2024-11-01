@@ -1,12 +1,15 @@
 # `esp-generate`
 
-Template generation tool to create `no_std` applications targeting Espressif's line of SoCs and modules. At present, this template supports the ESP32, ESP32-C2, ESP32-C3, ESP32-C6, ESP32-H2, ESP32-S2, and ESP32-S3. Additional devices will be added as they become available.
+Template generation tool to create `no_std` applications targeting Espressif's line of SoCs and modules.
 
-> [!WARNING]
+At present, this template supports the ESP32, ESP32-C2/C3/C6, ESP32-H2, and ESP32-S2/S3. Support for additional devices will be added as they become available.
+
+> [!NOTE]
 >
-> This project is still in the early stages of development. If you encounter any issue or you would like to see any feature added. Please, open an [issue].
+> This project is still in the early stages of development. If you encounter any problems, or you would like to see any feature added, please [open an issue] or [start a discussion].
 
-[issue]: https://github.com/esp-rs/esp-generate/issues/new
+[open an issue]: https://github.com/esp-rs/esp-generate/issues/new
+[start a discussion]: https://github.com/esp-rs/esp-generate/discussions/new/choose
 
 ## Quickstart
 
@@ -20,42 +23,27 @@ cargo install esp-generate --git https://github.com/esp-rs/esp-generate.git
 
 2. Generate a project. There are two options:
 
-   1. Using TUI:
+   1. Using the Terminal User Interface (TUI):
 
       ```
-      esp-generate --chip esp32 tests
+      esp-generate --chip esp32 your-project
       ```
 
-      Replace the chip and project name accordingly and choose the different options using the TUI.
+      Replace the chip and project name accordingly, and select the desired options using the TUI.
 
-   2. Adding the options to the `esp-generate` command:
+   2. Using the Command Line Interface (CLI), adding the options to the `esp-generate` command:
+
       ```
-      esp-generate --chip esp32 -o wifi -o alloc tests
+      esp-generate --chip esp32 -o alloc -o wifi your-project
       ```
-      Replace the chip and project name accordingly and choose the different options using the `-o/--option` flag.
-      For a full list of available options, see [Usage](#usage) section.
 
-## Usage
+      Replace the chip and project name accordingly, and select the desired options using the `-o/--option` flag. For a full list of available options, see [Available Options](#available-options) section of this README.
 
-```
-Usage: esp-generate [OPTIONS] --chip <CHIP> <NAME>
-
-Arguments:
-  <NAME>
-
-Options:
-  -c, --chip <CHIP>      [possible values: esp32, esp32s2, esp32s3, esp32c2, esp32c3, esp32c6, esp32h2]
-      --headless
-  -o, --option <OPTION>
-  -h, --help             Print help
-  -V, --version          Print version
-```
-
-### Available Options
+## Available Options
 
 - `alloc`: Enables allocations via the `esp-alloc` crate.
-- `wifi`: Enables Wi-Fi via the `esp-wifi` crate. Requires `alloc`.
-- `ble`: Enables BLE via the `esp-wifi` crate. Requires `alloc`.
+- `wifi`: Enables Wi-Fi via the `esp-wifi` crate; requires `alloc`.
+- `ble`: Enables BLE via the `esp-wifi` crate; requires `alloc`.
 - `embassy`: Adds `embassy` framework support.
 - `probe-rs`: Enables `defmt` and flashes using `probe-rs` instead of `espflash`.
 - `optional`: Enables the following set of options:

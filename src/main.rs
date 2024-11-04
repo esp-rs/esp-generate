@@ -184,7 +184,7 @@ struct Args {
         for option in OPTIONS {
             all_options.extend(option.options());
         }
-        format!("Generation options: {}",all_options.join(" ,")). For more information regarding the different options. Check the esp-generate Readme.
+        format!("Generation options: {} - For more information regarding the different options check the esp-generate README.md (https://github.com/esp-rs/esp-generate/blob/main/README.md).",all_options.join(", "))
     })]
     option: Vec<String>,
 

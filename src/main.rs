@@ -22,11 +22,27 @@ pub struct GeneratorOption {
     chips: &'static [Chip],
 }
 
+impl GeneratorOption {
+    fn options(&self) -> Vec<String> {
+        vec![self.name.to_string()]
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct GeneratorOptionCategory {
     name: &'static str,
     display_name: &'static str,
     options: &'static [GeneratorOptionItem],
+}
+
+impl GeneratorOptionCategory {
+    fn options(&self) -> Vec<String> {
+        let mut res = Vec::new();
+        for option in self.options {
+            res.extend(option.options());
+        }
+        res
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -47,6 +63,13 @@ impl GeneratorOptionItem {
         match self {
             GeneratorOptionItem::Category(category) => category.name.to_string(),
             GeneratorOptionItem::Option(option) => option.name.to_string(),
+        }
+    }
+
+    fn options(&self) -> Vec<String> {
+        match self {
+            GeneratorOptionItem::Category(category) => category.options(),
+            GeneratorOptionItem::Option(option) => option.options(),
         }
     }
 
@@ -141,28 +164,6 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     }),
 ];
 
-static CHIP_VARS: &[(Chip, &[(&str, &str)])] = &[
-    (Chip::Esp32, &[("rust_target", "xtensa-esp32-none-elf")]),
-    (
-        Chip::Esp32c2,
-        &[("rust_target", "riscv32imc-unknown-none-elf")],
-    ),
-    (
-        Chip::Esp32c3,
-        &[("rust_target", "riscv32imc-unknown-none-elf")],
-    ),
-    (
-        Chip::Esp32c6,
-        &[("rust_target", "riscv32imac-unknown-none-elf")],
-    ),
-    (
-        Chip::Esp32h2,
-        &[("rust_target", "riscv32imac-unknown-none-elf")],
-    ),
-    (Chip::Esp32s2, &[("rust_target", "xtensa-esp32s2-none-elf")]),
-    (Chip::Esp32s3, &[("rust_target", "xtensa-esp32s3-none-elf")]),
-];
-
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -177,9 +178,14 @@ struct Args {
     #[arg(long)]
     headless: bool,
 
-    // TODO: Can we list the options and/or point users to some documentation?
     /// Generation options
-    #[arg(short, long)]
+    #[arg(short, long, help = {
+        let mut all_options = Vec::new();
+        for option in OPTIONS {
+            all_options.extend(option.options());
+        }
+        format!("Generation options: {} - For more information regarding the different options check the esp-generate README.md (https://github.com/esp-rs/esp-generate/blob/main/README.md).",all_options.join(", "))
+    })]
     option: Vec<String>,
 
     /// Directory in which to generate the project
@@ -244,13 +250,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ("mcu".to_string(), args.chip.to_string()),
     ];
 
-    for (chip, vars) in CHIP_VARS {
-        if chip == &args.chip {
-            for (key, value) in vars.iter() {
-                variables.push((key.to_string(), value.to_string()))
-            }
-        }
-    }
+    variables.push(("rust_target".to_string(), args.chip.target().to_string()));
 
     let project_dir = path.join(&args.name);
     fs::create_dir(&project_dir)?;

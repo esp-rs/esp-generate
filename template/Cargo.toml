@@ -63,9 +63,9 @@ esp-wifi = { version = "0.10.1", default-features=false, features = [
     #ENDIF
     #IF option("embassy")
     "async",
-    #ENDIF
     #IF option("wifi")
     "embassy-net",
+    #ENDIF
     #ENDIF
 ] }
 heapless = { version = "0.8.0", default-features = false }

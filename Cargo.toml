@@ -9,6 +9,15 @@ license      = "MIT OR Apache-2.0"
 keywords     = ["esp32", "template"]
 categories   = ["command-line-utilities", "template-engine"]
 
+include = [
+    "Cargo.toml",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+    "README.md",
+    "src",
+    "template",
+]
+
 [dependencies]
 clap         = { version = "4.5.20", features = ["derive"] }
 crossterm    = "0.28.1"

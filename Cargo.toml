@@ -1,7 +1,12 @@
 [package]
-name    = "esp-generate"
-version = "0.1.0"
-edition = "2021"
+name         = "esp-generate"
+version      = "0.1.0"
+edition      = "2021"
+rust-version = "1.74"
+description  = "Template generation tool to create no_std applications targeting Espressif's chips"
+license      = "MIT OR Apache-2.0"
+keywords     = ["esp32", "template"]
+categories   = ["command-line-utilities", "template-engine"]
 
 [dependencies]
 clap         = { version = "4.5.20", features = ["derive"] }
@@ -10,7 +15,7 @@ env_logger   = "0.11.5"
 esp-metadata = { version = "0.4.0", features = ["clap"] }
 log          = "0.4.22"
 ratatui      = { version = "0.29.0", features = ["crossterm"] }
-rhai         = "1.19.0"
+rhai         = "1.20.0"
 
 [build-dependencies]
 quote   = "1.0.37"

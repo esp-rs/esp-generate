@@ -4,6 +4,7 @@ version      = "0.1.0"
 edition      = "2021"
 rust-version = "1.74"
 description  = "Template generation tool to create no_std applications targeting Espressif's chips"
+repository   = "https://github.com/esp-rs/esp-generate"
 license      = "MIT OR Apache-2.0"
 keywords     = ["esp32", "template"]
 categories   = ["command-line-utilities", "template-engine"]

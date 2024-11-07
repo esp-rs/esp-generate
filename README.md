@@ -18,7 +18,7 @@ To generate a proect using this template:
 1. Install `esp-generate`:
 
 ```
-cargo install esp-generate --git https://github.com/esp-rs/esp-generate.git
+cargo install esp-generate
 ```
 
 2. Generate a project. There are two options:

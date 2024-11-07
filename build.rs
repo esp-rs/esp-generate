@@ -49,5 +49,5 @@ fn main() {
     };
 
     std::fs::write("src/template_files.rs", code.to_string().as_bytes()).unwrap();
-    println!("cargo::rerun-if-changed=template");
+    println!("cargo:rerun-if-changed=template");
 }

@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       all_combinations:
-        description: 'Checks all combinations of options'
+        description: "Checks all combinations of options"
         required: true
         type: boolean
 
@@ -31,6 +31,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
 
 jobs:
+  # --------------------------------------------------------------------------
+  # Verify
+
   verify:
     name: "Check ${{ matrix.chip }}"
     runs-on: ubuntu-latest
@@ -68,6 +71,8 @@ jobs:
         if: github.event_name == 'schedule' ||  inputs.all_combinations
         run: cd xtask && cargo run -- check ${{ matrix.chip }} --all-combinations
 
+  # --------------------------------------------------------------------------
+  # Test
 
   test:
     runs-on: ubuntu-latest
@@ -78,3 +83,16 @@ jobs:
 
       - name: Run tests
         run: cargo test
+
+  # --------------------------------------------------------------------------
+  # Lint
+
+  clippy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run clippy
+        run: cargo clippy -- -D warnings

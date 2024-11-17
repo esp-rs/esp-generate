@@ -1,0 +1,7 @@
+#INCLUDEFILE helix
+[[language]]
+name = "rust"
+
+[language-server.rust-analyzer.config]
+check.allTargets = false
+cargo.target = "riscv32imac-unknown-none-elf"

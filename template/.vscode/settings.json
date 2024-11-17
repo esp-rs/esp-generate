@@ -1,3 +1,4 @@
+//INCLUDEFILE vscode
 {
     "rust-analyzer.cargo.allTargets": false,
     //REPLACE riscv32imac-unknown-none-elf rust_target

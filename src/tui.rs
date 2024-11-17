@@ -196,7 +196,7 @@ impl App {
                             self.repository.up();
                             self.state.select(Some(0));
                         }
-                        Char('l') | Right | Enter => {
+                        Char('l') | Char(' ') | Right | Enter => {
                             let selected = self.state.selected().unwrap_or_default();
                             if self.repository.is_option(selected) {
                                 self.repository.toggle_current(selected);

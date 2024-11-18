@@ -4,4 +4,5 @@ name = "rust"
 
 [language-server.rust-analyzer.config]
 check.allTargets = false
+#REPLACE riscv32imac-unknown-none-elf rust_target
 cargo.target = "riscv32imac-unknown-none-elf"

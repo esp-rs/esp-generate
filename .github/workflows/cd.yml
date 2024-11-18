@@ -39,7 +39,9 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Publish (dry-run)
         if: matrix.job.target == 'x86_64-unknown-linux-gnu'
-        run: cargo publish --dry-run
+        run: |
+          cargo build --release
+          cargo publish --dry-run --allow-dirty
       - name: Install cross and build
         if: matrix.job.target == 'aarch64-unknown-linux-gnu'
         run: |
@@ -81,4 +83,6 @@ jobs:
       - name: Enable caching
         uses: Swatinem/rust-cache@v2
       - name: Cargo publish
-        run: cargo publish --token ${{ secrets.CARGO_API_KEY }}
+        run: |
+          cargo build --release
+          cargo publish --allow-dirty --token ${{ secrets.CARGO_API_KEY }}

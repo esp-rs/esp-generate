@@ -1,0 +1,84 @@
+name: Continuous Deployment
+
+on:
+  release:
+    types: [created]
+
+env:
+  CARGO_TERM_COLOR: always
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  publish-artifacts:
+    name: Generating artifacts for ${{ matrix.job.target }}
+    runs-on: ${{ matrix.job.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: ubuntu-20.04
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary-postfix: ".exe"
+          - os: ubuntu-20.04
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.job.target }}
+      - name: Enable caching
+        uses: Swatinem/rust-cache@v2
+      - name: Publish (dry-run)
+        if: matrix.job.target == 'x86_64-unknown-linux-gnu'
+        run: cargo publish --dry-run
+      - name: Install cross and build
+        if: matrix.job.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          cargo install cross
+          cross build --release --target ${{ matrix.job.target }}
+      - name: Cargo build
+        if: matrix.job.target != 'aarch64-unknown-linux-gnu'
+        run: cargo build --release --target ${{ matrix.job.target }}
+      - name: Compress (Unix)
+        if: ${{ matrix.job.os != 'windows-latest' }}
+        run: zip -j esp-generate-${{ matrix.job.target }}.zip target/${{ matrix.job.target }}/release/esp-generate${{ matrix.job.binary-postfix }}
+      - name: Compress (Windows)
+        if: ${{ matrix.job.os == 'windows-latest' }}
+        run: Compress-Archive target/${{ matrix.job.target }}/release/esp-generate${{ matrix.job.binary-postfix }} esp-generate-${{ matrix.job.target }}.zip
+      - name: Upload compressed artifact
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: esp-generate-${{ matrix.job.target }}.zip
+          tag: ${{ github.ref }}
+      - name: Upload binary artifact
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: target/${{ matrix.job.target }}/release/esp-generate${{ matrix.job.binary-postfix }}
+          asset_name: esp-generate-${{ matrix.job.target }}${{ matrix.job.binary-postfix }}
+          tag: ${{ github.ref }}
+  publish-cratesio:
+    name: Publishing to Crates.io
+    needs: publish-artifacts
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+      - name: Enable caching
+        uses: Swatinem/rust-cache@v2
+      - name: Cargo publish
+        run: cargo publish --token ${{ secrets.CARGO_API_KEY }}

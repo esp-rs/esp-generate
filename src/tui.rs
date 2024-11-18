@@ -100,10 +100,6 @@ impl Repository {
         self.path.pop();
     }
 
-    fn count(&self) -> usize {
-        self.current_level().len()
-    }
-
     fn current_level_desc(&self) -> Vec<(bool, String)> {
         self.current_level()
             .iter()
@@ -164,7 +160,7 @@ pub fn restore_terminal() -> AppResult<()> {
 }
 
 pub struct App {
-    state: ListState,
+    state: Vec<ListState>,
     repository: Repository,
 }
 
@@ -175,7 +171,35 @@ impl App {
 
         Self {
             repository,
-            state: initial_state,
+            state: vec![initial_state],
+        }
+    }
+    pub fn selected(&self) -> usize {
+        if let Some(current) = self.state.last() {
+            current.selected().unwrap_or_default()
+        } else {
+            0
+        }
+    }
+
+    pub fn select_next(&mut self) {
+        if let Some(current) = self.state.last_mut() {
+            current.select_next();
+        }
+    }
+    pub fn select_previous(&mut self) {
+        if let Some(current) = self.state.last_mut() {
+            current.select_previous();
+        }
+    }
+    pub fn enter_menu(&mut self) {
+        let mut new_state = ListState::default();
+        new_state.select(Some(0));
+        self.state.push(new_state);
+    }
+    pub fn exit_menu(&mut self) {
+        if self.state.len() > 1 {
+            self.state.pop();
         }
     }
 }
@@ -194,31 +218,22 @@ impl App {
                         Char('s') => return Ok(Some(self.repository.selected.clone())),
                         Char('h') | Left => {
                             self.repository.up();
-                            self.state.select(Some(0));
+                            self.exit_menu();
                         }
                         Char('l') | Char(' ') | Right | Enter => {
-                            let selected = self.state.selected().unwrap_or_default();
+                            let selected = self.selected();
                             if self.repository.is_option(selected) {
                                 self.repository.toggle_current(selected);
                             } else {
-                                self.repository
-                                    .select(self.state.selected().unwrap_or_default());
-                                self.state.select(Some(0));
+                                self.repository.select(self.selected());
+                                self.enter_menu();
                             }
                         }
                         Char('j') | Down => {
-                            if self.state.selected().unwrap_or_default()
-                                < self.repository.count() - 1
-                            {
-                                self.state
-                                    .select(Some(self.state.selected().unwrap_or_default() + 1));
-                            }
+                            self.select_next();
                         }
                         Char('k') | Up => {
-                            if self.state.selected().unwrap_or_default() > 0 {
-                                self.state
-                                    .select(Some(self.state.selected().unwrap_or_default() - 1));
-                            }
+                            self.select_previous();
                         }
                         _ => {}
                     }
@@ -314,7 +329,12 @@ impl App {
         // We can now render the item list
         // (look carefully, we are using StatefulWidget's render.)
         // ratatui::widgets::StatefulWidget::render as stateful_render
-        StatefulWidget::render(items, inner_area, buf, &mut self.state);
+        if let Some(current_state) = self.state.last_mut() {
+            StatefulWidget::render(items, inner_area, buf, current_state);
+        } else {
+            ratatui::restore();
+            panic!("menu state not found!")
+        }
     }
 
     fn render_footer(&self, area: Rect, buf: &mut Buffer) {

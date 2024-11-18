@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 ### Changed
+- Remember position when entering a sub-menu to restore state on exit.
 
 ### Removed
 

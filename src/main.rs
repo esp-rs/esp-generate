@@ -162,6 +162,26 @@ static OPTIONS: &[GeneratorOptionItem] = &[
             }),
         ],
     }),
+    GeneratorOptionItem::Category(GeneratorOptionCategory {
+        name: "editor",
+        display_name: "Optional editor config files for rust-analyzer",
+        options: &[
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "helix",
+                display_name: "Rust-Analyzer settings for Helix Editor",
+                enables: &[],
+                disables: &[],
+                chips: &[],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "vscode",
+                display_name: "Rust-Analyzer settings for Visual Studio Code",
+                enables: &[],
+                disables: &[],
+                chips: &[],
+            }),
+        ],
+    }),
 ];
 
 #[derive(Parser, Debug)]

@@ -69,7 +69,10 @@ impl Repository {
 
                 let currently_selected = self.selected.clone();
                 for option in currently_selected {
-                    let option = find_option(option, self.options).unwrap();
+                    let Some(option) = find_option(&option, self.options) else {
+                        ratatui::restore();
+                        panic!("option not found");
+                    };
                     for enable in option.enables {
                         if !self.selected.contains(&enable.to_string()) {
                             self.selected.push(enable.to_string());
@@ -77,7 +80,10 @@ impl Repository {
                     }
                     for disable in option.disables {
                         if self.selected.contains(&disable.to_string()) {
-                            let idx = self.selected.iter().position(|v| v == disable).unwrap();
+                            let Some(idx) = self.selected.iter().position(|v| v == disable) else {
+                                ratatui::restore();
+                                panic!("disable option not found");
+                            };
                             self.selected.remove(idx);
                         }
                     }
@@ -122,13 +128,16 @@ impl Repository {
 }
 
 fn find_option(
-    option: String,
+    option: &str,
     options: &'static [GeneratorOptionItem],
 ) -> Option<&'static GeneratorOption> {
     for item in options {
         match item {
             GeneratorOptionItem::Category(category) => {
-                return find_option(option, category.options)
+                let found_option = find_option(option, category.options);
+                if found_option.is_some() {
+                    return found_option;
+                }
             }
             GeneratorOptionItem::Option(item) => {
                 if item.name == option {
@@ -187,7 +196,7 @@ impl App {
                             self.repository.up();
                             self.state.select(Some(0));
                         }
-                        Char('l') | Right | Enter => {
+                        Char('l') | Char(' ') | Right | Enter => {
                             let selected = self.state.selected().unwrap_or_default();
                             if self.repository.is_option(selected) {
                                 self.repository.toggle_current(selected);

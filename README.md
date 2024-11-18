@@ -50,6 +50,9 @@ cargo install esp-generate
   - `wokwi`: Adds support for Wokwi simulation using [VS Code Wokwi extension].
   - `dev-container`: Adds support for [VS Code Dev Containers] and [GitHub Codespaces].
   - `ci` Adds GitHub Actions support with some basics checks.
+- `editors`: Select the editors that will be used with Rust-Analyzer:
+   - `helix`: The Helix Editor
+   - `vscode`: Visual Studio Code
 
 [VS Code Wokwi extension]: https://marketplace.visualstudio.com/items?itemName=wokwi.wokwi-vscode
 [VS Code Dev Containers]: https://code.visualstudio.com/docs/remote/containers#_quick-start-open-an-existing-folder-in-a-container

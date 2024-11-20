@@ -59,12 +59,6 @@ esp-wifi = { version = "0.11.0", default-features=false, features = [
     #IF !option("probe-rs")
     "log",
     #ENDIF
-    #IF option("embassy")
-    "async",
-    #IF option("wifi")
-    "embassy-net",
-    #ENDIF
-    #ENDIF
 ] }
 heapless = { version = "0.8.0", default-features = false }
 smoltcp = { version = "0.11.0", default-features = false, features = [

@@ -48,7 +48,6 @@ esp-wifi = { version = "0.11.0", default-features=false, features = [
     "utils",
     #IF option("wifi")
     "wifi",
-    "wifi-default",
     #ENDIF
     #IF option("ble")
     "ble",

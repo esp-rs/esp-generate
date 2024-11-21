@@ -35,14 +35,21 @@ async fn main(spawner: Spawner) {
     esp_println::logger::init_logger_from_env();
     //ENDIF
 
-    let timg0 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG0);
-    esp_hal_embassy::init(timg0.timer0);
+    //IF !option("esp32")
+    let timer0 = esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER)
+        .split::<esp_hal::timer::systimer::Target>();
+    esp_hal_embassy::init(timer0.alarm0);
+    //ELSE
+    let timer0 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG1);
+    esp_hal_embassy::init(timer0.timer0);
+    //ENDIF
+
     info!("Embassy initialized!");
 
     //IF option("wifi") || option("ble")
-    let timg1 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG1);
+    let timer1 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG0);
     let _init = esp_wifi::init(
-        timg1.timer0,
+        timer1.timer0,
         esp_hal::rng::Rng::new(peripherals.RNG),
         peripherals.RADIO_CLK,
     )

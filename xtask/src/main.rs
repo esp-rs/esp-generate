@@ -3,7 +3,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 use esp_metadata::Chip;
 
@@ -66,28 +66,40 @@ fn check(workspace: &Path, chip: Chip, all_combinations: bool) -> Result<()> {
         generate(workspace, &project_path, PROJECT_NAME, chip, &options)?;
 
         // Ensure that the generated project builds without errors:
-        Command::new("cargo")
+        let output = Command::new("cargo")
             .args(["check", "--release"])
             .current_dir(project_path.join(PROJECT_NAME))
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .output()?;
+        if !output.status.success() {
+            project_dir.close()?;
+            bail!("Failed to execute cargo check subcommand")
+        }
 
         // Run clippy against the generated project to check for lint errors:
-        Command::new("cargo")
+        let output = Command::new("cargo")
             .args(["clippy", "--no-deps", "--", "-Dwarnings"])
             .current_dir(project_path.join(PROJECT_NAME))
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .output()?;
+        if !output.status.success() {
+            project_dir.close()?;
+            bail!("Failed to execute cargo clippy subcommand")
+        }
 
         // Ensure that the generated project is correctly formatted:
-        Command::new("cargo")
+        let output = Command::new("cargo")
             .args(["fmt", "--", "--check"])
             .current_dir(project_path.join(PROJECT_NAME))
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .output()?;
+        if !output.status.success() {
+            project_dir.close()?;
+            bail!("Failed to execute cargo fmt subcommand")
+        }
 
         project_dir.close()?;
     }

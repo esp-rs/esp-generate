@@ -63,4 +63,7 @@ async fn main(spawner: Spawner) {
         info!("Hello world!");
         Timer::after(Duration::from_secs(1)).await;
     }
+
+    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/v0.22.0/examples/src/bin
+
 }

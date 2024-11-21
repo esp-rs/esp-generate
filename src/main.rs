@@ -259,6 +259,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         args.option.clone()
     };
 
+    selected.push(args.chip.to_string());
+
     selected.push(if args.chip.is_riscv() {
         "riscv".to_string()
     } else {

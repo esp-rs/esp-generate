@@ -162,6 +162,7 @@ pub fn restore_terminal() -> AppResult<()> {
 pub struct App {
     state: Vec<ListState>,
     repository: Repository,
+    confirm_quit: bool,
 }
 
 impl App {
@@ -172,6 +173,7 @@ impl App {
         Self {
             repository,
             state: vec![initial_state],
+            confirm_quit: false,
         }
     }
     pub fn selected(&self) -> usize {
@@ -213,9 +215,25 @@ impl App {
                 if key.kind == KeyEventKind::Press {
                     use KeyCode::*;
 
+                    if self.confirm_quit {
+                        match key.code {
+                            Char('y') | Char('Y') => return Ok(None),
+                            _ => self.confirm_quit = false,
+                        }
+                        continue;
+                    }
+
                     match key.code {
-                        Char('q') | Esc => return Ok(None),
-                        Char('s') => return Ok(Some(self.repository.selected.clone())),
+                        Char('q') => self.confirm_quit = true,
+                        Char('s') | Char('S') => return Ok(Some(self.repository.selected.clone())),
+                        Esc => {
+                            if self.state.len() == 1 {
+                                self.confirm_quit = true;
+                            } else {
+                                self.repository.up();
+                                self.exit_menu();
+                            }
+                        }
                         Char('h') | Left => {
                             self.repository.up();
                             self.exit_menu();
@@ -338,9 +356,12 @@ impl App {
     }
 
     fn render_footer(&self, area: Rect, buf: &mut Buffer) {
-        Paragraph::new(
-            "\nUse ↓↑ to move, ← to go up, → to go deeper or change the value, s/S to save and generate, ESC/q to cancel"
-        ).centered()
-        .render(area, buf);
+        let text = if self.confirm_quit {
+            "Are you sure you want to quit? (y/N)"
+        } else {
+            "Use ↓↑ to move, ESC/← to go up, → to go deeper or change the value, s/S to save and generate, ESC/q to cancel"
+        };
+
+        Paragraph::new(text).centered().render(area, buf);
     }
 }

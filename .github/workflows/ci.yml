@@ -61,15 +61,19 @@ jobs:
           target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
           components: clippy,rustfmt,rust-src
 
+      # //Define a new environment variable called toolchain
+      - if: ${{ contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.chip) }}
+        run: echo "TOOLCHAIN=+esp" >> $GITHUB_ENV
+
       - uses: Swatinem/rust-cache@v2
 
       - name: Generate and check project
         if: github.event_name != 'schedule' &&  !inputs.all_combinations
-        run: cd xtask && cargo run -- check ${{ matrix.chip }}
+        run: cd xtask && cargo ${{ env.TOOLCHAIN }} run -- check ${{ matrix.chip }}
 
       - name: Generate and check project (all combinations)
         if: github.event_name == 'schedule' ||  inputs.all_combinations
-        run: cd xtask && cargo run -- check ${{ matrix.chip }} --all-combinations
+        run: cd xtask && cargo ${{ env.TOOLCHAIN }} run -- check ${{ matrix.chip }} --all-combinations
 
   # --------------------------------------------------------------------------
   # Test

@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Remember position when entering a sub-menu to restore state on exit.
+- Update dependencies to latest esp-hal releases.
+- Use `systimer` instead of `timg` in embassy templates for all targets but ESP32
 
 ### Removed
 

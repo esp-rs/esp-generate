@@ -44,13 +44,6 @@ fn main() -> ! {
     .unwrap();
     //ENDIF
 
-    //IF option("wifi")
-    let _wifi = peripherals.WIFI;
-    //ENDIF
-    //IF option("ble")
-    let _bluetooth = peripherals.BT;
-    //ENDIF
-
     let delay = Delay::new();
     loop {
         info!("Hello world!");

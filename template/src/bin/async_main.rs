@@ -56,13 +56,6 @@ async fn main(spawner: Spawner) {
     .unwrap();
     //ENDIF
 
-    //IF option("wifi")
-    let _wifi = peripherals.WIFI;
-    //ENDIF
-    //IF option("ble")
-    let _bluetooth = peripherals.BT;
-    //ENDIF
-
     // TODO: Spawn some tasks
     let _ = spawner;
 

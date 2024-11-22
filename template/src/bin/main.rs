@@ -4,11 +4,8 @@
 
 use esp_backtrace as _;
 use esp_hal::{delay::Delay, prelude::*};
-//IF option("wifi")
+//IF option("wifi") || option("ble")
 use esp_hal::timer::timg::TimerGroup;
-//ENDIF
-//IF option("ble")
-//+ use esp_hal::timer::timg::TimerGroup;
 //ENDIF
 
 //IF option("probe-rs")

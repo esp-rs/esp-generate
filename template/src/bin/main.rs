@@ -24,7 +24,11 @@ extern crate alloc;
 
 #[entry]
 fn main() -> ! {
+    //IF option("wifi") || option("ble")
     let peripherals = esp_hal::init({
+    //ELSE
+    //+let _peripherals = esp_hal::init({
+    //ENDIF
         let mut config = esp_hal::Config::default();
         config.cpu_clock = CpuClock::max();
         config

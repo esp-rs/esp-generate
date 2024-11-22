@@ -1,6 +1,6 @@
 [package]
 name         = "esp-generate"
-version      = "0.1.0"
+version      = "0.2.0"
 edition      = "2021"
 rust-version = "1.74"
 description  = "Template generation tool to create no_std applications targeting Espressif's chips"
@@ -19,7 +19,7 @@ include = [
 ]
 
 [dependencies]
-clap         = { version = "4.5.20", features = ["derive"] }
+clap         = { version = "4.5.21", features = ["derive"] }
 crossterm    = "0.28.1"
 env_logger   = "0.11.5"
 esp-metadata = { version = "0.4.0", features = ["clap"] }

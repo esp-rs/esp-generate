@@ -49,4 +49,7 @@ fn main() -> ! {
         info!("Hello world!");
         delay.delay(500.millis());
     }
+
+    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/v0.22.0/examples/src/bin
+
 }

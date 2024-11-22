@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added editor selection. Currently only helix and vscode
 - Before quitting the TUI, it ask for user confirmation
+- Show a hint where to find examples
 
 ### Fixed
 

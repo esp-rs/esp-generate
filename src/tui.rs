@@ -67,6 +67,7 @@ impl Repository {
                     self.selected.push(option.name.to_string());
                 }
 
+                let toggled_option = option.clone();
                 let currently_selected = self.selected.clone();
                 for option in currently_selected {
                     let Some(option) = find_option(&option, self.options) else {
@@ -79,7 +80,9 @@ impl Repository {
                         }
                     }
                     for disable in option.disables {
-                        if self.selected.contains(&disable.to_string()) {
+                        if disable != &toggled_option.name
+                            && self.selected.contains(&disable.to_string())
+                        {
                             let Some(idx) = self.selected.iter().position(|v| v == disable) else {
                                 ratatui::restore();
                                 panic!("disable option not found");

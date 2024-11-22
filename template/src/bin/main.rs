@@ -24,6 +24,12 @@ extern crate alloc;
 
 #[entry]
 fn main() -> ! {
+    let peripherals = esp_hal::init({
+        let mut config = esp_hal::Config::default();
+        config.cpu_clock = CpuClock::max();
+        config
+    });
+
     //IF !option("probe-rs")
     esp_println::logger::init_logger_from_env();
     //ENDIF

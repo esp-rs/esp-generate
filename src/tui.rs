@@ -67,7 +67,7 @@ impl Repository {
                     self.selected.push(option.name.to_string());
                 }
 
-                let toggled_option = option.clone();
+                let toggled_option = option;
                 let currently_selected = self.selected.clone();
                 for option in currently_selected {
                     let Some(option) = find_option(&option, self.options) else {

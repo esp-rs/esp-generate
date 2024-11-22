@@ -4,11 +4,8 @@
 
 use esp_backtrace as _;
 use esp_hal::{delay::Delay, prelude::*};
-//IF option("wifi")
+//IF option("wifi") || option("ble")
 use esp_hal::timer::timg::TimerGroup;
-//ENDIF
-//IF option("ble")
-//+ use esp_hal::timer::timg::TimerGroup;
 //ENDIF
 
 //IF option("probe-rs")
@@ -24,6 +21,16 @@ extern crate alloc;
 
 #[entry]
 fn main() -> ! {
+    //IF option("wifi") || option("ble")
+    let peripherals = esp_hal::init({
+    //ELSE
+    //+let _peripherals = esp_hal::init({
+    //ENDIF
+        let mut config = esp_hal::Config::default();
+        config.cpu_clock = CpuClock::max();
+        config
+    });
+
     //IF !option("probe-rs")
     esp_println::logger::init_logger_from_env();
     //ENDIF
@@ -33,8 +40,6 @@ fn main() -> ! {
     //ENDIF
 
     //IF option("wifi") || option("ble")
-    let peripherals = esp_hal::init(esp_hal::Config::default());
-
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let _init = esp_wifi::init(
         timg0.timer0,

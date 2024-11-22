@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Added missing init code in non-async template
+
 ### Removed
 
 ## [0.2.0] - 2024-11-21

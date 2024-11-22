@@ -39,8 +39,6 @@ fn main() -> ! {
     //ENDIF
 
     //IF option("wifi") || option("ble")
-    let peripherals = esp_hal::init(esp_hal::Config::default());
-
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let _init = esp_wifi::init(
         timg0.timer0,

@@ -97,7 +97,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
         name: "wifi",
         display_name: "Enables Wi-Fi via the `esp-wifi` crate. Requires `alloc`.",
         enables: &["alloc"],
-        disables: &["ble"],
+        disables: &[],
         chips: &[
             Chip::Esp32,
             Chip::Esp32c2,
@@ -111,7 +111,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
         name: "ble",
         display_name: "Enables BLE via the `esp-wifi` crate. Requires `alloc`.",
         enables: &["alloc"],
-        disables: &["wifi"],
+        disables: &[],
         chips: &[
             Chip::Esp32,
             Chip::Esp32c2,
@@ -440,11 +440,6 @@ fn process_options(args: &Args) {
                 process::exit(-1);
             }
         }
-    }
-
-    if args.option.contains(&String::from("ble")) && args.option.contains(&String::from("wifi")) {
-        log::error!("Options 'ble' and 'wifi' are mutually exclusive");
-        process::exit(-1);
     }
 }
 

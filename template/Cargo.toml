@@ -4,6 +4,11 @@ name = "project-name"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+#REPLACE project-name project-name
+name = "project-name"
+path = "./src/bin/main.rs"
+
 [dependencies]
 esp-backtrace = { version = "0.14.2", features = [
     #REPLACE esp32c6 mcu

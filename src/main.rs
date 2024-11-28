@@ -319,8 +319,7 @@ fn process_file(
 ) -> Option<String> {
     let mut res = String::new();
 
-    let mut replace = None;
-    let mut replacement = None;
+    let mut replace: Option<Vec<(String, String)>> = None;
     let mut include = vec![true];
     let mut first_line = true;
 
@@ -373,13 +372,25 @@ fn process_file(
             .strip_prefix("#REPLACE ")
             .or_else(|| trimmed.strip_prefix("//REPLACE "))
         {
-            let mut split = what.split_terminator(" ");
-            replace = Some(split.next().unwrap().to_string());
-            let var = split.next().unwrap().to_string();
+            let replacements = what
+                .split(" && ")
+                .filter_map(|pair| {
+                    let mut parts = pair.split_whitespace();
+                    if let (Some(pattern), Some(var_name)) = (parts.next(), parts.next()) {
+                        if let Some((_, value)) = variables.iter().find(|(key, _)| key == var_name)
+                        {
+                            Some((pattern.to_string(), value.clone()))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
 
-            // Find the replacement value from the variables map
-            if let Some((_, value)) = variables.iter().find(|(key, _)| key == &var) {
-                replacement = Some(value);
+            if !replacements.is_empty() {
+                replace = Some(replacements);
             }
         // Check if we should include the next line(s)
         } else if trimmed.starts_with("#IF ") || trimmed.starts_with("//IF ") {
@@ -401,22 +412,23 @@ fn process_file(
             let mut line = line.to_string();
 
             if trimmed.starts_with("#+") {
-                line = line.replace("#+", "").to_string();
+                line = line.replace("#+", "");
             }
 
             if trimmed.starts_with("//+") {
-                line = line.replace("//+", "").to_string();
+                line = line.replace("//+", "");
             }
 
-            if let (Some(replace), Some(replacement)) = (replace, replacement) {
-                line = line.replace(&replace, replacement);
+            if let Some(replacements) = &replace {
+                for (pattern, value) in replacements {
+                    line = line.replace(pattern, value);
+                }
             }
 
             res.push_str(&line);
             res.push('\n');
 
             replace = None;
-            replacement = None;
         }
     }
 

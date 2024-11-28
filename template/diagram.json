@@ -2,10 +2,10 @@
 {
     "version": 1,
     "editor": "wokwi",
-    "author": "{{authors}}",
     "parts": [
         {
-            "type": "{{ wokwi_board }}",
+            //REPLACE wokwi-board wokwi-board
+            "type": "wokwi-board",
             "id": "esp",
             "top": 0.59,
             "left": 0.67,

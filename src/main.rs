@@ -144,7 +144,14 @@ static OPTIONS: &[GeneratorOptionItem] = &[
                 display_name: "Adds support for Wokwi simulation using VS Code Wokwi extension.",
                 enables: &[],
                 disables: &[],
-                chips: &[],
+                chips: &[
+                    Chip::Esp32,
+                    Chip::Esp32c3,
+                    Chip::Esp32c6,
+                    Chip::Esp32h2,
+                    Chip::Esp32s2,
+                    Chip::Esp32s3,
+                ],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "dev-container",
@@ -267,9 +274,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         "xtensa".to_string()
     });
 
+    let wokwi_devkit = match args.chip {
+        Chip::Esp32 => "board-esp32-devkit-c-v4",
+        Chip::Esp32c2 => "",
+        Chip::Esp32c3 => "board-esp32-c3-devkitm-1",
+        Chip::Esp32c6 => "board-esp32-c6-devkitc-1",
+        Chip::Esp32h2 => "board-esp32-h2-devkitm-1",
+        Chip::Esp32s2 => "board-esp32-s2-devkitm-1",
+        Chip::Esp32s3 => "board-esp32-s3-devkitc-1",
+    };
+
     let mut variables = vec![
         ("project-name".to_string(), args.name.clone()),
         ("mcu".to_string(), args.chip.to_string()),
+        ("wokwi-board".to_string(), wokwi_devkit.to_string()),
     ];
 
     variables.push(("rust_target".to_string(), args.chip.target().to_string()));

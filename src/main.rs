@@ -83,6 +83,13 @@ impl GeneratorOptionItem {
             GeneratorOptionItem::Option(option) => option.chips,
         }
     }
+
+    fn enables(&self) -> &[&str] {
+        match self {
+            GeneratorOptionItem::Category(_) => &[],
+            GeneratorOptionItem::Option(option) => option.enables,
+        }
+    }
 }
 
 static OPTIONS: &[GeneratorOptionItem] = &[
@@ -466,6 +473,18 @@ fn process_options(args: &Args) {
                     "Option '{}' is not supported for chip {}",
                     option,
                     args.chip
+                );
+                process::exit(-1);
+            }
+            if !option_item
+                .enables()
+                .iter()
+                .all(|requirement| args.option.contains(&requirement.to_string()))
+            {
+                log::error!(
+                    "Option '{}' requires {}",
+                    option_item.name(),
+                    option_item.enables().join(", ")
                 );
                 process::exit(-1);
             }

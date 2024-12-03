@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update the resulting binary name (#62)
 
 ### Fixed
+- Verify the required options are provided (#65)
 
 ### Removed
 

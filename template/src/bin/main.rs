@@ -21,6 +21,9 @@ extern crate alloc;
 
 #[entry]
 fn main() -> ! {
+    //REPLACE generate-version generate-version
+    // generator version: generate-version
+
     //IF option("wifi") || option("ble")
     let peripherals = esp_hal::init({
     //ELSE
@@ -30,7 +33,6 @@ fn main() -> ! {
         config.cpu_clock = CpuClock::max();
         config
     });
-
     //IF !option("probe-rs")
     esp_println::logger::init_logger_from_env();
     //ENDIF

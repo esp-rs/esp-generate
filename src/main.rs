@@ -295,6 +295,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         ("project-name".to_string(), args.name.clone()),
         ("mcu".to_string(), args.chip.to_string()),
         ("wokwi-board".to_string(), wokwi_devkit.to_string()),
+        (
+            "generate-version".to_string(),
+            env!("CARGO_PKG_VERSION").to_string(),
+        ),
     ];
 
     variables.push(("rust_target".to_string(), args.chip.target().to_string()));

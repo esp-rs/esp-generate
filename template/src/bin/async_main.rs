@@ -21,6 +21,9 @@ extern crate alloc;
 
 #[main]
 async fn main(spawner: Spawner) {
+    //REPLACE generate-version generate-version
+    // generator version: generate-version
+
     let peripherals = esp_hal::init({
         let mut config = esp_hal::Config::default();
         config.cpu_clock = CpuClock::max();

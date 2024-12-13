@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Update the resulting binary name (#62)
+- Include version of `esp-generate` in the generated code (#67)
+- Use rustc-link-arg instead of rustc-link-arg-bin (#67)
 
 ### Fixed
 - Verify the required options are provided (#65)

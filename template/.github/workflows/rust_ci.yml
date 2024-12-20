@@ -42,7 +42,7 @@ jobs:
 #+        uses: esp-rs/xtensa-toolchain@v1.5
 #+        with:
 #+          default: true
-#REPLACE esp32c6 mcu
+#REPLACE esp32 mcu
 #+          buildtargets: esp32
 #+          ldproxy: false
 #ENDIF

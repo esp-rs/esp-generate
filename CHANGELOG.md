@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Verify the required options are provided (#65)
+- Added missing template substitution in devcontainer.json (#70)
 
 ### Removed
 

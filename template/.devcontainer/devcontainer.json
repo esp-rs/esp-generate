@@ -1,14 +1,17 @@
 //INCLUDEFILE dev-container
 {
-  "name": "{{ crate_name }}",
+  //REPLACE project-name project-name
+  "name": "project-name",
   // Select between image and build properties to pull or build the image.
-  // "image": "docker.io/espressif/idf-rust:{{ mcu }}_latest",
+  //REPLACE mcu mcu
+  // "image": "docker.io/espressif/idf-rust:mcu_latest",
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
       "CONTAINER_USER": "esp",
       "CONTAINER_GROUP": "esp",
-      "ESP_BOARD": "{{ mcu }}"
+      //REPLACE mcu mcu
+      "ESP_BOARD": "mcu"
     }
   },
   "customizations": {
@@ -44,6 +47,8 @@
     8000,
     3333
   ],
-  "workspaceMount": "source=${localWorkspaceFolder},target=/home/esp/{{ crate_name }},type=bind,consistency=cached",
-  "workspaceFolder": "/home/esp/{{ crate_name }}"
+  //REPLACE project-name project-name
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/esp/project-name,type=bind,consistency=cached",
+  //REPLACE project-name project-name
+  "workspaceFolder": "/home/esp/project-name"
 }

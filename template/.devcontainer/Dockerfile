@@ -54,9 +54,6 @@ RUN if [ -n "${GITHUB_TOKEN}" ]; then export GITHUB_TOKEN=${GITHUB_TOKEN}; fi  \
     --log-level debug \
     --export-file /home/${CONTAINER_USER}/export-esp.sh
 
-# Set default toolchain
-RUN rustup default {{ toolchain }}
-
 # Activate ESP environment
 RUN echo "source /home/${CONTAINER_USER}/export-esp.sh" >> ~/.bashrc
 

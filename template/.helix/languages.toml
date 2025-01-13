@@ -11,3 +11,7 @@ environment.RUSTUP_TOOLCHAIN = "stable"
 check.allTargets = false
 #REPLACE riscv32imac-unknown-none-elf rust_target
 cargo.target = "riscv32imac-unknown-none-elf"
+#IF option("xtensa")
+check.extraEnv.RUSTUP_TOOLCHAIN = "esp"
+cargo.extraEnv.RUSTUP_TOOLCHAIN = "esp"
+#ENDIF

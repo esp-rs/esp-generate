@@ -9,6 +9,7 @@ use std::{
 use clap::Parser;
 use env_logger::{Builder, Env};
 use esp_metadata::Chip;
+use taplo::formatter::Options;
 
 mod template_files;
 mod tui;
@@ -327,6 +328,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         ])
         .current_dir(&project_dir)
         .output()?;
+
+    // Format Cargo.toml:
+    let input = fs::read_to_string(project_dir.join("Cargo.toml"))?;
+    let format_options = Options {
+        align_entries: true,
+        reorder_keys: true,
+        reorder_arrays: true,
+        ..Default::default()
+    };
+    let formated = taplo::formatter::format(&input, format_options);
+    fs::write(project_dir.join("Cargo.toml"), formated)?;
 
     if should_initialize_git_repo(&project_dir) {
         // Run git init:

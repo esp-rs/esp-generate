@@ -2,7 +2,16 @@
 [[language]]
 name = "rust"
 
+#IF option("xtensa")
+[language-server.rust-analyzer]
+environment.RUSTUP_TOOLCHAIN = "stable"
+
+#ENDIF
 [language-server.rust-analyzer.config]
 check.allTargets = false
 #REPLACE riscv32imac-unknown-none-elf rust_target
 cargo.target = "riscv32imac-unknown-none-elf"
+#IF option("xtensa")
+check.extraEnv.RUSTUP_TOOLCHAIN = "esp"
+cargo.extraEnv.RUSTUP_TOOLCHAIN = "esp"
+#ENDIF

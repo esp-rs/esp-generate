@@ -44,6 +44,7 @@ jobs:
         with:
           default: true
           buildtargets: ${{ matrix.chip }}
+          version: "1.84.0.0"
           ldproxy: false
 
       # Rust toolchain for RISC-V:

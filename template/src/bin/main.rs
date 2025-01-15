@@ -3,7 +3,7 @@
 #![no_main]
 
 use esp_backtrace as _;
-use esp_hal::{delay::Delay, prelude::*};
+use esp_hal::{clock::CpuClock, delay::Delay, main};
 //IF option("wifi") || option("ble")
 use esp_hal::timer::timg::TimerGroup;
 //ENDIF
@@ -19,20 +19,18 @@ use log::info;
 extern crate alloc;
 //ENDIF
 
-#[entry]
+#[main]
 fn main() -> ! {
     //REPLACE generate-version generate-version
     // generator version: generate-version
 
+    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     //IF option("wifi") || option("ble")
-    let peripherals = esp_hal::init({
+    let peripherals = esp_hal::init(config);
     //ELSE
-    //+let _peripherals = esp_hal::init({
+    //+let _peripherals = esp_hal::init(config);
     //ENDIF
-        let mut config = esp_hal::Config::default();
-        config.cpu_clock = CpuClock::max();
-        config
-    });
+
     //IF !option("probe-rs")
     esp_println::logger::init_logger_from_env();
     //ENDIF
@@ -54,9 +52,8 @@ fn main() -> ! {
     let delay = Delay::new();
     loop {
         info!("Hello world!");
-        delay.delay(500.millis());
+        delay.delay_millis(500);
     }
 
-    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/v0.22.0/examples/src/bin
-
+    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/v0.23.1/examples/src/bin
 }

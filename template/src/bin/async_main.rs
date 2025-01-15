@@ -3,7 +3,7 @@
 #![no_main]
 
 use esp_backtrace as _;
-use esp_hal::prelude::*;
+use esp_hal::clock::CpuClock;
 //IF option("probe-rs")
 //+ use defmt_rtt as _;
 //+ use defmt::info;
@@ -19,16 +19,13 @@ use embassy_time::{Duration, Timer};
 extern crate alloc;
 //ENDIF
 
-#[main]
+#[esp_hal_embassy::main]
 async fn main(spawner: Spawner) {
     //REPLACE generate-version generate-version
     // generator version: generate-version
 
-    let peripherals = esp_hal::init({
-        let mut config = esp_hal::Config::default();
-        config.cpu_clock = CpuClock::max();
-        config
-    });
+    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+    let peripherals = esp_hal::init(config);
 
     //IF option("alloc")
     esp_alloc::heap_allocator!(72 * 1024);
@@ -39,8 +36,7 @@ async fn main(spawner: Spawner) {
     //ENDIF
 
     //IF !option("esp32")
-    let timer0 = esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER)
-        .split::<esp_hal::timer::systimer::Target>();
+    let timer0 = esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER);
     esp_hal_embassy::init(timer0.alarm0);
     //ELSE
     let timer0 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG1);
@@ -67,6 +63,5 @@ async fn main(spawner: Spawner) {
         Timer::after(Duration::from_secs(1)).await;
     }
 
-    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/v0.22.0/examples/src/bin
-
+    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/v0.23.1/examples/src/bin
 }

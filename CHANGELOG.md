@@ -8,19 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.2.2] - 2025-01-16
+
+### Added
 - The resulting `Cargo.toml` is now formated with Taplo (#72)
 
 ### Changed
 - Update the resulting binary name (#62)
 - Include version of `esp-generate` in the generated code (#67)
-- Use rustc-link-arg instead of rustc-link-arg-bin (#67)
+- Use `rustc-link-arg` instead of `rustc-link-arg-bin` (#67)
 
 ### Fixed
 - Verify the required options are provided (#65)
-- Use stable toolchain for rust-analyzer on xtensa targets (#69)
-- Added missing template substitution in devcontainer.json (#70)
-
-### Removed
+- Use `stable` toolchain for Rust Analyzer on Xtensa targets (#69)
+- Added missing template substitution in `devcontainer.json` (#70)
 
 ## [0.2.1] - 2024-11-26
 
@@ -47,7 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/esp-rs/esp-generate/releases/tag/v0.2.2
 [0.2.1]: https://github.com/esp-rs/esp-generate/releases/tag/v0.2.1
 [0.2.0]: https://github.com/esp-rs/esp-generate/releases/tag/v0.2.0
 [0.1.0]: https://github.com/esp-rs/esp-generate/releases/tag/v0.1.0

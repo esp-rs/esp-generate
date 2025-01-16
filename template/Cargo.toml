@@ -46,7 +46,7 @@ embedded-io = "0.6.1"
 #IF option("embassy")
 embedded-io-async = "0.6.1"
 #IF option("wifi")
-embassy-net = { version = "0.4.0", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet"] }
+embassy-net = { version = "0.6.0", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet"] }
 #ENDIF
 #ENDIF
 esp-wifi = { version = "0.12.0", default-features=false, features = [
@@ -73,12 +73,19 @@ esp-wifi = { version = "0.12.0", default-features=false, features = [
 heapless = { version = "0.8.0", default-features = false }
 smoltcp = { version = "0.12.0", default-features = false, features = [
     "medium-ethernet",
+    "multicast",
+    "proto-dhcpv4",
+    "proto-dns",
+    "proto-ipv4",
+    "socket-dns",
     "socket-raw",
+    "socket-tcp",
+    "socket-udp",
+    "socket-icmp",
 ] }
-edge-dhcp = { version = "0.5.0", git = "https://github.com/bugadani/edge-net", rev = "b72678e15bb7c6e72809df235778bb7b48ac146d" }
-edge-raw = { version = "0.5.0", git = "https://github.com/bugadani/edge-net", rev = "b72678e15bb7c6e72809df235778bb7b48ac146d" }
-edge-nal = { version = "0.5.0", git = "https://github.com/bugadani/edge-net", rev = "b72678e15bb7c6e72809df235778bb7b48ac146d" }
-edge-nal-embassy = { version = "0.5.0", git = "https://github.com/bugadani/edge-net", rev = "b72678e15bb7c6e72809df235778bb7b48ac146d" }
+#IF option("embassy")
+# for more networking protocol support see https://crates.io/crates/edge-net
+#ENDIF
 #ENDIF
 #IF option("ble")
 #+bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }

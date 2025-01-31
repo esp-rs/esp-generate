@@ -4,12 +4,14 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::{self, Command},
+    time::Duration,
 };
 
 use clap::Parser;
 use env_logger::{Builder, Env};
 use esp_metadata::Chip;
 use taplo::formatter::Options;
+use update_informer::{registry, Check};
 
 mod template_files;
 mod tui;
@@ -226,6 +228,22 @@ struct Args {
     /// Directory in which to generate the project
     #[arg(short = 'O', long)]
     output_path: Option<PathBuf>,
+
+    /// Do not check for updates
+    #[arg(short, long, global = true, action)]
+    skip_update_check: bool,
+}
+
+/// Check crates.io for a new version of the application
+fn check_for_update(name: &str, version: &str) {
+    // By setting the interval to 0 seconds we invalidate the cache with each
+    // invocation and ensure we're getting up-to-date results
+    let informer =
+        update_informer::new(registry::Crates, name, version).interval(Duration::from_secs(0));
+
+    if let Some(version) = informer.check_version().ok().flatten() {
+        log::warn!("🚀 A new version of {name} is available: {version}");
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -234,6 +252,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     let args = Args::parse();
+
+    // Only check for updates once the command-line arguments have been processed,
+    // to avoid printing any update notifications when the help message is
+    // displayed.
+    if !args.skip_update_check {
+        check_for_update(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+    }
 
     let path = &args
         .output_path

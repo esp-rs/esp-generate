@@ -13,6 +13,7 @@ use esp_metadata::Chip;
 use taplo::formatter::Options;
 use update_informer::{registry, Check};
 
+mod check;
 mod template_files;
 mod tui;
 
@@ -374,6 +375,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     } else {
         log::warn!("Current directory is already in a git repository, skipping git initialization");
     }
+
+    check::check(args.chip);
 
     Ok(())
 }

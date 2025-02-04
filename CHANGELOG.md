@@ -8,8 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-. Added a version checker that prints a wanr message if not using latest esp-generate version.
+-  Added a version checker that prints a wanr message if not using latest esp-generate version (#87)
 ### Changed
+- Update `probe-rs run` arguments (#90)
 
 ### Fixed
 

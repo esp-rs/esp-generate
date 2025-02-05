@@ -7,11 +7,7 @@ edition = "2021"
 [[bin]]
 #REPLACE project-name project-name
 name = "project-name"
-#IF !option("embassy")
 path = "./src/bin/main.rs"
-#ELSE
-#+path = "./src/bin/async_main.rs"
-#ENDIF
 
 [dependencies]
 esp-backtrace = { version = "0.15.0", features = [

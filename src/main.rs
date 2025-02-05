@@ -342,6 +342,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    if selected.contains(&"embassy".to_string()) {
+        fs::rename(
+            project_dir.join("src").join("bin").join("async_main.rs"),
+            project_dir.join("src").join("bin").join("main.rs"),
+        )?;
+    }
+
     // Run cargo fmt:
     Command::new("cargo")
         .args([

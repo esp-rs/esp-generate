@@ -334,19 +334,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     fs::create_dir(&project_dir)?;
 
     for &(file_path, contents) in template_files::TEMPLATE_FILES.iter() {
-        if let Some(processed) = process_file(contents, &selected, &variables) {
+        let mut file_path = file_path.to_string();
+        if let Some(processed) = process_file(contents, &selected, &variables, &mut file_path) {
             let file_path = project_dir.join(file_path);
 
             fs::create_dir_all(file_path.parent().unwrap())?;
             fs::write(file_path, processed)?;
         }
-    }
-
-    if selected.contains(&"embassy".to_string()) {
-        fs::rename(
-            project_dir.join("src").join("bin").join("async_main.rs"),
-            project_dir.join("src").join("bin").join("main.rs"),
-        )?;
     }
 
     // Run cargo fmt:
@@ -392,6 +386,7 @@ fn process_file(
     contents: &str,                 // Raw content of the file
     options: &[String],             // Selected options
     variables: &[(String, String)], // Variables and their values in tuples
+    file_path: &mut String,         // File path to be modified
 ) -> Option<String> {
     let mut res = String::new();
 
@@ -422,16 +417,35 @@ fn process_file(
                 .or_else(|| trimmed.strip_prefix("#INCLUDEFILE "));
 
             if let Some(cond) = cond {
-                let include_file = if let Some(stripped) = cond.strip_prefix("!") {
-                    !options.contains(&stripped.to_string())
+                if !cond.contains(" ") {
+                    let include_file = if let Some(stripped) = cond.strip_prefix("!") {
+                        !options.contains(&stripped.to_string())
+                    } else {
+                        options.contains(&cond.to_string())
+                    };
+                    if !include_file {
+                        return None;
+                    } else {
+                        continue;
+                    }
                 } else {
-                    options.contains(&cond.to_string())
-                };
-
-                if !include_file {
-                    return None;
-                } else {
-                    continue;
+                    let mut parts = cond.split_whitespace();
+                    let include_file = if let Some(stripped) = parts.next() {
+                        if let Some(stripped) = stripped.strip_prefix("!") {
+                            !options.contains(&stripped.to_string())
+                        } else {
+                            options.contains(&stripped.to_string())
+                        }
+                    } else {
+                        false
+                    };
+                    if !include_file {
+                        return None;
+                    } else {
+                        let new_name = parts.next().unwrap();
+                        *file_path = new_name.to_string();
+                        continue;
+                    }
                 }
             }
         }
@@ -581,6 +595,7 @@ mod test {
         "#,
             &["opt1".to_string(), "opt2".to_string()],
             &[],
+            &mut String::from("main.rs"),
         )
         .unwrap();
 
@@ -611,6 +626,7 @@ mod test {
         "#,
             &[],
             &[],
+            &mut String::from("main.rs"),
         )
         .unwrap();
 
@@ -640,6 +656,7 @@ mod test {
         "#,
             &["opt1".to_string()],
             &[],
+            &mut String::from("main.rs"),
         )
         .unwrap();
 
@@ -668,6 +685,7 @@ mod test {
         "#,
             &["opt1".to_string()],
             &[],
+            &mut String::from("main.rs"),
         )
         .unwrap();
 
@@ -696,6 +714,7 @@ mod test {
         "#,
             &["opt2".to_string()],
             &[],
+            &mut String::from("main.rs"),
         )
         .unwrap();
 

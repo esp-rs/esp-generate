@@ -1,4 +1,4 @@
-//INCLUDEFILE embassy
+//INCLUDEFILE embassy src/bin/main.rs
 #![no_std]
 #![no_main]
 

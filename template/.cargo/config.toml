@@ -3,12 +3,10 @@
 #IF option("probe-rs")
 #REPLACE esp32c6 mcu
 runner = "probe-rs run --chip=esp32c6 --always-print-stacktrace --no-location --catch-hardfault"
-#ENDIF
-#IF !option("probe-rs") && option("log-frontend-defmt")
+#ELIF option("log-frontend-defmt")
 #REPLACE esp32c6 mcu
-#+runner = "espflash flash --monitor --chip esp32c6" --log-format=defmt
-#ENDIF
-#IF !option("probe-rs") && !option("log-frontend-defmt")
+#+runner = "espflash flash --monitor --chip esp32c6 --log-format=defmt"
+#ELSE
 #REPLACE esp32c6 mcu
 #+runner = "espflash flash --monitor --chip esp32c6"
 #ENDIF
@@ -16,8 +14,7 @@ runner = "probe-rs run --chip=esp32c6 --always-print-stacktrace --no-location --
 [env]
 #IF option("log-frontend-defmt")
 DEFMT_LOG="info"
-#ENDIF
-#IF option("log-frontend-log")
+#ELIF option("log-frontend-log")
 ESP_LOG="INFO"
 #ENDIF
 
@@ -25,8 +22,7 @@ ESP_LOG="INFO"
 rustflags = [
 #IF option("xtensa")
   "-C", "link-arg=-nostartfiles",
-#ENDIF
-#IF option("riscv")
+#ELIF option("riscv")
   # Required to obtain backtraces (e.g. when using the "esp-backtrace" crate.)
   # NOTE: May negatively impact performance of produced code
   "-C", "force-frame-pointers",

@@ -13,24 +13,21 @@ use esp_hal::timer::timg::TimerGroup;
 
 //IF option("panic-esp-backtrace")
 use esp_backtrace as _;
-//ENDIF
-//IF option("panic-panic-probe")
-//+ use panic_probe as _;
-//ENDIF
-//IF !option("panic-esp-backtrace") && !option("panic-panic-probe")
-//+ #[panic_handler]
-//+ fn panic(_: &core::panic::PanicInfo) -> ! {
-//+     esp_hal::system::software_reset()
-//+ }
+//ELSE
+//+#[panic_handler]
+//+fn panic(_: &core::panic::PanicInfo) -> ! {
+//+    esp_hal::system::software_reset()
+//+}
 //ENDIF
 
 //IF option("log-backend-defmt-rtt")
-//+ use defmt_rtt as _;
+//+use defmt_rtt as _;
+//ELIF option("log-backend-esp-println") && (option("log-frontend-log") || option("log-frontend-defmt"))
+//+use esp_println as _;
 //ENDIF
 //IF option("log-frontend-defmt")
-//+ use defmt::info;
-//ENDIF
-//IF option("log-frontend-log")
+//+use defmt::info;
+//ELIF option("log-frontend-log")
 use log::info;
 //ENDIF
 
@@ -72,10 +69,10 @@ fn main() -> ! {
     loop {
         //IF option("log-frontend-defmt") || option("log-frontend-log")
         info!("Hello world!");
-        //ENDIF
-        //IF option("log-backend-esp-println") && !option("log-frontend-defmt") && !option("log-frontend-log")
+        //ELIF option("log-backend-esp-println")
         //+esp_println::println!("Hello world!");
         //ENDIF
+
         let delay_start = Instant::now();
         while delay_start.elapsed() < Duration::from_millis(500) {}
     }

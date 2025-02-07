@@ -186,22 +186,13 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     GeneratorOptionItem::Category(GeneratorOptionCategory {
         name: "panic",
         display_name: "Panic handling options",
-        options: &[
-            GeneratorOptionItem::Option(GeneratorOption {
-                name: "panic-esp-backtrace",
-                display_name: "Use `esp-backtrace`.",
-                enables: &[],
-                disables: &["panic-panic-probe"],
-                chips: &[],
-            }),
-            GeneratorOptionItem::Option(GeneratorOption {
-                name: "panic-panic-probe",
-                display_name: "Use `panic-probe`. Requires `probe-rs`.",
-                enables: &["probe-rs"],
-                disables: &["panic-esp-backtrace"],
-                chips: &[],
-            }),
-        ],
+        options: &[GeneratorOptionItem::Option(GeneratorOption {
+            name: "panic-esp-backtrace",
+            display_name: "Use `esp-backtrace`.",
+            enables: &[],
+            disables: &[],
+            chips: &[],
+        })],
     }),
     GeneratorOptionItem::Category(GeneratorOptionCategory {
         name: "optional",
@@ -548,6 +539,15 @@ fn process_file(
             };
             let res = engine.eval::<bool>(cond).unwrap();
             include.push(res && *include.last().unwrap());
+        } else if trimmed.starts_with("#ELIF ") || trimmed.starts_with("//ELIF ") {
+            let cond = if trimmed.starts_with("#ELIF ") {
+                trimmed.strip_prefix("#ELIF ").unwrap()
+            } else {
+                trimmed.strip_prefix("//ELIF ").unwrap()
+            };
+            let res = engine.eval::<bool>(cond).unwrap();
+            let last = include.pop();
+            include.push(res && !last.unwrap());
         } else if trimmed.starts_with("#ELSE") || trimmed.starts_with("//ELSE") {
             let res = !*include.last().unwrap();
             include.pop();

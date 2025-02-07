@@ -1,6 +1,6 @@
 fn main() {
     linker_be_nice();
-    //IF option("probe-rs")
+    //IF option("log-frontend-defmt")
     println!("cargo:rustc-link-arg=-Tdefmt.x");
     //ENDIF
     // make sure linkall.x is the last linker script (otherwise might cause problems with flip-link)

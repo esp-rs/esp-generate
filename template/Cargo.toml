@@ -10,29 +10,37 @@ name = "project-name"
 path = "./src/bin/main.rs"
 
 [dependencies]
+#IF option("panic-esp-backtrace")
 esp-backtrace = { version = "0.15.0", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     "exception-handler",
     "panic-handler",
-    #IF option("probe-rs")
+    #IF option("log-frontend-defmt")
     #+"defmt",
     #ELSE
     "println",
     #ENDIF
 ]}
+#ENDIF
 esp-hal = { version = "0.23.1", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     "unstable",
-    #IF option("probe-rs")
+    #IF option("log-frontend-defmt")
     #+"defmt",
     #ENDIF
 ] }
-#IF !option("probe-rs")
+#IF option("log-backend-esp-println")
 #REPLACE esp32c6 mcu
 esp-println = { version = "0.13.0", features = ["esp32c6", "log"] }
+#ELIF option("log-backend-defmt-rtt")
+#+defmt-rtt        = "0.4.1"
+#ENDIF
+#IF option("log-frontend-log")
 log = { version = "0.4.21" }
+#ELIF option("log-frontend-defmt")
+#+defmt            = "0.3.10"
 #ENDIF
 #IF option("alloc")
 esp-alloc = { version = "0.6.0" }
@@ -59,10 +67,9 @@ esp-wifi = { version = "0.12.0", default-features=false, features = [
     "coex",
     #ENDIF
     "esp-alloc",
-    #IF option("probe-rs")
+    #IF option("log-frontend-defmt")
     #+"defmt",
-    #ENDIF
-    #IF !option("probe-rs")
+    #ELIF option("log-frontend-log")
     "log",
     #ENDIF
 ] }
@@ -86,14 +93,10 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
 #IF option("ble")
 #+bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
 #ENDIF
-#IF option("probe-rs")
-#+defmt            = "0.3.10"
-#+defmt-rtt        = "0.4.1"
-#ENDIF
 #IF option("embassy")
 embassy-executor = { version = "0.7.0",  features = [
     "task-arena-size-20480",
-    #IF option("probe-rs")
+    #IF option("log-frontend-defmt")
     "defmt"
     #ENDIF
 ] }

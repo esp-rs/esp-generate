@@ -185,7 +185,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     }),
     GeneratorOptionItem::Category(GeneratorOptionCategory {
         name: "panic",
-        display_name: "Panic handling options",
+        display_name: "Panic handler options",
         options: &[GeneratorOptionItem::Option(GeneratorOption {
             name: "panic-esp-backtrace",
             display_name: "Use `esp-backtrace`.",

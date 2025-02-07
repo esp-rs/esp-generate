@@ -21,7 +21,8 @@ mod tui;
 pub struct GeneratorOption {
     name: &'static str,
     display_name: &'static str,
-    enables: &'static [&'static str],
+    // A number of options. The inner slice contains alternatives, one of which must be selected.
+    enables: &'static [&'static [&'static str]],
     disables: &'static [&'static str],
     chips: &'static [Chip],
 }
@@ -88,9 +89,9 @@ impl GeneratorOptionItem {
         }
     }
 
-    fn enables(&self) -> &[&str] {
+    fn enables(&self) -> &[&[&str]] {
         match self {
-            GeneratorOptionItem::Category(_) => &[],
+            GeneratorOptionItem::Category(_) => &[&[]],
             GeneratorOptionItem::Option(option) => option.enables,
         }
     }
@@ -107,7 +108,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     GeneratorOptionItem::Option(GeneratorOption {
         name: "wifi",
         display_name: "Enable Wi-Fi via the `esp-wifi` crate. Requires `alloc`.",
-        enables: &["alloc"],
+        enables: &[&["alloc"]],
         disables: &[],
         chips: &[
             Chip::Esp32,
@@ -121,7 +122,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     GeneratorOptionItem::Option(GeneratorOption {
         name: "ble",
         display_name: "Enable BLE via the `esp-wifi` crate. Requires `alloc`.",
-        enables: &["alloc"],
+        enables: &[&["alloc"]],
         disables: &[],
         chips: &[
             Chip::Esp32,
@@ -142,7 +143,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     GeneratorOptionItem::Option(GeneratorOption {
         name: "probe-rs",
         display_name: "Use `probe-rs` instead of `espflash` for flashing and logging.",
-        enables: &["log-backend-defmt-rtt"],
+        enables: &[&["log-backend-defmt-rtt"]],
         disables: &[],
         chips: &[],
     }),
@@ -153,7 +154,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "log-backend-defmt-rtt",
                 display_name: "Use `defmt-rtt` as the log backend.",
-                enables: &["probe-rs"],
+                enables: &[&["probe-rs"]],
                 disables: &["log-backend-esp-println"],
                 chips: &[],
             }),
@@ -169,7 +170,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
                 name: "log-frontend-log",
                 display_name:
                     "Use the `log` crate as the logging API. Requires `esp-println` as the backend.",
-                enables: &["log-backend-esp-println"],
+                enables: &[&["log-backend-esp-println"]],
                 disables: &["log-frontend-defmt", "log-backend-defmt-rtt"],
                 chips: &[],
             }),
@@ -177,7 +178,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
                 name: "log-frontend-defmt",
                 display_name:
                     "Use the `defmt` crate as the logging API. Can be used with both backends.",
-                enables: &[],
+                enables: &[&["log-backend-esp-println", "log-backend-defmt-rtt"]],
                 disables: &["log-frontend-log"],
                 chips: &[],
             }),
@@ -598,15 +599,26 @@ fn process_options(args: &Args) {
                 );
                 process::exit(-1);
             }
-            if !option_item
-                .enables()
-                .iter()
-                .all(|requirement| args.option.contains(&requirement.to_string()))
-            {
+
+            let mut requires = vec![];
+            for alternatives in option_item.enables() {
+                if !alternatives
+                    .iter()
+                    .all(|alternative| args.option.contains(&alternative.to_string()))
+                {
+                    requires.push(if alternatives.len() == 1 {
+                        alternatives[0].to_string()
+                    } else {
+                        format!("one of {{{}}}", alternatives.join(", "))
+                    });
+                }
+            }
+
+            if !requires.is_empty() {
                 log::error!(
                     "Option '{}' requires {}",
                     option_item.name(),
-                    option_item.enables().join(", ")
+                    requires.join(", ")
                 );
                 process::exit(-1);
             }

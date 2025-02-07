@@ -75,8 +75,15 @@ impl Repository {
                         panic!("option not found");
                     };
                     for enable in option.enables {
-                        if !self.selected.contains(&enable.to_string()) {
-                            self.selected.push(enable.to_string());
+                        let mut contains_any = false;
+                        for enable_option in enable.iter() {
+                            if self.selected.contains(&enable_option.to_string()) {
+                                contains_any = true;
+                                break;
+                            }
+                        }
+                        if !contains_any && !enable.is_empty() {
+                            self.selected.push(enable[0].to_string());
                         }
                     }
                     for disable in option.disables {

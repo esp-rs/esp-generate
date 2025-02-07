@@ -99,14 +99,14 @@ impl GeneratorOptionItem {
 static OPTIONS: &[GeneratorOptionItem] = &[
     GeneratorOptionItem::Option(GeneratorOption {
         name: "alloc",
-        display_name: "Enables allocations via the `esp-alloc` crate.",
+        display_name: "Enable allocations via the `esp-alloc` crate.",
         enables: &[],
         disables: &[],
         chips: &[],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "wifi",
-        display_name: "Enables Wi-Fi via the `esp-wifi` crate. Requires `alloc`.",
+        display_name: "Enable Wi-Fi via the `esp-wifi` crate. Requires `alloc`.",
         enables: &["alloc"],
         disables: &[],
         chips: &[
@@ -120,7 +120,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "ble",
-        display_name: "Enables BLE via the `esp-wifi` crate. Requires `alloc`.",
+        display_name: "Enable BLE via the `esp-wifi` crate. Requires `alloc`.",
         enables: &["alloc"],
         disables: &[],
         chips: &[
@@ -134,7 +134,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "embassy",
-        display_name: "Adds `embassy` framework support.",
+        display_name: "Add `embassy` framework support.",
         enables: &[],
         disables: &[],
         chips: &[],
@@ -152,7 +152,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
         options: &[
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "wokwi",
-                display_name: "Adds support for Wokwi simulation using VS Code Wokwi extension.",
+                display_name: "Add support for Wokwi simulation using VS Code Wokwi extension.",
                 enables: &[],
                 disables: &[],
                 chips: &[
@@ -166,14 +166,14 @@ static OPTIONS: &[GeneratorOptionItem] = &[
             }),
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "dev-container",
-                display_name: "Adds support for VS Code Dev Containers and GitHub Codespaces.",
+                display_name: "Add support for VS Code Dev Containers and GitHub Codespaces.",
                 enables: &[],
                 disables: &[],
                 chips: &[],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "ci",
-                display_name: "Adds GitHub Actions support with some basics checks.",
+                display_name: "Add GitHub Actions support with some basic checks.",
                 enables: &[],
                 disables: &[],
                 chips: &[],
@@ -186,14 +186,14 @@ static OPTIONS: &[GeneratorOptionItem] = &[
         options: &[
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "helix",
-                display_name: "Rust-Analyzer settings for Helix Editor",
+                display_name: "Add rust-analyzer settings for Helix Editor",
                 enables: &[],
                 disables: &[],
                 chips: &[],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "vscode",
-                display_name: "Rust-Analyzer settings for Visual Studio Code",
+                display_name: "Add rust-analyzer settings for Visual Studio Code",
                 enables: &[],
                 disables: &[],
                 chips: &[],

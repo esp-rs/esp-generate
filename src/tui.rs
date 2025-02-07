@@ -327,8 +327,8 @@ impl App {
             .repository
             .current_level_desc()
             .into_iter()
-            .map(|v| {
-                ListItem::new(v.1).style(if v.0 {
+            .map(|(enabled, value)| {
+                ListItem::new(value).style(if enabled {
                     Style::default()
                 } else {
                     Style::default().fg(DISABLED_STYLE_FG)

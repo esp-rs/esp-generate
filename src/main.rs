@@ -141,10 +141,67 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "probe-rs",
-        display_name: "Enables `defmt` and flashes using `probe-rs` instead of `espflash`.",
-        enables: &[],
+        display_name: "Use `probe-rs` instead of `espflash` for flashing and logging.",
+        enables: &["log-backend-defmt-rtt"],
         disables: &[],
         chips: &[],
+    }),
+    GeneratorOptionItem::Category(GeneratorOptionCategory {
+        name: "logging",
+        display_name: "Logging options",
+        options: &[
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "log-backend-defmt-rtt",
+                display_name: "Use `defmt-rtt` as the log backend.",
+                enables: &["probe-rs"],
+                disables: &["log-backend-esp-println"],
+                chips: &[],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "log-backend-esp-println",
+                display_name:
+                    "Use `esp-println` as the log backend. Can be used without a log frontend.",
+                enables: &[],
+                disables: &["log-backend-defmt-rtt"],
+                chips: &[],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "log-frontend-log",
+                display_name:
+                    "Use the `log` crate as the logging API. Requires `esp-println` as the backend.",
+                enables: &["log-backend-esp-println"],
+                disables: &["log-frontend-defmt", "log-backend-defmt-rtt"],
+                chips: &[],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "log-frontend-defmt",
+                display_name:
+                    "Use the `defmt` crate as the logging API. Can be used with both backends.",
+                enables: &[],
+                disables: &["log-frontend-log"],
+                chips: &[],
+            }),
+        ],
+    }),
+    GeneratorOptionItem::Category(GeneratorOptionCategory {
+        name: "panic",
+        display_name: "Panic handling options",
+        options: &[
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "panic-esp-backtrace",
+                display_name: "Use `esp-backtrace`.",
+                enables: &[],
+                disables: &["panic-panic-probe"],
+                chips: &[],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "panic-panic-probe",
+                display_name: "Use `panic-probe`. Requires `probe-rs`.",
+                enables: &["probe-rs"],
+                disables: &["panic-esp-backtrace"],
+                chips: &[],
+            }),
+        ],
     }),
     GeneratorOptionItem::Category(GeneratorOptionCategory {
         name: "optional",

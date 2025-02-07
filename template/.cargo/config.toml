@@ -3,15 +3,21 @@
 #IF option("probe-rs")
 #REPLACE esp32c6 mcu
 runner = "probe-rs run --chip=esp32c6 --always-print-stacktrace --no-location --catch-hardfault"
-#ELSE
+#ENDIF
+#IF !option("probe-rs") && option("log-frontend-defmt")
+#REPLACE esp32c6 mcu
+#+runner = "espflash flash --monitor --chip esp32c6" --log-format=defmt
+#ENDIF
+#IF !option("probe-rs") && !option("log-frontend-defmt")
 #REPLACE esp32c6 mcu
 #+runner = "espflash flash --monitor --chip esp32c6"
 #ENDIF
 
 [env]
-#IF option("probe-rs")
+#IF option("log-frontend-defmt")
 DEFMT_LOG="info"
-#ELSE
+#ENDIF
+#IF option("log-frontend-log")
 ESP_LOG="INFO"
 #ENDIF
 

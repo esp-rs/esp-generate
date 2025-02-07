@@ -7,8 +7,7 @@ use esp_hal::clock::CpuClock;
 //IF option("probe-rs")
 //+ use defmt_rtt as _;
 //+ use defmt::info;
-//ENDIF
-//IF !option("probe-rs")
+//ELSE
 use log::info;
 //ENDIF
 
@@ -24,15 +23,15 @@ async fn main(spawner: Spawner) {
     //REPLACE generate-version generate-version
     // generator version: generate-version
 
+    //IF !option("probe-rs")
+    esp_println::logger::init_logger_from_env();
+    //ENDIF
+
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
     //IF option("alloc")
     esp_alloc::heap_allocator!(72 * 1024);
-    //ENDIF
-
-    //IF !option("probe-rs")
-    esp_println::logger::init_logger_from_env();
     //ENDIF
 
     //IF !option("esp32")

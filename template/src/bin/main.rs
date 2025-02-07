@@ -24,15 +24,15 @@ fn main() -> ! {
     //REPLACE generate-version generate-version
     // generator version: generate-version
 
+    //IF !option("probe-rs")
+    esp_println::logger::init_logger_from_env();
+    //ENDIF
+
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     //IF option("wifi") || option("ble")
     let peripherals = esp_hal::init(config);
     //ELSE
     //+let _peripherals = esp_hal::init(config);
-    //ENDIF
-
-    //IF !option("probe-rs")
-    esp_println::logger::init_logger_from_env();
     //ENDIF
 
     //IF option("alloc")

@@ -4,7 +4,6 @@ channel    = "stable"
 components = ["rust-src"]
 #REPLACE riscv32imac-unknown-none-elf rust_target
 targets = ["riscv32imac-unknown-none-elf"]
-#ENDIF
-#IF option("xtensa")
+#ELIF option("xtensa")
 #+channel = "esp"
 #ENDIF

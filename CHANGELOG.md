@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a version checker that prints a warn message if not using latest esp-generate version (#87)
 - After generating the project the tool now checks the rust version, espflash version and probe-rs version (#88)
 
+- Be more helpful in case of common linker errors (#94)
+
 ### Changed
 - Update `probe-rs run` arguments (#90)
 - When using `embassy` option, `async_main.rs` file was renamed to `main.rs` (#93)

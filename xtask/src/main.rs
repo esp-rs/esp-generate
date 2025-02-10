@@ -142,15 +142,14 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Vec<Vec<String>> {
                     options.extend(available_options[j].clone());
                 }
             }
+            options.sort();
+            options.dedup();
             result.push(options);
         }
-        // Filter all the items that contains wifi and ble
-        let result = result
-            .into_iter()
-            .filter(|opts| {
-                !opts.contains(&"wifi".to_string()) || !opts.contains(&"ble".to_string())
-            })
-            .collect::<Vec<_>>();
+
+        result.sort();
+        result.dedup();
+
         return result;
     }
 }

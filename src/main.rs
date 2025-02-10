@@ -382,6 +382,42 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+enum BlockKind {
+    // All lines are included
+    Root,
+
+    // (current branch to be included, any previous branches included)
+    IfElse(bool, bool),
+}
+
+impl BlockKind {
+    fn include_line(self) -> bool {
+        match self {
+            BlockKind::Root => true,
+            BlockKind::IfElse(current, any) => current && !any,
+        }
+    }
+
+    fn new_if(current: bool) -> BlockKind {
+        BlockKind::IfElse(current, false)
+    }
+
+    fn into_else_if(self, condition: bool) -> BlockKind {
+        let BlockKind::IfElse(previous, any) = self else {
+            panic!("ELIF without IF");
+        };
+        BlockKind::IfElse(condition, any || previous)
+    }
+
+    fn into_else(self) -> BlockKind {
+        let BlockKind::IfElse(previous, any) = self else {
+            panic!("ELSE without IF");
+        };
+        BlockKind::IfElse(!any, any || previous)
+    }
+}
+
 fn process_file(
     contents: &str,                 // Raw content of the file
     options: &[String],             // Selected options
@@ -391,7 +427,7 @@ fn process_file(
     let mut res = String::new();
 
     let mut replace: Option<Vec<(String, String)>> = None;
-    let mut include = vec![true];
+    let mut include = vec![BlockKind::Root];
     let mut first_line = true;
 
     // Create a new Rhai engine and scope
@@ -489,16 +525,43 @@ fn process_file(
             } else {
                 trimmed.strip_prefix("//IF ").unwrap()
             };
-            let res = engine.eval::<bool>(cond).unwrap();
-            include.push(res && *include.last().unwrap());
+            let last = *include.last().unwrap();
+
+            // Only evaluate condition if this IF is in a branch that should be included
+            let current = if last.include_line() {
+                engine.eval::<bool>(cond).unwrap()
+            } else {
+                false
+            };
+
+            include.push(BlockKind::new_if(current));
+        } else if trimmed.starts_with("#ELIF ") || trimmed.starts_with("//ELIF ") {
+            let cond = if trimmed.starts_with("#ELIF ") {
+                trimmed.strip_prefix("#ELIF ").unwrap()
+            } else {
+                trimmed.strip_prefix("//ELIF ").unwrap()
+            };
+            let last = include.pop().unwrap();
+
+            // Only evaluate condition if no other branches evaluated to true
+            let current = if matches!(last, BlockKind::IfElse(false, false)) {
+                engine.eval::<bool>(cond).unwrap()
+            } else {
+                false
+            };
+
+            include.push(last.into_else_if(current));
         } else if trimmed.starts_with("#ELSE") || trimmed.starts_with("//ELSE") {
-            let res = !*include.last().unwrap();
-            include.pop();
-            include.push(res);
+            let last = include.pop().unwrap();
+            include.push(last.into_else());
         } else if trimmed.starts_with("#ENDIF") || trimmed.starts_with("//ENDIF") {
-            include.pop();
+            let prev = include.pop();
+            assert!(
+                matches!(prev, Some(BlockKind::IfElse(_, _))),
+                "ENDIF without IF"
+            );
         // Trim #+ and //+
-        } else if include.iter().all(|v| *v) {
+        } else if include.iter().all(|v| v.include_line()) {
             let mut line = line.to_string();
 
             if trimmed.starts_with("#+") {
@@ -724,5 +787,43 @@ mod test {
             .trim(),
             res.trim()
         );
+    }
+
+    #[test]
+    fn test_basic_elseif() {
+        let template = r#"
+        #IF option("opt1")
+        opt1
+        #ELIF option("opt2")
+        opt2
+        #ELIF option("opt3")
+        opt3
+        #ELSE
+        opt4
+        #ENDIF
+        "#;
+
+        const PAIRS: &[(&[&str], &str)] = &[
+            (&["opt1"], "opt1"),
+            (&["opt1", "opt2"], "opt1"),
+            (&["opt1", "opt3"], "opt1"),
+            (&["opt1", "opt2", "opt3"], "opt1"),
+            (&["opt2"], "opt2"),
+            (&["opt2", "opt3"], "opt2"),
+            (&["opt3"], "opt3"),
+            (&["opt4"], "opt4"),
+            (&[], "opt4"),
+        ];
+
+        for (options, expected) in PAIRS.iter().cloned() {
+            let res = process_file(
+                template,
+                &options.iter().map(|o| o.to_string()).collect::<Vec<_>>(),
+                &[],
+                &mut String::from("main.rs"),
+            )
+            .unwrap();
+            assert_eq!(expected, res.trim(), "options: {:?}", options);
+        }
     }
 }

@@ -49,47 +49,69 @@ impl Repository {
         current
     }
 
-    fn select(&mut self, index: usize) {
+    fn enter_group(&mut self, index: usize) {
         self.path.push(index);
     }
 
-    fn toggle_current(&mut self, index: usize) {
-        let current = self.current_level()[index];
-        match current {
-            GeneratorOptionItem::Category(_) => unreachable!(),
-            GeneratorOptionItem::Option(option) => {
-                if !option.chips.is_empty() && !option.chips.contains(&self.chip) {
-                    return;
-                }
+    fn is_selected(&self, option: &str) -> bool {
+        self.selected_index(option).is_some()
+    }
 
-                if let Some(i) = self.selected.iter().position(|v| v == option.name) {
-                    self.selected.remove(i);
-                } else {
-                    self.selected.push(option.name.to_string());
-                }
+    fn selected_index(&self, option: &str) -> Option<usize> {
+        self.selected.iter().position(|s| s == option)
+    }
 
-                let toggled_option = option;
-                let currently_selected = self.selected.clone();
-                for option in currently_selected {
-                    let Some(option) = find_option(&option, self.options) else {
-                        ratatui::restore();
-                        panic!("option not found");
-                    };
-                    for enable in option.enables {
-                        if !self.selected.contains(&enable.to_string()) {
-                            self.selected.push(enable.to_string());
-                        }
+    fn select(&mut self, option: &str) {
+        self.selected.push(option.to_string());
+    }
+
+    fn is_enabled(&self, level: &[GeneratorOptionItem], index: usize) -> bool {
+        match level[index] {
+            GeneratorOptionItem::Category(options) => {
+                for i in 0..options.options.len() {
+                    if self.is_enabled(options.options, i) {
+                        return true;
                     }
-                    for disable in option.disables {
-                        if disable != &toggled_option.name
-                            && self.selected.contains(&disable.to_string())
-                        {
-                            let Some(idx) = self.selected.iter().position(|v| v == disable) else {
-                                ratatui::restore();
-                                panic!("disable option not found");
-                            };
-                            self.selected.remove(idx);
-                        }
+                }
+                false
+            }
+            GeneratorOptionItem::Option(option) => {
+                option.chips.is_empty() || option.chips.contains(&self.chip)
+            }
+        }
+    }
+
+    fn toggle_current(&mut self, index: usize) {
+        if !self.is_enabled(self.current_level(), index) {
+            return;
+        }
+
+        let GeneratorOptionItem::Option(option) = self.current_level()[index] else {
+            ratatui::restore();
+            unreachable!();
+        };
+
+        if let Some(i) = self.selected_index(option.name) {
+            self.selected.swap_remove(i);
+        } else {
+            self.select(option.name);
+        }
+
+        let toggled_option = option;
+        for option in self.selected.clone() {
+            let Some(option) = find_option(&option, self.options) else {
+                ratatui::restore();
+                panic!("option not found");
+            };
+            for enable in option.enables {
+                if !self.is_selected(enable) {
+                    self.select(enable);
+                }
+            }
+            for disable in option.disables {
+                if disable != &toggled_option.name {
+                    if let Some(idx) = self.selected_index(disable) {
+                        self.selected.swap_remove(idx);
                     }
                 }
             }
@@ -105,11 +127,14 @@ impl Repository {
     }
 
     fn current_level_desc(&self) -> Vec<(bool, String)> {
-        self.current_level()
+        let level = self.current_level();
+
+        level
             .iter()
-            .map(|v| {
+            .enumerate()
+            .map(|(index, v)| {
                 (
-                    v.chips().is_empty() || v.chips().contains(&self.chip),
+                    self.is_enabled(level, index),
                     format!(
                         " {} {}",
                         if self.selected.contains(&v.name()) {
@@ -247,7 +272,7 @@ impl App {
                             if self.repository.is_option(selected) {
                                 self.repository.toggle_current(selected);
                             } else {
-                                self.repository.select(self.selected());
+                                self.repository.enter_group(self.selected());
                                 self.enter_menu();
                             }
                         }

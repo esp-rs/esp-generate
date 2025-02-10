@@ -355,7 +355,7 @@ impl App {
         }
     }
 
-    fn help_paragraph(&self) -> Paragraph<'_> {
+    fn help_paragraph(&self) -> Option<Paragraph<'_>> {
         let selected = self
             .selected()
             .min(self.repository.current_level().len() - 1);
@@ -363,23 +363,35 @@ impl App {
         // Create a space for header, list, help text and the footer.
         let help_text = option.help();
 
+        if help_text.is_empty() {
+            return None;
+        }
+
         let help_block = Block::default()
             .borders(Borders::NONE)
             .fg(TEXT_COLOR)
             .bg(HELP_ROW_COLOR);
 
-        Paragraph::new(help_text)
-            .centered()
-            .wrap(Wrap { trim: false })
-            .block(help_block)
+        Some(
+            Paragraph::new(help_text)
+                .centered()
+                .wrap(Wrap { trim: false })
+                .block(help_block),
+        )
     }
 
     fn help_lines(&self, area: Rect) -> u16 {
-        self.help_paragraph().line_count(area.width) as u16
+        if let Some(paragraph) = self.help_paragraph() {
+            paragraph.line_count(area.width) as u16
+        } else {
+            0
+        }
     }
 
     fn render_help(&self, area: Rect, buf: &mut Buffer) {
-        self.help_paragraph().render(area, buf);
+        if let Some(paragraph) = self.help_paragraph() {
+            paragraph.render(area, buf);
+        }
     }
 
     fn footer_paragraph(&self) -> Paragraph<'_> {

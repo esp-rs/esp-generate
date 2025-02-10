@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Update `probe-rs run` arguments (#90)
 - When using `embassy` option, `async_main.rs` file was renamed to `main.rs` (#93)
+- The UI no longer allows selecting options with missing requirements, and does not allow deselecting
+  options that are required by other options. (#101)
+- Options can now declare negative requirements (e.g. `!alloc` can not be enabled if `alloc` is used) (#101)
 
 ### Fixed
 

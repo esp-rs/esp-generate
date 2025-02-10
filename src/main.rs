@@ -22,8 +22,7 @@ pub struct GeneratorOption {
     name: &'static str,
     display_name: &'static str,
     help: &'static str,
-    enables: &'static [&'static str],
-    disables: &'static [&'static str],
+    requires: &'static [&'static str],
     chips: &'static [Chip],
 }
 
@@ -90,10 +89,10 @@ impl GeneratorOptionItem {
         }
     }
 
-    fn enables(&self) -> &[&str] {
+    fn requires(&self) -> &[&str] {
         match self {
             GeneratorOptionItem::Category(_) => &[],
-            GeneratorOptionItem::Option(option) => option.enables,
+            GeneratorOptionItem::Option(option) => option.requires,
         }
     }
 
@@ -110,16 +109,14 @@ static OPTIONS: &[GeneratorOptionItem] = &[
         name: "alloc",
         display_name: "Enable allocations via the `esp-alloc` crate.",
         help: "",
-        enables: &[],
-        disables: &[],
+        requires: &[],
         chips: &[],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "wifi",
         display_name: "Enable Wi-Fi via the `esp-wifi` crate.",
         help: "Requires `alloc`. Not available on ESP32-H2.",
-        enables: &["alloc"],
-        disables: &[],
+        requires: &["alloc"],
         chips: &[
             Chip::Esp32,
             Chip::Esp32c2,
@@ -133,8 +130,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
         name: "ble",
         display_name: "Enable BLE via the `esp-wifi` crate.",
         help: "Requires `alloc`. Not available on ESP32-S2.",
-        enables: &["alloc"],
-        disables: &[],
+        requires: &["alloc"],
         chips: &[
             Chip::Esp32,
             Chip::Esp32c2,
@@ -148,16 +144,14 @@ static OPTIONS: &[GeneratorOptionItem] = &[
         name: "embassy",
         display_name: "Add `embassy` framework support.",
         help: "",
-        enables: &[],
-        disables: &[],
+        requires: &[],
         chips: &[],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "probe-rs",
         display_name: "Enable `defmt` and flashes using `probe-rs` instead of `espflash`.",
         help: "",
-        enables: &[],
-        disables: &[],
+        requires: &[],
         chips: &[],
     }),
     GeneratorOptionItem::Category(GeneratorOptionCategory {
@@ -169,8 +163,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
                 name: "wokwi",
                 display_name: "Add support for Wokwi simulation using VS Code Wokwi extension.",
                 help: "",
-                enables: &[],
-                disables: &[],
+                requires: &[],
                 chips: &[
                     Chip::Esp32,
                     Chip::Esp32c3,
@@ -184,16 +177,14 @@ static OPTIONS: &[GeneratorOptionItem] = &[
                 name: "dev-container",
                 display_name: "Add support for VS Code Dev Containers and GitHub Codespaces.",
                 help: "",
-                enables: &[],
-                disables: &[],
+                requires: &[],
                 chips: &[],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "ci",
                 display_name: "Add GitHub Actions support with some basic checks.",
                 help: "",
-                enables: &[],
-                disables: &[],
+                requires: &[],
                 chips: &[],
             }),
         ],
@@ -207,16 +198,14 @@ static OPTIONS: &[GeneratorOptionItem] = &[
                 name: "helix",
                 display_name: "Add rust-analyzer settings for Helix Editor",
                 help: "",
-                enables: &[],
-                disables: &[],
+                requires: &[],
                 chips: &[],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "vscode",
                 display_name: "Add rust-analyzer settings for Visual Studio Code",
                 help: "",
-                enables: &[],
-                disables: &[],
+                requires: &[],
                 chips: &[],
             }),
         ],
@@ -626,14 +615,14 @@ fn process_options(args: &Args) {
                 process::exit(-1);
             }
             if !option_item
-                .enables()
+                .requires()
                 .iter()
-                .all(|requirement| args.option.contains(&requirement.to_string()))
+                .all(|requirement| args.option.iter().any(|r| r == requirement))
             {
                 log::error!(
                     "Option '{}' requires {}",
                     option_item.name(),
-                    option_item.enables().join(", ")
+                    option_item.requires().join(", ")
                 );
                 process::exit(-1);
             }

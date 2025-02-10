@@ -416,8 +416,37 @@ impl App {
             .selected()
             .min(self.repository.current_level().len() - 1);
         let option = &self.repository.current_level()[selected];
-        // Create a space for header, list, help text and the footer.
+
+        let mut requires = Vec::new();
+        let mut required_by = Vec::new();
+        let mut disabled_by = Vec::new();
+
+        self.repository.selected.iter().for_each(|opt| {
+            let opt = find_option(opt.as_str(), self.repository.options).unwrap();
+            for o in opt.requires.iter() {
+                if let Some(disables) = o.strip_prefix("!") {
+                    if disables == option.name() {
+                        disabled_by.push(opt.name.as_str());
+                    }
+                } else if o == option.name() {
+                    required_by.push(o.as_str());
+                }
+            }
+        });
+        for req in option.requires() {
+            if let Some(disables) = req.strip_prefix("!") {
+                if self.repository.is_selected(disables) {
+                    disabled_by.push(disables);
+                }
+            } else {
+                requires.push(req);
+            }
+        }
+
         let help_text = option.help();
+        let help_text = generate_list(help_text, "Requires", &requires);
+        let help_text = generate_list(&help_text, "Required by", &required_by);
+        let help_text = generate_list(&help_text, "Disabled by", &disabled_by);
 
         if help_text.is_empty() {
             return None;
@@ -466,5 +495,36 @@ impl App {
 
     fn render_footer(&self, area: Rect, buf: &mut Buffer) {
         self.footer_paragraph().render(area, buf);
+    }
+}
+
+fn generate_list<S: AsRef<str>>(base: &str, word: &str, els: &[S]) -> String {
+    if !els.is_empty() {
+        let mut requires = String::new();
+
+        if !base.is_empty() {
+            requires.push_str(base);
+            requires.push(' ');
+        }
+
+        for (i, r) in els.iter().enumerate() {
+            if i == 0 {
+                requires.push_str(word);
+                requires.push(' ');
+            } else if i == els.len() - 1 {
+                requires.push_str(" and ");
+            } else {
+                requires.push_str(", ");
+            };
+
+            requires.push('`');
+            requires.push_str(r.as_ref());
+            requires.push('`');
+        }
+        requires.push('.');
+
+        requires
+    } else {
+        base.to_string()
     }
 }

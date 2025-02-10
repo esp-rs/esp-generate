@@ -105,8 +105,8 @@ impl GeneratorOptionItem {
 
     fn help(&self) -> &str {
         match self {
-            GeneratorOptionItem::Category(category) => category.help.as_str(),
-            GeneratorOptionItem::Option(option) => option.help.as_str(),
+            GeneratorOptionItem::Category(category) => &category.help,
+            GeneratorOptionItem::Option(option) => &option.help,
         }
     }
 }

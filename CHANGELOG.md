@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After generating the project the tool now checks the rust version, espflash version and probe-rs version (#88)
 - Be more helpful in case of common linker errors (#94)
 - Support for `ELIF` conditions (#96)
-- Display help text (#100)
+- Display help text (#100, #103)
 
 ### Changed
 - Update `probe-rs run` arguments (#90)
@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The UI no longer allows selecting options with missing requirements, and does not allow deselecting
   options that are required by other options. (#101)
 - Options can now declare negative requirements (e.g. `!alloc` can not be enabled if `alloc` is used) (#101)
+- Template settings are now described in a template-specific `yaml` file (#103)
 
 ### Fixed
 

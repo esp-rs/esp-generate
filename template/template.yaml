@@ -6,7 +6,7 @@ options:
   - !Option
     name: wifi
     display_name: Enable Wi-Fi via the `esp-wifi` crate.
-    help: Requires `alloc`. Not available on ESP32-H2.
+    help: Not available on ESP32-H2.
     requires:
       - alloc
     chips:
@@ -20,7 +20,7 @@ options:
   - !Option
     name: ble
     display_name: Enable BLE via the `esp-wifi` crate.
-    help: Requires `alloc`. Not available on ESP32-S2.
+    help: Not available on ESP32-S2.
     requires:
       - alloc
     chips:

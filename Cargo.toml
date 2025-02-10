@@ -24,7 +24,7 @@ crossterm       = "0.28.1"
 env_logger      = "0.11.6"
 esp-metadata    = { version = "0.5.0", features = ["clap"] }
 log             = "0.4.25"
-ratatui         = { version = "0.29.0", features = ["crossterm"] }
+ratatui         = { version = "0.29.0", features = ["crossterm", "unstable"] }
 rhai            = "1.20.1"
 taplo           = "0.13.2"
 update-informer = "1.1.0"

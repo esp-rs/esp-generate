@@ -278,17 +278,12 @@ impl Widget for &mut App {
         let vertical = Layout::vertical([
             Constraint::Length(2),
             Constraint::Fill(1),
-            Constraint::Length(2),
+                        Constraint::Length(self.footer_lines(area)),
         ]);
-        let [header_area, rest_area, footer_area] = vertical.areas(area);
-
-        // Create two chunks with equal vertical screen space. One for the list and the
-        // other for the info block.
-        let vertical = Layout::vertical([Constraint::Percentage(100)]);
-        let [upper_item_list_area] = vertical.areas(rest_area);
+        let [header_area, rest_area, help_area, footer_area] = vertical.areas(area);
 
         self.render_title(header_area, buf);
-        self.render_item(upper_item_list_area, buf);
+        self.render_item(rest_area, buf);
         self.render_footer(footer_area, buf);
     }
 }
@@ -358,13 +353,21 @@ impl App {
         }
     }
 
-    fn render_footer(&self, area: Rect, buf: &mut Buffer) {
+    fn footer_paragraph(&self) -> Paragraph<'_> {
         let text = if self.confirm_quit {
             "Are you sure you want to quit? (y/N)"
         } else {
             "Use ↓↑ to move, ESC/← to go up, → to go deeper or change the value, s/S to save and generate, ESC/q to cancel"
         };
 
-        Paragraph::new(text).centered().render(area, buf);
+        Paragraph::new(text).centered().wrap(Wrap { trim: false })
+    }
+
+    fn footer_lines(&self, area: Rect) -> u16 {
+        self.footer_paragraph().line_count(area.width) as u16
+    }
+
+    fn render_footer(&self, area: Rect, buf: &mut Buffer) {
+        self.footer_paragraph().render(area, buf);
     }
 }

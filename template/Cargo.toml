@@ -24,18 +24,20 @@ esp-backtrace = { version = "0.15.0", features = [
 esp-hal = { version = "0.23.1", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
+    #IF option("unstable-hal")
     "unstable",
+    #ENDIF
     #IF option("probe-rs")
     #+"defmt",
     #ENDIF
 ] }
-#IF !option("probe-rs")
+#IF option("probe-rs")
+#+defmt            = "0.3.10"
+#+defmt-rtt        = "0.4.1"
+#ELSE
 #REPLACE esp32c6 mcu
 esp-println = { version = "0.13.0", features = ["esp32c6", "log"] }
 log = { version = "0.4.21" }
-#ELSE
-#+defmt            = "0.3.10"
-#+defmt-rtt        = "0.4.1"
 #ENDIF
 #IF option("alloc")
 esp-alloc = { version = "0.6.0" }

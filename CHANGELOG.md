@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Be more helpful in case of common linker errors (#94)
 - Support for `ELIF` conditions (#96)
 - Display help text (#100, #103)
+- Added an option to enable unstable HAL features (#104)
 
 ### Changed
 - Update `probe-rs run` arguments (#90)

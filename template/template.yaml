@@ -1,5 +1,10 @@
 options:
   - !Option
+    name: unstable-hal
+    display_name: Enable unstable HAL features.
+    help: esp-hal contains many unstable features that are not yet ready for general use. This configuration enables using them.
+
+  - !Option
     name: alloc
     display_name: Enable allocations via the `esp-alloc` crate.
 
@@ -9,6 +14,7 @@ options:
     help: Not available on ESP32-H2.
     requires:
       - alloc
+      - unstable-hal
     chips:
       - esp32
       - esp32c2
@@ -23,6 +29,7 @@ options:
     help: Not available on ESP32-S2.
     requires:
       - alloc
+      - unstable-hal
     chips:
       - esp32
       - esp32c2
@@ -37,7 +44,8 @@ options:
 
   - !Option
     name: probe-rs
-    display_name: Enable `defmt` and flashes using `probe-rs` instead of `espflash`.
+    display_name: Flashes using `probe-rs` instead of `espflash`.
+    help: espflash uses a serial connection (UART) for programming and logging. probe-rs is a debugger that connects to the chips over JTAG. It can be used to flash and monitor, and it can also be used to interactively debug an application, or run tests on the hardware. Semihosting or RTT-based technologies like defmt-rtt require probe-rs.
 
   - !Category
     name: optional

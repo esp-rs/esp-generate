@@ -13,7 +13,7 @@ use esp_hal::timer::timg::TimerGroup;
 //+ use defmt::info;
 //ELSE
 use log::info;
-//ENDIF
+//ENDIF probe-rs
 
 //IF option("alloc")
 extern crate alloc;

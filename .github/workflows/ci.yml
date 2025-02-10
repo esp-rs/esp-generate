@@ -1,10 +1,5 @@
 name: CI
 on:
-  push:
-    branches-ignore:
-      - "gh-readonly-queue/**"
-    paths-ignore:
-      - "**/README.md"
   pull_request:
     types: [opened, synchronize, reopened]
     paths-ignore:

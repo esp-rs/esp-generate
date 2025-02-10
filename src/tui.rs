@@ -65,24 +65,22 @@ impl Repository {
         self.selected.push(option.to_string());
     }
 
-    fn is_enabled(&self, level: &[GeneratorOptionItem], index: usize) -> bool {
+    fn is_active(&self, level: &[GeneratorOptionItem], index: usize) -> bool {
         match level[index] {
             GeneratorOptionItem::Category(options) => {
                 for i in 0..options.options.len() {
-                    if self.is_enabled(options.options, i) {
+                    if self.is_active(options.options, i) {
                         return true;
                     }
                 }
                 false
             }
-            GeneratorOptionItem::Option(option) => {
-                option.chips.is_empty() || option.chips.contains(&self.chip)
-            }
+            GeneratorOptionItem::Option(option) => self.requirements_met(option),
         }
     }
 
     fn toggle_current(&mut self, index: usize) {
-        if !self.is_enabled(self.current_level(), index) {
+        if !self.is_active(self.current_level(), index) {
             return;
         }
 
@@ -92,30 +90,39 @@ impl Repository {
         };
 
         if let Some(i) = self.selected_index(option.name) {
-            self.selected.swap_remove(i);
-        } else {
+            if self.can_be_disabled(option.name) {
+                self.selected.swap_remove(i);
+            }
+        } else if self.requirements_met(option) {
             self.select(option.name);
         }
+    }
 
-        let toggled_option = option;
-        for option in self.selected.clone() {
-            let Some(option) = find_option(&option, self.options) else {
-                ratatui::restore();
-                panic!("option not found");
-            };
-            for enable in option.enables {
-                if !self.is_selected(enable) {
-                    self.select(enable);
-                }
-            }
-            for disable in option.disables {
-                if disable != &toggled_option.name {
-                    if let Some(idx) = self.selected_index(disable) {
-                        self.selected.swap_remove(idx);
-                    }
-                }
+    fn requirements_met(&self, option: GeneratorOption) -> bool {
+        if !option.chips.is_empty() && !option.chips.contains(&self.chip) {
+            return false;
+        }
+
+        for requirement in option.requires {
+            if !self.is_selected(requirement) {
+                return false;
             }
         }
+        true
+    }
+
+    // An option can only be disabled if it's not required by any other selected option.
+    fn can_be_disabled(&self, option: &str) -> bool {
+        for selected in self.selected.iter() {
+            let Some(selected_option) = find_option(selected, self.options) else {
+                ratatui::restore();
+                panic!("selected option not found: {selected}");
+            };
+            if selected_option.requires.contains(&option) {
+                return false;
+            }
+        }
+        true
     }
 
     fn is_option(&self, index: usize) -> bool {
@@ -134,7 +141,7 @@ impl Repository {
             .enumerate()
             .map(|(index, v)| {
                 (
-                    self.is_enabled(level, index),
+                    self.is_active(level, index),
                     format!(
                         " {} {}",
                         if self.selected.contains(&v.name()) {

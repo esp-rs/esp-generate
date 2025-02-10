@@ -12,6 +12,7 @@ use super::{GeneratorOption, GeneratorOptionItem};
 
 const TODO_HEADER_BG: Color = tailwind::BLUE.c950;
 const NORMAL_ROW_COLOR: Color = tailwind::SLATE.c950;
+const HELP_ROW_COLOR: Color = tailwind::SLATE.c800;
 const SELECTED_STYLE_FG: Color = tailwind::BLUE.c300;
 const DISABLED_STYLE_FG: Color = tailwind::GRAY.c600;
 const TEXT_COLOR: Color = tailwind::SLATE.c200;
@@ -35,7 +36,7 @@ impl Repository {
         }
     }
 
-    fn current_level(&self) -> Vec<GeneratorOptionItem> {
+    fn current_level(&self) -> &[GeneratorOptionItem] {
         let mut current = self.options;
 
         for &index in &self.path {
@@ -45,7 +46,7 @@ impl Repository {
             }
         }
 
-        Vec::from(current)
+        current
     }
 
     fn select(&mut self, index: usize) {
@@ -274,21 +275,17 @@ impl App {
 
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        // Create a space for header, todo list and the footer.
         let vertical = Layout::vertical([
             Constraint::Length(2),
             Constraint::Fill(1),
-            Constraint::Length(2),
+            Constraint::Length(self.help_lines(area)),
+            Constraint::Length(self.footer_lines(area)),
         ]);
-        let [header_area, rest_area, footer_area] = vertical.areas(area);
-
-        // Create two chunks with equal vertical screen space. One for the list and the
-        // other for the info block.
-        let vertical = Layout::vertical([Constraint::Percentage(100)]);
-        let [upper_item_list_area] = vertical.areas(rest_area);
+        let [header_area, rest_area, help_area, footer_area] = vertical.areas(area);
 
         self.render_title(header_area, buf);
-        self.render_item(upper_item_list_area, buf);
+        self.render_item(rest_area, buf);
+        self.render_help(help_area, buf);
         self.render_footer(footer_area, buf);
     }
 }
@@ -358,13 +355,60 @@ impl App {
         }
     }
 
-    fn render_footer(&self, area: Rect, buf: &mut Buffer) {
+    fn help_paragraph(&self) -> Option<Paragraph<'_>> {
+        let selected = self
+            .selected()
+            .min(self.repository.current_level().len() - 1);
+        let option = &self.repository.current_level()[selected];
+        // Create a space for header, list, help text and the footer.
+        let help_text = option.help();
+
+        if help_text.is_empty() {
+            return None;
+        }
+
+        let help_block = Block::default()
+            .borders(Borders::NONE)
+            .fg(TEXT_COLOR)
+            .bg(HELP_ROW_COLOR);
+
+        Some(
+            Paragraph::new(help_text)
+                .centered()
+                .wrap(Wrap { trim: false })
+                .block(help_block),
+        )
+    }
+
+    fn help_lines(&self, area: Rect) -> u16 {
+        if let Some(paragraph) = self.help_paragraph() {
+            paragraph.line_count(area.width) as u16
+        } else {
+            0
+        }
+    }
+
+    fn render_help(&self, area: Rect, buf: &mut Buffer) {
+        if let Some(paragraph) = self.help_paragraph() {
+            paragraph.render(area, buf);
+        }
+    }
+
+    fn footer_paragraph(&self) -> Paragraph<'_> {
         let text = if self.confirm_quit {
             "Are you sure you want to quit? (y/N)"
         } else {
             "Use ↓↑ to move, ESC/← to go up, → to go deeper or change the value, s/S to save and generate, ESC/q to cancel"
         };
 
-        Paragraph::new(text).centered().render(area, buf);
+        Paragraph::new(text).centered().wrap(Wrap { trim: false })
+    }
+
+    fn footer_lines(&self, area: Rect) -> u16 {
+        self.footer_paragraph().line_count(area.width) as u16
+    }
+
+    fn render_footer(&self, area: Rect, buf: &mut Buffer) {
+        self.footer_paragraph().render(area, buf);
     }
 }

@@ -21,6 +21,7 @@ mod tui;
 pub struct GeneratorOption {
     name: &'static str,
     display_name: &'static str,
+    help: &'static str,
     enables: &'static [&'static str],
     disables: &'static [&'static str],
     chips: &'static [Chip],
@@ -36,6 +37,7 @@ impl GeneratorOption {
 pub struct GeneratorOptionCategory {
     name: &'static str,
     display_name: &'static str,
+    help: &'static str,
     options: &'static [GeneratorOptionItem],
 }
 
@@ -94,19 +96,28 @@ impl GeneratorOptionItem {
             GeneratorOptionItem::Option(option) => option.enables,
         }
     }
+
+    fn help(&self) -> &str {
+        match self {
+            GeneratorOptionItem::Category(category) => category.help,
+            GeneratorOptionItem::Option(option) => option.help,
+        }
+    }
 }
 
 static OPTIONS: &[GeneratorOptionItem] = &[
     GeneratorOptionItem::Option(GeneratorOption {
         name: "alloc",
         display_name: "Enable allocations via the `esp-alloc` crate.",
+        help: "",
         enables: &[],
         disables: &[],
         chips: &[],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "wifi",
-        display_name: "Enable Wi-Fi via the `esp-wifi` crate. Requires `alloc`.",
+        display_name: "Enable Wi-Fi via the `esp-wifi` crate.",
+        help: "Requires `alloc`. Not available on ESP32-H2.",
         enables: &["alloc"],
         disables: &[],
         chips: &[
@@ -120,7 +131,8 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "ble",
-        display_name: "Enable BLE via the `esp-wifi` crate. Requires `alloc`.",
+        display_name: "Enable BLE via the `esp-wifi` crate.",
+        help: "Requires `alloc`. Not available on ESP32-S2.",
         enables: &["alloc"],
         disables: &[],
         chips: &[
@@ -135,13 +147,15 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     GeneratorOptionItem::Option(GeneratorOption {
         name: "embassy",
         display_name: "Add `embassy` framework support.",
+        help: "",
         enables: &[],
         disables: &[],
         chips: &[],
     }),
     GeneratorOptionItem::Option(GeneratorOption {
         name: "probe-rs",
-        display_name: "Enables `defmt` and flashes using `probe-rs` instead of `espflash`.",
+        display_name: "Enable `defmt` and flashes using `probe-rs` instead of `espflash`.",
+        help: "",
         enables: &[],
         disables: &[],
         chips: &[],
@@ -149,10 +163,12 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     GeneratorOptionItem::Category(GeneratorOptionCategory {
         name: "optional",
         display_name: "Options",
+        help: "",
         options: &[
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "wokwi",
                 display_name: "Add support for Wokwi simulation using VS Code Wokwi extension.",
+                help: "",
                 enables: &[],
                 disables: &[],
                 chips: &[
@@ -167,6 +183,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "dev-container",
                 display_name: "Add support for VS Code Dev Containers and GitHub Codespaces.",
+                help: "",
                 enables: &[],
                 disables: &[],
                 chips: &[],
@@ -174,6 +191,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "ci",
                 display_name: "Add GitHub Actions support with some basic checks.",
+                help: "",
                 enables: &[],
                 disables: &[],
                 chips: &[],
@@ -183,10 +201,12 @@ static OPTIONS: &[GeneratorOptionItem] = &[
     GeneratorOptionItem::Category(GeneratorOptionCategory {
         name: "editor",
         display_name: "Optional editor config files for rust-analyzer",
+        help: "",
         options: &[
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "helix",
                 display_name: "Add rust-analyzer settings for Helix Editor",
+                help: "",
                 enables: &[],
                 disables: &[],
                 chips: &[],
@@ -194,6 +214,7 @@ static OPTIONS: &[GeneratorOptionItem] = &[
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "vscode",
                 display_name: "Add rust-analyzer settings for Visual Studio Code",
+                help: "",
                 enables: &[],
                 disables: &[],
                 chips: &[],

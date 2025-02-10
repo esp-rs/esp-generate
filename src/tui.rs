@@ -103,11 +103,35 @@ impl Repository {
             return false;
         }
 
-        for requirement in option.requires {
-            if !self.is_selected(requirement) {
+        // Are this option's requirements met?
+        for &requirement in option.requires {
+            let (key, expected) = if let Some(requirement) = requirement.strip_prefix('!') {
+                (requirement, false)
+            } else {
+                (requirement, true)
+            };
+
+            if self.is_selected(key) != expected {
                 return false;
             }
         }
+
+        // Does any of the enabled options have a requirement against this one?
+        for selected in self.selected.iter() {
+            let Some(selected_option) = find_option(selected, self.options) else {
+                ratatui::restore();
+                panic!("selected option not found: {selected}");
+            };
+
+            for requirement in selected_option.requires.iter() {
+                if let Some(requirement) = requirement.strip_prefix('!') {
+                    if requirement == option.name {
+                        return false;
+                    }
+                }
+            }
+        }
+
         true
     }
 

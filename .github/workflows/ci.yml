@@ -67,11 +67,11 @@ jobs:
 
       - name: Generate and check project
         if: github.event_name != 'schedule' &&  !inputs.all_combinations
-        run: cd xtask && cargo ${{ env.TOOLCHAIN }} run -- check ${{ matrix.chip }}
+        run: cargo ${{ env.TOOLCHAIN }} xtask check ${{ matrix.chip }}
 
       - name: Generate and check project (all combinations)
         if: github.event_name == 'schedule' ||  inputs.all_combinations
-        run: cd xtask && cargo ${{ env.TOOLCHAIN }} run -- check ${{ matrix.chip }} --all-combinations
+        run: cargo ${{ env.TOOLCHAIN }} xtask check ${{ matrix.chip }} --all-combinations
 
   # --------------------------------------------------------------------------
   # Test

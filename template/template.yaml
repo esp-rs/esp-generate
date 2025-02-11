@@ -1,0 +1,75 @@
+options:
+  - !Option
+    name: alloc
+    display_name: Enable allocations via the `esp-alloc` crate.
+
+  - !Option
+    name: wifi
+    display_name: Enable Wi-Fi via the `esp-wifi` crate.
+    help: Not available on ESP32-H2.
+    requires:
+      - alloc
+    chips:
+      - esp32
+      - esp32c2
+      - esp32c3
+      - esp32c6
+      - esp32s2
+      - esp32s3
+
+  - !Option
+    name: ble
+    display_name: Enable BLE via the `esp-wifi` crate.
+    help: Not available on ESP32-S2.
+    requires:
+      - alloc
+    chips:
+      - esp32
+      - esp32c2
+      - esp32c3
+      - esp32c6
+      - esp32h2
+      - esp32s3
+
+  - !Option
+    name: embassy
+    display_name: Add `embassy` framework support.
+
+  - !Option
+    name: probe-rs
+    display_name: Enable `defmt` and flashes using `probe-rs` instead of `espflash`.
+
+  - !Category
+    name: optional
+    display_name: Options
+    options:
+      - !Option
+        name: wokwi
+        display_name: Add support for Wokwi simulation using VS Code Wokwi extension.
+        chips:
+          - esp32
+          - esp32c3
+          - esp32c6
+          - esp32h2
+          - esp32s2
+          - esp32s3
+
+      - !Option
+        name: dev-container
+        display_name: Add support for VS Code Dev Containers and GitHub Codespaces.
+
+      - !Option
+        name: ci
+        display_name: Add GitHub Actions support with some basic checks.
+
+  - !Category
+    name: editor
+    display_name: Optional editor config files for rust-analyzer
+    options:
+      - !Option
+        name: helix
+        display_name: Add rust-analyzer settings for Helix Editor
+
+      - !Option
+        name: vscode
+        display_name: Add rust-analyzer settings for Visual Studio Code

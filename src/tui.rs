@@ -40,8 +40,8 @@ impl Repository {
         let mut current = self.options;
 
         for &index in &self.path {
-            current = match current[index] {
-                GeneratorOptionItem::Category(category) => category.options,
+            current = match &current[index] {
+                GeneratorOptionItem::Category(category) => category.options.as_slice(),
                 GeneratorOptionItem::Option(_) => unreachable!(),
             }
         }
@@ -61,15 +61,15 @@ impl Repository {
         self.selected.iter().position(|s| s == option)
     }
 
-    fn select(&mut self, option: &str) {
-        self.selected.push(option.to_string());
+    fn select(&mut self, option: String) {
+        self.selected.push(option);
     }
 
     fn is_active(&self, level: &[GeneratorOptionItem], index: usize) -> bool {
-        match level[index] {
+        match &level[index] {
             GeneratorOptionItem::Category(options) => {
                 for i in 0..options.options.len() {
-                    if self.is_active(options.options, i) {
+                    if self.is_active(&options.options, i) {
                         return true;
                     }
                 }
@@ -84,31 +84,31 @@ impl Repository {
             return;
         }
 
-        let GeneratorOptionItem::Option(option) = self.current_level()[index] else {
+        let GeneratorOptionItem::Option(ref option) = self.current_level()[index] else {
             ratatui::restore();
             unreachable!();
         };
 
-        if let Some(i) = self.selected_index(option.name) {
-            if self.can_be_disabled(option.name) {
+        if let Some(i) = self.selected_index(&option.name) {
+            if self.can_be_disabled(&option.name) {
                 self.selected.swap_remove(i);
             }
         } else if self.requirements_met(option) {
-            self.select(option.name);
+            self.select(option.name.clone());
         }
     }
 
-    fn requirements_met(&self, option: GeneratorOption) -> bool {
+    fn requirements_met(&self, option: &GeneratorOption) -> bool {
         if !option.chips.is_empty() && !option.chips.contains(&self.chip) {
             return false;
         }
 
         // Are this option's requirements met?
-        for &requirement in option.requires {
+        for requirement in option.requires.iter() {
             let (key, expected) = if let Some(requirement) = requirement.strip_prefix('!') {
                 (requirement, false)
             } else {
-                (requirement, true)
+                (requirement.as_str(), true)
             };
 
             if self.is_selected(key) != expected {
@@ -142,7 +142,7 @@ impl Repository {
                 ratatui::restore();
                 panic!("selected option not found: {selected}");
             };
-            if selected_option.requires.contains(&option) {
+            if selected_option.requires.iter().any(|o| o == option) {
                 return false;
             }
         }
@@ -168,7 +168,7 @@ impl Repository {
                     self.is_active(level, index),
                     format!(
                         " {} {}",
-                        if self.selected.contains(&v.name()) {
+                        if self.selected.iter().any(|o| o == v.name()) {
                             "✅"
                         } else if v.is_category() {
                             "▶️"
@@ -190,7 +190,7 @@ fn find_option(
     for item in options {
         match item {
             GeneratorOptionItem::Category(category) => {
-                let found_option = find_option(option, category.options);
+                let found_option = find_option(option, &category.options);
                 if found_option.is_some() {
                     return found_option;
                 }
@@ -416,8 +416,37 @@ impl App {
             .selected()
             .min(self.repository.current_level().len() - 1);
         let option = &self.repository.current_level()[selected];
-        // Create a space for header, list, help text and the footer.
+
+        let mut requires = Vec::new();
+        let mut required_by = Vec::new();
+        let mut disabled_by = Vec::new();
+
+        self.repository.selected.iter().for_each(|opt| {
+            let opt = find_option(opt.as_str(), self.repository.options).unwrap();
+            for o in opt.requires.iter() {
+                if let Some(disables) = o.strip_prefix("!") {
+                    if disables == option.name() {
+                        disabled_by.push(opt.name.as_str());
+                    }
+                } else if o == option.name() {
+                    required_by.push(o.as_str());
+                }
+            }
+        });
+        for req in option.requires() {
+            if let Some(disables) = req.strip_prefix("!") {
+                if self.repository.is_selected(disables) {
+                    disabled_by.push(disables);
+                }
+            } else {
+                requires.push(req);
+            }
+        }
+
         let help_text = option.help();
+        let help_text = generate_list(help_text, "Requires", &requires);
+        let help_text = generate_list(&help_text, "Required by", &required_by);
+        let help_text = generate_list(&help_text, "Disabled by", &disabled_by);
 
         if help_text.is_empty() {
             return None;
@@ -466,5 +495,36 @@ impl App {
 
     fn render_footer(&self, area: Rect, buf: &mut Buffer) {
         self.footer_paragraph().render(area, buf);
+    }
+}
+
+fn generate_list<S: AsRef<str>>(base: &str, word: &str, els: &[S]) -> String {
+    if !els.is_empty() {
+        let mut requires = String::new();
+
+        if !base.is_empty() {
+            requires.push_str(base);
+            requires.push(' ');
+        }
+
+        for (i, r) in els.iter().enumerate() {
+            if i == 0 {
+                requires.push_str(word);
+                requires.push(' ');
+            } else if i == els.len() - 1 {
+                requires.push_str(" and ");
+            } else {
+                requires.push_str(", ");
+            };
+
+            requires.push('`');
+            requires.push_str(r.as_ref());
+            requires.push('`');
+        }
+        requires.push('.');
+
+        requires
+    } else {
+        base.to_string()
     }
 }

@@ -4,12 +4,14 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::{self, Command},
+    sync::LazyLock,
     time::Duration,
 };
 
 use clap::Parser;
 use env_logger::{Builder, Env};
 use esp_metadata::Chip;
+use serde::{Deserialize, Serialize};
 use taplo::formatter::Options;
 use update_informer::{registry, Check};
 
@@ -17,13 +19,16 @@ mod check;
 mod template_files;
 mod tui;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct GeneratorOption {
-    name: &'static str,
-    display_name: &'static str,
-    help: &'static str,
-    requires: &'static [&'static str],
-    chips: &'static [Chip],
+    name: String,
+    display_name: String,
+    #[serde(default)]
+    help: String,
+    #[serde(default)]
+    requires: Vec<String>,
+    #[serde(default)]
+    chips: Vec<Chip>,
 }
 
 impl GeneratorOption {
@@ -32,42 +37,44 @@ impl GeneratorOption {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct GeneratorOptionCategory {
-    name: &'static str,
-    display_name: &'static str,
-    help: &'static str,
-    options: &'static [GeneratorOptionItem],
+    name: String,
+    display_name: String,
+    #[serde(default)]
+    help: String,
+    #[serde(default)]
+    options: Vec<GeneratorOptionItem>,
 }
 
 impl GeneratorOptionCategory {
     fn options(&self) -> Vec<String> {
         let mut res = Vec::new();
-        for option in self.options {
+        for option in self.options.iter() {
             res.extend(option.options());
         }
         res
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum GeneratorOptionItem {
     Category(GeneratorOptionCategory),
     Option(GeneratorOption),
 }
 
 impl GeneratorOptionItem {
-    fn title(&self) -> String {
+    fn title(&self) -> &str {
         match self {
-            GeneratorOptionItem::Category(category) => category.display_name.to_string(),
-            GeneratorOptionItem::Option(option) => option.display_name.to_string(),
+            GeneratorOptionItem::Category(category) => category.display_name.as_str(),
+            GeneratorOptionItem::Option(option) => option.display_name.as_str(),
         }
     }
 
-    fn name(&self) -> String {
+    fn name(&self) -> &str {
         match self {
-            GeneratorOptionItem::Category(category) => category.name.to_string(),
-            GeneratorOptionItem::Option(option) => option.name.to_string(),
+            GeneratorOptionItem::Category(category) => category.name.as_str(),
+            GeneratorOptionItem::Option(option) => option.name.as_str(),
         }
     }
 
@@ -82,135 +89,37 @@ impl GeneratorOptionItem {
         matches!(self, GeneratorOptionItem::Category(_))
     }
 
-    fn chips(&self) -> &'static [Chip] {
+    fn chips(&self) -> &[Chip] {
         match self {
             GeneratorOptionItem::Category(_) => &[],
-            GeneratorOptionItem::Option(option) => option.chips,
+            GeneratorOptionItem::Option(option) => option.chips.as_slice(),
         }
     }
 
-    fn requires(&self) -> &[&str] {
+    fn requires(&self) -> &[String] {
         match self {
             GeneratorOptionItem::Category(_) => &[],
-            GeneratorOptionItem::Option(option) => option.requires,
+            GeneratorOptionItem::Option(option) => option.requires.as_slice(),
         }
     }
 
     fn help(&self) -> &str {
         match self {
-            GeneratorOptionItem::Category(category) => category.help,
-            GeneratorOptionItem::Option(option) => option.help,
+            GeneratorOptionItem::Category(category) => &category.help,
+            GeneratorOptionItem::Option(option) => &option.help,
         }
     }
 }
 
-static OPTIONS: &[GeneratorOptionItem] = &[
-    GeneratorOptionItem::Option(GeneratorOption {
-        name: "alloc",
-        display_name: "Enable allocations via the `esp-alloc` crate.",
-        help: "",
-        requires: &[],
-        chips: &[],
-    }),
-    GeneratorOptionItem::Option(GeneratorOption {
-        name: "wifi",
-        display_name: "Enable Wi-Fi via the `esp-wifi` crate.",
-        help: "Requires `alloc`. Not available on ESP32-H2.",
-        requires: &["alloc"],
-        chips: &[
-            Chip::Esp32,
-            Chip::Esp32c2,
-            Chip::Esp32c3,
-            Chip::Esp32c6,
-            Chip::Esp32s2,
-            Chip::Esp32s3,
-        ],
-    }),
-    GeneratorOptionItem::Option(GeneratorOption {
-        name: "ble",
-        display_name: "Enable BLE via the `esp-wifi` crate.",
-        help: "Requires `alloc`. Not available on ESP32-S2.",
-        requires: &["alloc"],
-        chips: &[
-            Chip::Esp32,
-            Chip::Esp32c2,
-            Chip::Esp32c3,
-            Chip::Esp32c6,
-            Chip::Esp32h2,
-            Chip::Esp32s3,
-        ],
-    }),
-    GeneratorOptionItem::Option(GeneratorOption {
-        name: "embassy",
-        display_name: "Add `embassy` framework support.",
-        help: "",
-        requires: &[],
-        chips: &[],
-    }),
-    GeneratorOptionItem::Option(GeneratorOption {
-        name: "probe-rs",
-        display_name: "Enable `defmt` and flashes using `probe-rs` instead of `espflash`.",
-        help: "",
-        requires: &[],
-        chips: &[],
-    }),
-    GeneratorOptionItem::Category(GeneratorOptionCategory {
-        name: "optional",
-        display_name: "Options",
-        help: "",
-        options: &[
-            GeneratorOptionItem::Option(GeneratorOption {
-                name: "wokwi",
-                display_name: "Add support for Wokwi simulation using VS Code Wokwi extension.",
-                help: "",
-                requires: &[],
-                chips: &[
-                    Chip::Esp32,
-                    Chip::Esp32c3,
-                    Chip::Esp32c6,
-                    Chip::Esp32h2,
-                    Chip::Esp32s2,
-                    Chip::Esp32s3,
-                ],
-            }),
-            GeneratorOptionItem::Option(GeneratorOption {
-                name: "dev-container",
-                display_name: "Add support for VS Code Dev Containers and GitHub Codespaces.",
-                help: "",
-                requires: &[],
-                chips: &[],
-            }),
-            GeneratorOptionItem::Option(GeneratorOption {
-                name: "ci",
-                display_name: "Add GitHub Actions support with some basic checks.",
-                help: "",
-                requires: &[],
-                chips: &[],
-            }),
-        ],
-    }),
-    GeneratorOptionItem::Category(GeneratorOptionCategory {
-        name: "editor",
-        display_name: "Optional editor config files for rust-analyzer",
-        help: "",
-        options: &[
-            GeneratorOptionItem::Option(GeneratorOption {
-                name: "helix",
-                display_name: "Add rust-analyzer settings for Helix Editor",
-                help: "",
-                requires: &[],
-                chips: &[],
-            }),
-            GeneratorOptionItem::Option(GeneratorOption {
-                name: "vscode",
-                display_name: "Add rust-analyzer settings for Visual Studio Code",
-                help: "",
-                requires: &[],
-                chips: &[],
-            }),
-        ],
-    }),
-];
+#[derive(Clone, Serialize, Deserialize)]
+struct Template {
+    options: Vec<GeneratorOptionItem>,
+}
+
+static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
+    let options = include_str!("../template/template.yaml");
+    serde_yaml::from_str(options).unwrap()
+});
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -229,7 +138,7 @@ struct Args {
     /// Generation options
     #[arg(short, long, help = {
         let mut all_options = Vec::new();
-        for option in OPTIONS {
+        for option in TEMPLATE.options.iter() {
             all_options.extend(option.options());
         }
         format!("Generation options: {} - For more information regarding the different options check the esp-generate README.md (https://github.com/esp-rs/esp-generate/blob/main/README.md).",all_options.join(", "))
@@ -290,7 +199,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     process_options(&args);
 
     let mut selected = if !args.headless {
-        let repository = tui::Repository::new(args.chip, OPTIONS, &args.option);
+        let repository = tui::Repository::new(args.chip, &TEMPLATE.options, &args.option);
 
         // TUI stuff ahead
         let terminal = tui::init_terminal()?;
@@ -601,7 +510,7 @@ fn process_file(
 fn process_options(args: &Args) {
     for option in &args.option {
         // Find the matching option in OPTIONS
-        if let Some(option_item) = OPTIONS.iter().find(|item| item.name() == *option) {
+        if let Some(option_item) = TEMPLATE.options.iter().find(|item| item.name() == *option) {
             // Check if the chip is supported. If the chip list is empty,
             // all chips are supported:
             if !option_item.chips().iter().any(|chip| chip == &args.chip)

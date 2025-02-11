@@ -10,111 +10,14 @@ use std::{
 
 use clap::Parser;
 use env_logger::{Builder, Env};
+use esp_generate::template::Template;
 use esp_metadata::Chip;
-use serde::{Deserialize, Serialize};
 use taplo::formatter::Options;
 use update_informer::{registry, Check};
 
 mod check;
 mod template_files;
 mod tui;
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct GeneratorOption {
-    name: String,
-    display_name: String,
-    #[serde(default)]
-    help: String,
-    #[serde(default)]
-    requires: Vec<String>,
-    #[serde(default)]
-    chips: Vec<Chip>,
-}
-
-impl GeneratorOption {
-    fn options(&self) -> Vec<String> {
-        vec![self.name.to_string()]
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct GeneratorOptionCategory {
-    name: String,
-    display_name: String,
-    #[serde(default)]
-    help: String,
-    #[serde(default)]
-    options: Vec<GeneratorOptionItem>,
-}
-
-impl GeneratorOptionCategory {
-    fn options(&self) -> Vec<String> {
-        let mut res = Vec::new();
-        for option in self.options.iter() {
-            res.extend(option.options());
-        }
-        res
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub enum GeneratorOptionItem {
-    Category(GeneratorOptionCategory),
-    Option(GeneratorOption),
-}
-
-impl GeneratorOptionItem {
-    fn title(&self) -> &str {
-        match self {
-            GeneratorOptionItem::Category(category) => category.display_name.as_str(),
-            GeneratorOptionItem::Option(option) => option.display_name.as_str(),
-        }
-    }
-
-    fn name(&self) -> &str {
-        match self {
-            GeneratorOptionItem::Category(category) => category.name.as_str(),
-            GeneratorOptionItem::Option(option) => option.name.as_str(),
-        }
-    }
-
-    fn options(&self) -> Vec<String> {
-        match self {
-            GeneratorOptionItem::Category(category) => category.options(),
-            GeneratorOptionItem::Option(option) => option.options(),
-        }
-    }
-
-    fn is_category(&self) -> bool {
-        matches!(self, GeneratorOptionItem::Category(_))
-    }
-
-    fn chips(&self) -> &[Chip] {
-        match self {
-            GeneratorOptionItem::Category(_) => &[],
-            GeneratorOptionItem::Option(option) => option.chips.as_slice(),
-        }
-    }
-
-    fn requires(&self) -> &[String] {
-        match self {
-            GeneratorOptionItem::Category(_) => &[],
-            GeneratorOptionItem::Option(option) => option.requires.as_slice(),
-        }
-    }
-
-    fn help(&self) -> &str {
-        match self {
-            GeneratorOptionItem::Category(category) => &category.help,
-            GeneratorOptionItem::Option(option) => &option.help,
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-struct Template {
-    options: Vec<GeneratorOptionItem>,
-}
 
 static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
     let options = include_str!("../template/template.yaml");

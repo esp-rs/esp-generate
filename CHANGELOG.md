@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Options can now declare negative requirements (e.g. `!alloc` can not be enabled if `alloc` is used) (#101)
 - Template settings are now described in a template-specific `yaml` file (#103)
 - Test cases are now generated from template settings (#106)
+- Migrated deprecated `serayuzgur.crates` to `fill-labs.dependi` vscode extension in devcontainer config
 
 ### Fixed
 

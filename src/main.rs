@@ -5,7 +5,6 @@ use std::{
     path::{Path, PathBuf},
     process::{self, Command},
     sync::LazyLock,
-    time::Duration,
 };
 
 use clap::Parser;
@@ -13,7 +12,6 @@ use env_logger::{Builder, Env};
 use esp_generate::template::Template;
 use esp_metadata::Chip;
 use taplo::formatter::Options;
-use update_informer::{registry, Check};
 
 mod check;
 mod template_files;
@@ -54,11 +52,15 @@ struct Args {
 
     /// Do not check for updates
     #[arg(short, long, global = true, action)]
+    #[cfg(feature = "update-informer")]
     skip_update_check: bool,
 }
 
 /// Check crates.io for a new version of the application
+#[cfg(feature = "update-informer")]
 fn check_for_update(name: &str, version: &str) {
+    use std::time::Duration;
+    use update_informer::{registry, Check};
     // By setting the interval to 0 seconds we invalidate the cache with each
     // invocation and ensure we're getting up-to-date results
     let informer =
@@ -79,6 +81,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Only check for updates once the command-line arguments have been processed,
     // to avoid printing any update notifications when the help message is
     // displayed.
+    #[cfg(feature = "update-informer")]
     if !args.skip_update_check {
         check_for_update(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
     }

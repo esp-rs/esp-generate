@@ -44,16 +44,31 @@ esp-alloc = { version = "0.6.0" }
 embedded-io = "0.6.1"
 #IF option("embassy")
 embedded-io-async = "0.6.1"
+#ENDIF embassy
 #IF option("wifi")
 embassy-net = { version = "0.6.0", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet"] }
-#ENDIF
-#ENDIF
+smoltcp = { version = "0.12.0", default-features = false, features = [
+    "medium-ethernet",
+    "multicast",
+    "proto-dhcpv4",
+    "proto-dns",
+    "proto-ipv4",
+    "socket-dns",
+    "socket-raw",
+    "socket-tcp",
+    "socket-udp",
+    "socket-icmp",
+] }
+#ENDIF wifi
+#IF option("embassy") && option("wifi")
+# for more networking protocol support see https://crates.io/crates/edge-net
+#ENDIF embassy && wifi
 esp-wifi = { version = "0.12.0", default-features=false, features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
-    "utils",
     #IF option("wifi")
     "wifi",
+    "utils",
     #ENDIF
     #IF option("ble")
     "ble",
@@ -69,25 +84,10 @@ esp-wifi = { version = "0.12.0", default-features=false, features = [
     #ENDIF
 ] }
 heapless = { version = "0.8.0", default-features = false }
-smoltcp = { version = "0.12.0", default-features = false, features = [
-    "medium-ethernet",
-    "multicast",
-    "proto-dhcpv4",
-    "proto-dns",
-    "proto-ipv4",
-    "socket-dns",
-    "socket-raw",
-    "socket-tcp",
-    "socket-udp",
-    "socket-icmp",
-] }
-#IF option("embassy")
-# for more networking protocol support see https://crates.io/crates/edge-net
-#ENDIF
-#ENDIF
 #IF option("ble")
 #+bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
 #ENDIF
+#ENDIF wifi || ble
 #IF option("embassy")
 embassy-executor = { version = "0.7.0",  features = [
     "task-arena-size-20480",

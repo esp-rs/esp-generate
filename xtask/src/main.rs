@@ -5,6 +5,10 @@ use std::{
 
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
+use esp_generate::{
+    config::{find_option, ActiveConfiguration},
+    template::{GeneratorOptionItem, Template},
+};
 use esp_metadata::Chip;
 
 #[derive(Debug, Parser)]
@@ -18,6 +22,16 @@ enum Commands {
     /// Generate a project; ensure that it builds, lints pass, and that it is
     /// formatted correctly
     Check {
+        /// Target chip to check
+        #[arg(value_enum)]
+        chip: Chip,
+        /// Verify all possible options combinations
+        #[arg(short, long)]
+        all_combinations: bool,
+    },
+
+    /// Prints all valid combinations of options for a given chip
+    Options {
         /// Target chip to check
         #[arg(value_enum)]
         chip: Chip,
@@ -42,6 +56,16 @@ fn main() -> Result<()> {
             chip,
             all_combinations,
         } => check(&workspace, chip, all_combinations),
+
+        Commands::Options {
+            chip,
+            all_combinations,
+        } => {
+            for options in options_for_chip(chip, all_combinations)? {
+                println!("{:?}", options);
+            }
+            Ok(())
+        }
     }
 }
 
@@ -52,7 +76,7 @@ fn check(workspace: &Path, chip: Chip, all_combinations: bool) -> Result<()> {
     log::info!("CHECK: {chip}");
 
     const PROJECT_NAME: &str = "test";
-    for options in options_for_chip(chip, all_combinations) {
+    for options in options_for_chip(chip, all_combinations)? {
         log::info!("WITH OPTIONS: {options:?}");
 
         // We will generate the project in a temporary directory, to avoid
@@ -107,51 +131,95 @@ fn check(workspace: &Path, chip: Chip, all_combinations: bool) -> Result<()> {
     Ok(())
 }
 
-fn options_for_chip(chip: Chip, all_combinations: bool) -> Vec<Vec<String>> {
-    let default_options: Vec<Vec<String>> = vec![
-        vec![], // No options
-        vec!["alloc".into()],
-        vec!["alloc".into(), "wifi".into()],
-        vec!["alloc".into(), "ble".into()],
-        vec!["embassy".into()],
-        vec!["probe-rs".into()],
-    ];
+fn enable_config_and_dependencies(config: &mut ActiveConfiguration, option: &str) -> Result<()> {
+    if config.selected.contains(&option.to_string()) {
+        return Ok(());
+    }
 
-    let available_options = match chip {
-        Chip::Esp32h2 => default_options
-            .iter()
-            .filter(|opts| !opts.contains(&"wifi".to_string()))
-            .cloned()
-            .collect::<Vec<_>>(),
-        Chip::Esp32s2 => default_options
-            .iter()
-            .filter(|opts| !opts.contains(&"ble".to_string()))
-            .cloned()
-            .collect::<Vec<_>>(),
-        _ => default_options,
-    };
-    if !all_combinations {
-        return available_options;
-    } else {
-        // Return all the combination of availble options
-        let mut result = vec![];
-        for i in 0..(1 << available_options.len()) {
-            let mut options = vec![];
-            for j in 0..available_options.len() {
-                if i & (1 << j) != 0 {
-                    options.extend(available_options[j].clone());
-                }
-            }
-            options.sort();
-            options.dedup();
-            result.push(options);
+    let option = find_option(option, &config.options)
+        .ok_or_else(|| anyhow::anyhow!("Option not found: {option}"))?;
+
+    for dependency in option.requires.iter() {
+        if dependency.starts_with('!') {
+            continue;
+        }
+        enable_config_and_dependencies(config, dependency)?;
+    }
+
+    if !config.requirements_met(option) {
+        return Ok(());
+    }
+
+    config.select(option.name.to_string());
+
+    Ok(())
+}
+
+fn is_valid(config: &ActiveConfiguration) -> bool {
+    for item in config.selected.iter() {
+        let option = find_option(item, &config.options).unwrap();
+        if !config.requirements_met(option) {
+            return false;
+        }
+    }
+    true
+}
+
+fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String>>> {
+    let options = include_str!("../../template/template.yaml");
+    let template = serde_yaml::from_str::<Template>(options)?;
+
+    // A list of each option, along with its dependencies
+    let mut available_options = vec![];
+    for item in template.options.iter() {
+        let mut config = ActiveConfiguration {
+            chip,
+            selected: vec![],
+            options: &template.options,
+        };
+
+        if let GeneratorOptionItem::Option(option) = item {
+            enable_config_and_dependencies(&mut config, &option.name)?;
         }
 
-        result.sort();
-        result.dedup();
-
-        return result;
+        if is_valid(&config) {
+            available_options.push(config.selected);
+        }
     }
+
+    available_options.sort();
+    available_options.dedup();
+
+    if !all_combinations {
+        return Ok(available_options);
+    }
+
+    // Return all the combination of availble options
+    let mut result = vec![];
+    for i in 0..(1 << available_options.len()) {
+        let mut config = ActiveConfiguration {
+            chip,
+            selected: vec![],
+            options: &template.options,
+        };
+
+        for j in 0..available_options.len() {
+            if i & (1 << j) != 0 {
+                config.selected.extend(available_options[j].clone());
+            }
+        }
+        config.selected.sort();
+        config.selected.dedup();
+
+        if is_valid(&config) {
+            result.push(config.selected);
+        }
+    }
+
+    result.sort();
+    result.dedup();
+
+    Ok(result)
 }
 
 fn generate(

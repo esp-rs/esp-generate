@@ -231,7 +231,7 @@ fn generate(
 ) -> Result<()> {
     let mut args = vec![
         "run",
-        "--release",
+        "--no-default-features",
         "--",
         "--headless",
         &format!("--chip={chip}"),

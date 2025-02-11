@@ -6,8 +6,8 @@ use crossterm::{
     ExecutableCommand,
 };
 use esp_generate::{
+    append_list_as_sentence,
     config::{find_option, ActiveConfiguration},
-    generate_list,
     template::GeneratorOptionItem,
 };
 use esp_metadata::Chip;
@@ -349,9 +349,9 @@ impl App {
         }
 
         let help_text = option.help();
-        let help_text = generate_list(help_text, "Requires", &requires);
-        let help_text = generate_list(&help_text, "Required by", &required_by);
-        let help_text = generate_list(&help_text, "Disabled by", &disabled_by);
+        let help_text = append_list_as_sentence(help_text, "Requires", &requires);
+        let help_text = append_list_as_sentence(&help_text, "Required by", &required_by);
+        let help_text = append_list_as_sentence(&help_text, "Disabled by", &disabled_by);
 
         if help_text.is_empty() {
             return None;

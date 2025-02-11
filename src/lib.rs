@@ -1,7 +1,17 @@
 pub mod config;
 pub mod template;
 
-pub fn generate_list<S: AsRef<str>>(base: &str, word: &str, els: &[S]) -> String {
+/// This turns a list of strings into a sentence, and appends it to the base string.
+///
+/// # Example
+///
+/// ```rust
+/// # use esp_generate::append_list_as_sentence;
+/// let list = &["foo", "bar", "baz"];
+/// let sentence = append_list_as_sentence("Here is a sentence.", "My elements are", list);
+/// assert_eq!(sentence, "Here is a sentence. My elements are `foo`, `bar` and `baz`.");
+/// ```
+pub fn append_list_as_sentence<S: AsRef<str>>(base: &str, word: &str, els: &[S]) -> String {
     if !els.is_empty() {
         let mut requires = String::new();
 

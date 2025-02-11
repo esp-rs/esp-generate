@@ -15,6 +15,7 @@ on:
         type: boolean
 
 env:
+  CARGO_TARGET_DIR: ${{ github.workspace }}/target
   CARGO_TERM_COLOR: always
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   SSID: ""

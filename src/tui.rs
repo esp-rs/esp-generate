@@ -5,10 +5,13 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
 };
+use esp_generate::{
+    append_list_as_sentence,
+    config::{find_option, ActiveConfiguration},
+    template::GeneratorOptionItem,
+};
 use esp_metadata::Chip;
 use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
-
-use super::{GeneratorOption, GeneratorOptionItem};
 
 const TODO_HEADER_BG: Color = tailwind::BLUE.c950;
 const NORMAL_ROW_COLOR: Color = tailwind::SLATE.c950;
@@ -20,24 +23,24 @@ const TEXT_COLOR: Color = tailwind::SLATE.c200;
 type AppResult<T> = Result<T, Box<dyn Error>>;
 
 pub struct Repository {
-    chip: Chip,
-    options: &'static [GeneratorOptionItem],
+    config: ActiveConfiguration<'static>,
     path: Vec<usize>,
-    selected: Vec<String>,
 }
 
 impl Repository {
     pub fn new(chip: Chip, options: &'static [GeneratorOptionItem], selected: &[String]) -> Self {
         Self {
-            chip,
-            options,
+            config: ActiveConfiguration {
+                chip,
+                selected: Vec::from(selected),
+                options,
+            },
             path: Vec::new(),
-            selected: Vec::from(selected),
         }
     }
 
     fn current_level(&self) -> &[GeneratorOptionItem] {
-        let mut current = self.options;
+        let mut current = self.config.options;
 
         for &index in &self.path {
             current = match &current[index] {
@@ -53,34 +56,8 @@ impl Repository {
         self.path.push(index);
     }
 
-    fn is_selected(&self, option: &str) -> bool {
-        self.selected_index(option).is_some()
-    }
-
-    fn selected_index(&self, option: &str) -> Option<usize> {
-        self.selected.iter().position(|s| s == option)
-    }
-
-    fn select(&mut self, option: String) {
-        self.selected.push(option);
-    }
-
-    fn is_active(&self, level: &[GeneratorOptionItem], index: usize) -> bool {
-        match &level[index] {
-            GeneratorOptionItem::Category(options) => {
-                for i in 0..options.options.len() {
-                    if self.is_active(&options.options, i) {
-                        return true;
-                    }
-                }
-                false
-            }
-            GeneratorOptionItem::Option(option) => self.requirements_met(option),
-        }
-    }
-
     fn toggle_current(&mut self, index: usize) {
-        if !self.is_active(self.current_level(), index) {
+        if !self.config.is_active(&self.current_level()[index]) {
             return;
         }
 
@@ -89,64 +66,13 @@ impl Repository {
             unreachable!();
         };
 
-        if let Some(i) = self.selected_index(&option.name) {
-            if self.can_be_disabled(&option.name) {
-                self.selected.swap_remove(i);
+        if let Some(i) = self.config.selected_index(&option.name) {
+            if self.config.can_be_disabled(&option.name) {
+                self.config.selected.swap_remove(i);
             }
-        } else if self.requirements_met(option) {
-            self.select(option.name.clone());
+        } else if self.config.requirements_met(option) {
+            self.config.select(option.name.clone());
         }
-    }
-
-    fn requirements_met(&self, option: &GeneratorOption) -> bool {
-        if !option.chips.is_empty() && !option.chips.contains(&self.chip) {
-            return false;
-        }
-
-        // Are this option's requirements met?
-        for requirement in option.requires.iter() {
-            let (key, expected) = if let Some(requirement) = requirement.strip_prefix('!') {
-                (requirement, false)
-            } else {
-                (requirement.as_str(), true)
-            };
-
-            if self.is_selected(key) != expected {
-                return false;
-            }
-        }
-
-        // Does any of the enabled options have a requirement against this one?
-        for selected in self.selected.iter() {
-            let Some(selected_option) = find_option(selected, self.options) else {
-                ratatui::restore();
-                panic!("selected option not found: {selected}");
-            };
-
-            for requirement in selected_option.requires.iter() {
-                if let Some(requirement) = requirement.strip_prefix('!') {
-                    if requirement == option.name {
-                        return false;
-                    }
-                }
-            }
-        }
-
-        true
-    }
-
-    // An option can only be disabled if it's not required by any other selected option.
-    fn can_be_disabled(&self, option: &str) -> bool {
-        for selected in self.selected.iter() {
-            let Some(selected_option) = find_option(selected, self.options) else {
-                ratatui::restore();
-                panic!("selected option not found: {selected}");
-            };
-            if selected_option.requires.iter().any(|o| o == option) {
-                return false;
-            }
-        }
-        true
     }
 
     fn is_option(&self, index: usize) -> bool {
@@ -162,13 +88,12 @@ impl Repository {
 
         level
             .iter()
-            .enumerate()
-            .map(|(index, v)| {
+            .map(|v| {
                 (
-                    self.is_active(level, index),
+                    self.config.is_active(v),
                     format!(
                         " {} {}",
-                        if self.selected.iter().any(|o| o == v.name()) {
+                        if self.config.selected.iter().any(|o| o == v.name()) {
                             "✅"
                         } else if v.is_category() {
                             "▶️"
@@ -181,28 +106,6 @@ impl Repository {
             })
             .collect()
     }
-}
-
-fn find_option(
-    option: &str,
-    options: &'static [GeneratorOptionItem],
-) -> Option<&'static GeneratorOption> {
-    for item in options {
-        match item {
-            GeneratorOptionItem::Category(category) => {
-                let found_option = find_option(option, &category.options);
-                if found_option.is_some() {
-                    return found_option;
-                }
-            }
-            GeneratorOptionItem::Option(item) => {
-                if item.name == option {
-                    return Some(item);
-                }
-            }
-        }
-    }
-    None
 }
 
 pub fn init_terminal() -> AppResult<Terminal<impl Backend>> {
@@ -285,7 +188,9 @@ impl App {
 
                     match key.code {
                         Char('q') => self.confirm_quit = true,
-                        Char('s') | Char('S') => return Ok(Some(self.repository.selected.clone())),
+                        Char('s') | Char('S') => {
+                            return Ok(Some(self.repository.config.selected.clone()))
+                        }
                         Esc => {
                             if self.state.len() == 1 {
                                 self.confirm_quit = true;
@@ -421,8 +326,8 @@ impl App {
         let mut required_by = Vec::new();
         let mut disabled_by = Vec::new();
 
-        self.repository.selected.iter().for_each(|opt| {
-            let opt = find_option(opt.as_str(), self.repository.options).unwrap();
+        self.repository.config.selected.iter().for_each(|opt| {
+            let opt = find_option(opt.as_str(), self.repository.config.options).unwrap();
             for o in opt.requires.iter() {
                 if let Some(disables) = o.strip_prefix("!") {
                     if disables == option.name() {
@@ -435,7 +340,7 @@ impl App {
         });
         for req in option.requires() {
             if let Some(disables) = req.strip_prefix("!") {
-                if self.repository.is_selected(disables) {
+                if self.repository.config.is_selected(disables) {
                     disabled_by.push(disables);
                 }
             } else {
@@ -444,9 +349,9 @@ impl App {
         }
 
         let help_text = option.help();
-        let help_text = generate_list(help_text, "Requires", &requires);
-        let help_text = generate_list(&help_text, "Required by", &required_by);
-        let help_text = generate_list(&help_text, "Disabled by", &disabled_by);
+        let help_text = append_list_as_sentence(help_text, "Requires", &requires);
+        let help_text = append_list_as_sentence(&help_text, "Required by", &required_by);
+        let help_text = append_list_as_sentence(&help_text, "Disabled by", &disabled_by);
 
         if help_text.is_empty() {
             return None;
@@ -495,36 +400,5 @@ impl App {
 
     fn render_footer(&self, area: Rect, buf: &mut Buffer) {
         self.footer_paragraph().render(area, buf);
-    }
-}
-
-fn generate_list<S: AsRef<str>>(base: &str, word: &str, els: &[S]) -> String {
-    if !els.is_empty() {
-        let mut requires = String::new();
-
-        if !base.is_empty() {
-            requires.push_str(base);
-            requires.push(' ');
-        }
-
-        for (i, r) in els.iter().enumerate() {
-            if i == 0 {
-                requires.push_str(word);
-                requires.push(' ');
-            } else if i == els.len() - 1 {
-                requires.push_str(" and ");
-            } else {
-                requires.push_str(", ");
-            };
-
-            requires.push('`');
-            requires.push_str(r.as_ref());
-            requires.push('`');
-        }
-        requires.push('.');
-
-        requires
-    } else {
-        base.to_string()
     }
 }

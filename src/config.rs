@@ -40,10 +40,16 @@ impl ActiveConfiguration<'_> {
         }
 
         // Avoid deselecting some options then failing.
-        if !selected
-            .iter()
-            .all(|s| Self::can_be_disabled_impl(selected, options, s))
-        {
+        if !selected.iter().all(|s| {
+            let o = find_option(s, options).unwrap();
+            if o.selection_group == group {
+                // We allow deselecting group options because we are changing the options in the
+                // group, so after this operation the group have a selected item still.
+                Self::can_be_disabled_impl(selected, options, s, true)
+            } else {
+                true
+            }
+        }) {
             return false;
         }
 
@@ -127,17 +133,23 @@ impl ActiveConfiguration<'_> {
 
     // An option can only be disabled if it's not required by any other selected option.
     pub fn can_be_disabled(&self, option: &str) -> bool {
-        Self::can_be_disabled_impl(&self.selected, self.options, option)
+        Self::can_be_disabled_impl(&self.selected, self.options, option, false)
     }
 
     fn can_be_disabled_impl(
         selected: &[String],
         options: &[GeneratorOptionItem],
         option: &str,
+        allow_deselecting_group: bool,
     ) -> bool {
+        let op = find_option(option, options).unwrap();
         for selected in selected.iter() {
             let selected_option = find_option(selected, options).unwrap();
-            if selected_option.requires.iter().any(|o| o == option) {
+            if selected_option
+                .requires
+                .iter()
+                .any(|o| o == option || (o == &op.selection_group && !allow_deselecting_group))
+            {
                 return false;
             }
         }
@@ -329,6 +341,14 @@ mod test {
                 chips: vec![Chip::Esp32],
                 requires: vec!["group".to_string()],
             }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "option4".to_string(),
+                display_name: "Extra option that depends on something".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec!["option3".to_string()],
+            }),
         ];
         let mut active = ActiveConfiguration {
             chip: Chip::Esp32,
@@ -346,8 +366,47 @@ mod test {
         active.select("option3".to_string());
         assert_eq!(active.selected, &["option1", "option3"]);
 
+        // The rejection algorithm must not trigger on unrelated options. This option is
+        // meant to test the group filtering. It prevents disabling "option3" but it does not
+        // belong to `group`, so it should not prevent selecting between "option1" or "option2".
+        active.select("option4".to_string());
+        assert_eq!(active.selected, &["option1", "option3", "option4"]);
+
         active.select("option2".to_string());
-        assert_eq!(active.selected, &["option3", "option2"]);
+        assert_eq!(active.selected, &["option3", "option4", "option2"]);
+    }
+
+    #[test]
+    fn depending_on_group_prevents_deselecting() {
+        let options = &[
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "option1".to_string(),
+                display_name: "Foobar".to_string(),
+                selection_group: "group".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec![],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "option2".to_string(),
+                display_name: "Barfoo".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec!["group".to_string()],
+            }),
+        ];
+        let mut active = ActiveConfiguration {
+            chip: Chip::Esp32,
+            selected: vec![],
+            options,
+        };
+
+        active.select("option1".to_string());
+        active.select("option2".to_string());
+
+        // Option1 can't be deselected because option2 requires that a `group` option is selected
+        assert!(!active.can_be_disabled("option1"));
     }
 
     fn empty() -> &'static [&'static str] {

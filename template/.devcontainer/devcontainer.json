@@ -25,8 +25,20 @@
         "files.watcherExclude": {
           "**/target/**": true
         },
-        "rust-analyzer.checkOnSave.command": "clippy",
-        "rust-analyzer.checkOnSave.allTargets": false,
+        "rust-analyzer.cargo.allTargets": false,
+        //REPLACE riscv32imac-unknown-none-elf rust_target
+        "rust-analyzer.cargo.target": "riscv32imac-unknown-none-elf",
+        //IF option("xtensa")
+        "rust-analyzer.server.extraEnv": {
+          "RUSTUP_TOOLCHAIN": "stable"
+        },
+        "rust-analyzer.check.extraEnv": {
+          "RUSTUP_TOOLCHAIN": "esp"
+        },
+        "rust-analyzer.cargo.extraEnv": {
+          "RUSTUP_TOOLCHAIN": "esp"
+        },
+        //ENDIF
         "[rust]": {
           "editor.defaultFormatter": "rust-lang.rust-analyzer"
         }

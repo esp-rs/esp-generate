@@ -88,6 +88,49 @@ impl ActiveConfiguration<'_> {
         }
         true
     }
+
+    pub fn collect_relationships<'a>(
+        &'a self,
+        option: &'a GeneratorOptionItem,
+    ) -> Relationships<'a> {
+        let mut requires = Vec::new();
+        let mut required_by = Vec::new();
+        let mut disabled_by = Vec::new();
+
+        self.selected.iter().for_each(|opt| {
+            let opt = find_option(opt.as_str(), self.options).unwrap();
+            for o in opt.requires.iter() {
+                if let Some(disables) = o.strip_prefix("!") {
+                    if disables == option.name() {
+                        disabled_by.push(opt.name.as_str());
+                    }
+                } else if o == option.name() {
+                    required_by.push(o.as_str());
+                }
+            }
+        });
+        for req in option.requires() {
+            if let Some(disables) = req.strip_prefix("!") {
+                if self.is_selected(disables) {
+                    disabled_by.push(disables);
+                }
+            } else {
+                requires.push(req.as_str());
+            }
+        }
+
+        Relationships {
+            requires,
+            required_by,
+            disabled_by,
+        }
+    }
+}
+
+pub struct Relationships<'a> {
+    pub requires: Vec<&'a str>,
+    pub required_by: Vec<&'a str>,
+    pub disabled_by: Vec<&'a str>,
 }
 
 pub fn find_option<'c>(

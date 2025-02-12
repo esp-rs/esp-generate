@@ -7,7 +7,7 @@ use crossterm::{
 };
 use esp_generate::{
     append_list_as_sentence,
-    config::{find_option, ActiveConfiguration},
+    config::{ActiveConfiguration, Relationships},
     template::GeneratorOptionItem,
 };
 use esp_metadata::Chip;
@@ -322,31 +322,11 @@ impl App {
             .min(self.repository.current_level().len() - 1);
         let option = &self.repository.current_level()[selected];
 
-        let mut requires = Vec::new();
-        let mut required_by = Vec::new();
-        let mut disabled_by = Vec::new();
-
-        self.repository.config.selected.iter().for_each(|opt| {
-            let opt = find_option(opt.as_str(), self.repository.config.options).unwrap();
-            for o in opt.requires.iter() {
-                if let Some(disables) = o.strip_prefix("!") {
-                    if disables == option.name() {
-                        disabled_by.push(opt.name.as_str());
-                    }
-                } else if o == option.name() {
-                    required_by.push(o.as_str());
-                }
-            }
-        });
-        for req in option.requires() {
-            if let Some(disables) = req.strip_prefix("!") {
-                if self.repository.config.is_selected(disables) {
-                    disabled_by.push(disables);
-                }
-            } else {
-                requires.push(req);
-            }
-        }
+        let Relationships {
+            requires,
+            required_by,
+            disabled_by,
+        } = self.repository.config.collect_relationships(option);
 
         let help_text = option.help();
         let help_text = append_list_as_sentence(help_text, "Requires", &requires);

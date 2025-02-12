@@ -1,0 +1,11 @@
+//INCLUDEFILE vscode
+{
+    "recommendations": [
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        //IF option("wokwi")
+        "Wokwi.wokwi-vscode",
+        //ENDIF
+        "fill-labs.dependi"
+    ]
+}

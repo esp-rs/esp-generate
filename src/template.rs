@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 pub struct GeneratorOption {
     pub name: String,
     pub display_name: String,
+    /// Selecting one option in the group deselect other options of the same group.
+    #[serde(default)]
+    pub selection_group: String,
     #[serde(default)]
     pub help: String,
     #[serde(default)]

@@ -20,7 +20,39 @@ impl ActiveConfiguration<'_> {
         self.selected.iter().position(|s| s == option)
     }
 
+    /// Tries to deselect all options in a selection gropu. Returns false if it's prevented by some
+    /// requirement.
+    fn deselect_group(
+        selected: &mut Vec<String>,
+        options: &[GeneratorOptionItem],
+        group: &str,
+    ) -> bool {
+        // No group, nothing to deselect
+        if group.is_empty() {
+            return true;
+        }
+
+        // Avoid deselecting some options then failing.
+        if !selected
+            .iter()
+            .all(|s| Self::can_be_disabled_impl(selected, options, s))
+        {
+            return false;
+        }
+
+        selected.retain(|s| {
+            let option = find_option(s, options).unwrap();
+            option.selection_group != group
+        });
+
+        true
+    }
+
     pub fn select(&mut self, option: String) {
+        let o = find_option(&option, self.options).unwrap();
+        if !Self::deselect_group(&mut self.selected, self.options, &o.selection_group) {
+            return;
+        }
         self.selected.push(option);
     }
 
@@ -77,11 +109,16 @@ impl ActiveConfiguration<'_> {
 
     // An option can only be disabled if it's not required by any other selected option.
     pub fn can_be_disabled(&self, option: &str) -> bool {
-        for selected in self.selected.iter() {
-            let Some(selected_option) = find_option(selected, self.options) else {
-                ratatui::restore();
-                panic!("selected option not found: {selected}");
-            };
+        Self::can_be_disabled_impl(&self.selected, self.options, option)
+    }
+
+    fn can_be_disabled_impl(
+        selected: &[String],
+        options: &[GeneratorOptionItem],
+        option: &str,
+    ) -> bool {
+        for selected in selected.iter() {
+            let selected_option = find_option(selected, options).unwrap();
             if selected_option.requires.iter().any(|o| o == option) {
                 return false;
             }
@@ -170,6 +207,7 @@ mod test {
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "option1".to_string(),
                 display_name: "Foobar".to_string(),
+                selection_group: "".to_string(),
                 help: "".to_string(),
                 chips: vec![Chip::Esp32],
                 requires: vec!["option2".to_string()],
@@ -177,6 +215,7 @@ mod test {
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "option2".to_string(),
                 display_name: "Barfoo".to_string(),
+                selection_group: "".to_string(),
                 help: "".to_string(),
                 chips: vec![Chip::Esp32],
                 requires: vec![],
@@ -195,5 +234,53 @@ mod test {
         let rels = active.collect_relationships(&options[1]);
         assert_eq!(rels.requires, <&[&str]>::default());
         assert_eq!(rels.required_by, &["option1"]);
+    }
+
+    #[test]
+    fn selecting_one_in_group_deselects_other() {
+        let options = &[
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "option1".to_string(),
+                display_name: "Foobar".to_string(),
+                selection_group: "group".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec![],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "option2".to_string(),
+                display_name: "Barfoo".to_string(),
+                selection_group: "group".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec![],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "option3".to_string(),
+                display_name: "Prevents deselecting option2".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec!["option2".to_string()],
+            }),
+        ];
+        let mut active = ActiveConfiguration {
+            chip: Chip::Esp32,
+            selected: vec![],
+            options,
+        };
+
+        active.select("option1".to_string());
+        assert_eq!(active.selected, &["option1"]);
+
+        active.select("option2".to_string());
+        assert_eq!(active.selected, &["option2"]);
+
+        // Enable option3, which prevents deselecting option2, which disallows selecting option1
+        active.select("option3".to_string());
+        assert_eq!(active.selected, &["option2", "option3"]);
+
+        active.select("option1".to_string());
+        assert_eq!(active.selected, &["option2", "option3"]);
     }
 }

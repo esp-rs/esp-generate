@@ -35,11 +35,11 @@
         "rust-lang.rust-analyzer",
         "tamasfe.even-better-toml",
         "fill-labs.dependi",
-        "mutantdino.resourcemonitor",
         "yzhang.markdown-all-in-one",
-        "ms-vscode.cpptools",
-        "actboy168.tasks",
-        "Wokwi.wokwi-vscode"
+        //IF option("wokwi")
+        "Wokwi.wokwi-vscode",
+        //ENDIF
+        "ms-vscode.cpptools"
       ]
     }
   },

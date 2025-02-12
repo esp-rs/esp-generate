@@ -41,6 +41,7 @@ cargo install esp-generate
 
 ## Available Options
 
+- `unstable-hal`: Enables esp-hal features that may not be ready for general use yet.
 - `alloc`: Enables allocations via the `esp-alloc` crate.
 - `wifi`: Enables Wi-Fi via the `esp-wifi` crate; requires `alloc`.
 - `ble`: Enables BLE via the `esp-wifi` crate; requires `alloc`.

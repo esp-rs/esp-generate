@@ -2,8 +2,8 @@ options:
   - !Option
     name: unstable-hal
     display_name: Enable unstable HAL features.
-    help: "This configuration enables esp-hal features that are considered unfinished
-      and may not be ready for general use yet."
+    help: "This configuration enables unstable esp-hal features.
+      These come with no stability guarantees, and could be changed or removed at any time."
 
   - !Option
     name: alloc

@@ -22,13 +22,13 @@ const TEXT_COLOR: Color = tailwind::SLATE.c200;
 
 type AppResult<T> = Result<T, Box<dyn Error>>;
 
-pub struct Repository {
-    config: ActiveConfiguration<'static>,
+pub struct Repository<'app> {
+    config: ActiveConfiguration<'app>,
     path: Vec<usize>,
 }
 
-impl Repository {
-    pub fn new(chip: Chip, options: &'static [GeneratorOptionItem], selected: &[String]) -> Self {
+impl<'app> Repository<'app> {
+    pub fn new(chip: Chip, options: &'app [GeneratorOptionItem], selected: &[String]) -> Self {
         Self {
             config: ActiveConfiguration {
                 chip,
@@ -131,14 +131,14 @@ pub fn restore_terminal() -> AppResult<()> {
     Ok(())
 }
 
-pub struct App {
+pub struct App<'app> {
     state: Vec<ListState>,
-    repository: Repository,
+    repository: Repository<'app>,
     confirm_quit: bool,
 }
 
-impl App {
-    pub fn new(repository: Repository) -> Self {
+impl<'app> App<'app> {
+    pub fn new(repository: Repository<'app>) -> Self {
         let mut initial_state = ListState::default();
         initial_state.select(Some(0));
 
@@ -178,7 +178,7 @@ impl App {
     }
 }
 
-impl App {
+impl App<'_> {
     pub fn run(&mut self, mut terminal: Terminal<impl Backend>) -> AppResult<Option<Vec<String>>> {
         loop {
             self.draw(&mut terminal)?;
@@ -243,7 +243,7 @@ impl App {
     }
 }
 
-impl Widget for &mut App {
+impl Widget for &mut App<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let vertical = Layout::vertical([
             Constraint::Length(2),
@@ -260,7 +260,7 @@ impl Widget for &mut App {
     }
 }
 
-impl App {
+impl App<'_> {
     fn render_title(&self, area: Rect, buf: &mut Buffer) {
         Paragraph::new("esp-generate")
             .bold()

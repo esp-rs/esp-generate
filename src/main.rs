@@ -9,7 +9,7 @@ use std::{
 
 use clap::Parser;
 use env_logger::{Builder, Env};
-use esp_generate::template::Template;
+use esp_generate::template::{GeneratorOptionItem, Template};
 use esp_metadata::Chip;
 use taplo::formatter::Options;
 
@@ -101,11 +101,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         process::exit(-1);
     }
 
-    // Validate options
-    process_options(&args);
+    // Validate options. We pass the unmodified template to the function, so that it can tell
+    // the user which options are not supported for the selected chip.
+    process_options(&TEMPLATE, &args);
+
+    // Now we filterout the incompatible options, so that they are not shown and they also don't
+    // screw with our position-based data model.
+    let mut template = TEMPLATE.clone();
+    remove_incompatible_chip_options(args.chip, &mut template.options);
 
     let mut selected = if !args.headless {
-        let repository = tui::Repository::new(args.chip, &TEMPLATE.options, &args.option);
+        let repository = tui::Repository::new(args.chip, &template.options, &args.option);
 
         // TUI stuff ahead
         let terminal = tui::init_terminal()?;
@@ -205,6 +211,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     check::check(args.chip);
 
     Ok(())
+}
+
+fn remove_incompatible_chip_options(chip: Chip, options: &mut Vec<GeneratorOptionItem>) {
+    options.retain_mut(|opt| match opt {
+        GeneratorOptionItem::Category(category) => {
+            remove_incompatible_chip_options(chip, &mut category.options);
+            !category.options.is_empty()
+        }
+        GeneratorOptionItem::Option(option) => {
+            option.chips.is_empty() || option.chips.contains(&chip)
+        }
+    });
 }
 
 #[derive(Clone, Copy)]
@@ -413,10 +431,11 @@ fn process_file(
     Some(res)
 }
 
-fn process_options(args: &Args) {
+fn process_options(template: &Template, args: &Args) {
+    let mut success = true;
     for option in &args.option {
         // Find the matching option in OPTIONS
-        if let Some(option_item) = TEMPLATE.options.iter().find(|item| item.name() == *option) {
+        if let Some(option_item) = template.options.iter().find(|item| item.name() == *option) {
             // Check if the chip is supported. If the chip list is empty,
             // all chips are supported:
             if !option_item.chips().iter().any(|chip| chip == &args.chip)
@@ -427,7 +446,8 @@ fn process_options(args: &Args) {
                     option,
                     args.chip
                 );
-                process::exit(-1);
+                success = false;
+                continue;
             }
             if !option_item
                 .requires()
@@ -439,9 +459,16 @@ fn process_options(args: &Args) {
                     option_item.name(),
                     option_item.requires().join(", ")
                 );
-                process::exit(-1);
+                success = false;
             }
+        } else {
+            log::error!("Unknown option '{}'", option);
+            success = false;
         }
+    }
+
+    if !success {
+        process::exit(-1);
     }
 }
 

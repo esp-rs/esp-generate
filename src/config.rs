@@ -105,10 +105,7 @@ impl ActiveConfiguration<'_> {
             }
 
             // Requirement is a group that must have a selected option?
-            let is_group = self
-                .options
-                .iter()
-                .any(|o| matches!(o, GeneratorOptionItem::Option(o) if o.selection_group == key));
+            let is_group = Self::group_exists(key, self.options);
             if is_group && self.is_group_selected(key) == expected {
                 continue;
             }
@@ -196,6 +193,13 @@ impl ActiveConfiguration<'_> {
             disabled_by,
         }
     }
+
+    fn group_exists(key: &str, options: &[GeneratorOptionItem]) -> bool {
+        options.iter().any(|o| match o {
+            GeneratorOptionItem::Option(o) => o.selection_group == key,
+            GeneratorOptionItem::Category(c) => Self::group_exists(key, &c.options),
+        })
+    }
 }
 
 pub struct Relationships<'a> {
@@ -232,7 +236,7 @@ mod test {
 
     use crate::{
         config::{find_option, ActiveConfiguration},
-        template::{GeneratorOption, GeneratorOptionItem},
+        template::{GeneratorOption, GeneratorOptionCategory, GeneratorOptionItem},
     };
 
     #[test]
@@ -321,21 +325,28 @@ mod test {
     #[test]
     fn depending_on_group_allows_changing_group_option() {
         let options = &[
-            GeneratorOptionItem::Option(GeneratorOption {
-                name: "option1".to_string(),
-                display_name: "Foobar".to_string(),
-                selection_group: "group".to_string(),
+            GeneratorOptionItem::Category(GeneratorOptionCategory {
+                name: "group-options".to_string(),
+                display_name: "Group options".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
-                requires: vec![],
-            }),
-            GeneratorOptionItem::Option(GeneratorOption {
-                name: "option2".to_string(),
-                display_name: "Barfoo".to_string(),
-                selection_group: "group".to_string(),
-                help: "".to_string(),
-                chips: vec![Chip::Esp32],
-                requires: vec![],
+                options: vec![
+                    GeneratorOptionItem::Option(GeneratorOption {
+                        name: "option1".to_string(),
+                        display_name: "Foobar".to_string(),
+                        selection_group: "group".to_string(),
+                        help: "".to_string(),
+                        chips: vec![Chip::Esp32],
+                        requires: vec![],
+                    }),
+                    GeneratorOptionItem::Option(GeneratorOption {
+                        name: "option2".to_string(),
+                        display_name: "Barfoo".to_string(),
+                        selection_group: "group".to_string(),
+                        help: "".to_string(),
+                        chips: vec![Chip::Esp32],
+                        requires: vec![],
+                    }),
+                ],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "option3".to_string(),

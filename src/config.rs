@@ -105,7 +105,7 @@ impl ActiveConfiguration<'_> {
                         disabled_by.push(opt.name.as_str());
                     }
                 } else if o == option.name() {
-                    required_by.push(o.as_str());
+                    required_by.push(opt.name.as_str());
                 }
             }
         });
@@ -153,4 +153,47 @@ pub fn find_option<'c>(
         }
     }
     None
+}
+
+#[cfg(test)]
+mod test {
+    use esp_metadata::Chip;
+
+    use crate::{
+        config::ActiveConfiguration,
+        template::{GeneratorOption, GeneratorOptionItem},
+    };
+
+    #[test]
+    fn required_by_and_requires_pick_the_right_options() {
+        let options = &[
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "option1".to_string(),
+                display_name: "Foobar".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec!["option2".to_string()],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "option2".to_string(),
+                display_name: "Barfoo".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec![],
+            }),
+        ];
+        let active = ActiveConfiguration {
+            chip: Chip::Esp32,
+            selected: vec!["option1".to_string()],
+            options,
+        };
+
+        let rels = active.collect_relationships(&options[0]);
+        assert_eq!(rels.requires, &["option2"]);
+        assert_eq!(rels.required_by, <&[&str]>::default());
+
+        let rels = active.collect_relationships(&options[1]);
+        assert_eq!(rels.requires, <&[&str]>::default());
+        assert_eq!(rels.required_by, &["option1"]);
+    }
 }

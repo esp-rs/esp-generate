@@ -105,7 +105,11 @@ impl ActiveConfiguration<'_> {
             }
 
             // Requirement is a group that must have a selected option?
-            if self.is_group_selected(key) == expected {
+            let is_group = self
+                .options
+                .iter()
+                .any(|o| matches!(o, GeneratorOptionItem::Option(o) if o.selection_group == key));
+            if is_group && self.is_group_selected(key) == expected {
                 continue;
             }
 
@@ -227,7 +231,7 @@ mod test {
     use esp_metadata::Chip;
 
     use crate::{
-        config::ActiveConfiguration,
+        config::{find_option, ActiveConfiguration},
         template::{GeneratorOption, GeneratorOptionItem},
     };
 
@@ -407,6 +411,37 @@ mod test {
 
         // Option1 can't be deselected because option2 requires that a `group` option is selected
         assert!(!active.can_be_disabled("option1"));
+    }
+
+    #[test]
+    fn requiring_not_option_only_rejects_existing_group() {
+        let options = &[
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "option1".to_string(),
+                display_name: "Foobar".to_string(),
+                selection_group: "group".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec![],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "option2".to_string(),
+                display_name: "Barfoo".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec!["!option1".to_string()],
+            }),
+        ];
+        let mut active = ActiveConfiguration {
+            chip: Chip::Esp32,
+            selected: vec![],
+            options,
+        };
+
+        active.select("option1".to_string());
+        let opt2 = find_option("option2", options).unwrap();
+        assert!(!active.requirements_met(opt2));
     }
 
     fn empty() -> &'static [&'static str] {

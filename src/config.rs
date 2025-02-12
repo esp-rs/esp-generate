@@ -12,6 +12,13 @@ pub struct ActiveConfiguration<'c> {
 }
 
 impl ActiveConfiguration<'_> {
+    pub fn is_group_selected(&self, group: &str) -> bool {
+        self.selected.iter().any(|s| {
+            let option = find_option(s, self.options).unwrap();
+            option.selection_group == group
+        })
+    }
+
     pub fn is_selected(&self, option: &str) -> bool {
         self.selected_index(option).is_some()
     }
@@ -50,6 +57,9 @@ impl ActiveConfiguration<'_> {
 
     pub fn select(&mut self, option: String) {
         let o = find_option(&option, self.options).unwrap();
+        if !self.requirements_met(o) {
+            return;
+        }
         if !Self::deselect_group(&mut self.selected, self.options, &o.selection_group) {
             return;
         }
@@ -83,9 +93,17 @@ impl ActiveConfiguration<'_> {
                 (requirement.as_str(), true)
             };
 
-            if self.is_selected(key) != expected {
-                return false;
+            // Requirement is an option that must be selected?
+            if self.is_selected(key) == expected {
+                continue;
             }
+
+            // Requirement is a group that must have a selected option?
+            if self.is_group_selected(key) == expected {
+                continue;
+            }
+
+            return false;
         }
 
         // Does any of the enabled options have a requirement against this one?
@@ -282,5 +300,57 @@ mod test {
 
         active.select("option1".to_string());
         assert_eq!(active.selected, &["option2", "option3"]);
+    }
+
+    #[test]
+    fn depending_on_group_allows_changing_group_option() {
+        let options = &[
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "option1".to_string(),
+                display_name: "Foobar".to_string(),
+                selection_group: "group".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec![],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "option2".to_string(),
+                display_name: "Barfoo".to_string(),
+                selection_group: "group".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec![],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "option3".to_string(),
+                display_name: "Requires any in group to be selected".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec!["group".to_string()],
+            }),
+        ];
+        let mut active = ActiveConfiguration {
+            chip: Chip::Esp32,
+            selected: vec![],
+            options,
+        };
+
+        // Nothing is selected in group, so option3 can't be selected
+        active.select("option3".to_string());
+        assert_eq!(active.selected, empty());
+
+        active.select("option1".to_string());
+        assert_eq!(active.selected, &["option1"]);
+
+        active.select("option3".to_string());
+        assert_eq!(active.selected, &["option1", "option3"]);
+
+        active.select("option2".to_string());
+        assert_eq!(active.selected, &["option3", "option2"]);
+    }
+
+    fn empty() -> &'static [&'static str] {
+        &[]
     }
 }

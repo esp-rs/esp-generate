@@ -34,12 +34,10 @@
       "extensions": [
         "rust-lang.rust-analyzer",
         "tamasfe.even-better-toml",
-        "fill-labs.dependi",
-        "yzhang.markdown-all-in-one",
         //IF option("wokwi")
         "Wokwi.wokwi-vscode",
         //ENDIF
-        "ms-vscode.cpptools"
+        "fill-labs.dependi"
       ]
     }
   },

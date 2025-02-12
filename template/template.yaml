@@ -39,7 +39,10 @@ options:
 
   - !Option
     name: embassy
-    display_name: Add `embassy` framework support.
+    display_name: Add embassy framework support.
+    help: esp-hal-embassy comes with no stability guarantees at this time.
+    requires:
+      - unstable-hal
 
   - !Option
     name: probe-rs

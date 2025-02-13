@@ -29,6 +29,8 @@ pub struct GeneratorOptionCategory {
     #[serde(default)]
     pub help: String,
     #[serde(default)]
+    pub requires: Vec<String>,
+    #[serde(default)]
     pub options: Vec<GeneratorOptionItem>,
 }
 
@@ -83,7 +85,7 @@ impl GeneratorOptionItem {
 
     pub fn requires(&self) -> &[String] {
         match self {
-            GeneratorOptionItem::Category(_) => &[],
+            GeneratorOptionItem::Category(category) => category.requires.as_slice(),
             GeneratorOptionItem::Option(option) => option.requires.as_slice(),
         }
     }

@@ -74,8 +74,11 @@ impl ActiveConfiguration<'_> {
 
     pub fn is_active(&self, item: &GeneratorOptionItem) -> bool {
         match item {
-            GeneratorOptionItem::Category(options) => {
-                for sub in options.options.iter() {
+            GeneratorOptionItem::Category(category) => {
+                if !self.requirements_met2(&category.requires) {
+                    return false;
+                }
+                for sub in category.options.iter() {
                     if self.is_active(sub) {
                         return true;
                     }
@@ -86,13 +89,8 @@ impl ActiveConfiguration<'_> {
         }
     }
 
-    pub fn requirements_met(&self, option: &GeneratorOption) -> bool {
-        if !option.chips.is_empty() && !option.chips.contains(&self.chip) {
-            return false;
-        }
-
-        // Are this option's requirements met?
-        for requirement in option.requires.iter() {
+    pub fn requirements_met2(&self, requires: &[String]) -> bool {
+        for requirement in requires {
             let (key, expected) = if let Some(requirement) = requirement.strip_prefix('!') {
                 (requirement, false)
             } else {
@@ -110,6 +108,19 @@ impl ActiveConfiguration<'_> {
                 continue;
             }
 
+            return false;
+        }
+
+        true
+    }
+
+    pub fn requirements_met(&self, option: &GeneratorOption) -> bool {
+        if !option.chips.is_empty() && !option.chips.contains(&self.chip) {
+            return false;
+        }
+
+        // Are this option's requirements met?
+        if !self.requirements_met2(&option.requires) {
             return false;
         }
 
@@ -329,6 +340,7 @@ mod test {
                 name: "group-options".to_string(),
                 display_name: "Group options".to_string(),
                 help: "".to_string(),
+                requires: vec![],
                 options: vec![
                     GeneratorOptionItem::Option(GeneratorOption {
                         name: "option1".to_string(),

@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test cases are now generated from template settings (#106)
 - Updated and removed some unused extensions (#109, #111)
 - Inactive menu items are now colored differently (#115)
+- The CLI now exits with success when the user quits (#117)
 
 ### Fixed
 

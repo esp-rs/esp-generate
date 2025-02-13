@@ -57,6 +57,12 @@
     8000,
     3333
   ],
+  // This only works for Linux and requires updating the `device` field
+  "runArgs": [
+    "--privileged",
+    "--device=/dev/ttyACM0",
+    "--group-add=dialout"
+  ],
   //REPLACE project-name project-name
   "workspaceMount": "source=${localWorkspaceFolder},target=/home/esp/project-name,type=bind,consistency=cached",
   //REPLACE project-name project-name

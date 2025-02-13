@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated and removed some unused extensions (#109, #111)
 - The option names are now display in the menu (#116)
 - Options that are not applicable to the selected chip are not shown (#116)
+- The CLI now exits with success when the user quits (#117)
 
 ### Fixed
 

@@ -125,7 +125,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         if let Some(selected) = selected {
             selected
         } else {
-            process::exit(-1);
+            process::exit(0);
         }
     } else {
         args.option.clone()

@@ -83,24 +83,33 @@ impl Repository {
         self.path.pop();
     }
 
-    fn current_level_desc(&self) -> Vec<(bool, String)> {
+    fn current_level_desc(&self, width: u16) -> Vec<(bool, String)> {
         let level = self.current_level();
 
         level
             .iter()
             .map(|v| {
+                let name = if let GeneratorOptionItem::Option(_) = v {
+                    v.name()
+                } else {
+                    ""
+                };
+                let indicator = if self.config.selected.iter().any(|o| o == v.name()) {
+                    "✅"
+                } else if v.is_category() {
+                    "▶️"
+                } else {
+                    "  "
+                };
+                let padding = width as usize - v.title().len() - 4; // 2 spaces + the indicator
                 (
                     self.config.is_active(v),
                     format!(
-                        " {} {}",
-                        if self.config.selected.iter().any(|o| o == v.name()) {
-                            "✅"
-                        } else if v.is_category() {
-                            "▶️"
-                        } else {
-                            "  "
-                        },
+                        " {} {}{:>padding$}",
+                        indicator,
                         v.title(),
+                        name,
+                        padding = padding,
                     ),
                 )
             })
@@ -283,7 +292,7 @@ impl App {
         // Iterate through all elements in the `items` and stylize them.
         let items: Vec<ListItem> = self
             .repository
-            .current_level_desc()
+            .current_level_desc(area.width)
             .into_iter()
             .map(|(enabled, value)| {
                 ListItem::new(value).style(if enabled {

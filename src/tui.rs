@@ -16,9 +16,22 @@ use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 const TODO_HEADER_BG: Color = tailwind::BLUE.c950;
 const NORMAL_ROW_COLOR: Color = tailwind::SLATE.c950;
 const HELP_ROW_COLOR: Color = tailwind::SLATE.c800;
-const SELECTED_STYLE_FG: Color = tailwind::BLUE.c300;
 const DISABLED_STYLE_FG: Color = tailwind::GRAY.c600;
 const TEXT_COLOR: Color = tailwind::SLATE.c200;
+
+const SELECTED_ACTIVE_BACKGROUND: Color = tailwind::BLUE.c950;
+const SELECTED_INACTIVE_TEXT: Color = tailwind::SLATE.c400;
+const SELECTED_INACTIVE_BACKGROUND: Color = tailwind::GRAY.c800;
+
+const SELECTED_ACTIVE_STYLE: Style = Style::new()
+    .add_modifier(Modifier::BOLD)
+    .fg(TEXT_COLOR)
+    .bg(SELECTED_ACTIVE_BACKGROUND);
+
+const SELECTED_INACTIVE_STYLE: Style = Style::new()
+    .add_modifier(Modifier::BOLD)
+    .fg(SELECTED_INACTIVE_TEXT)
+    .bg(SELECTED_INACTIVE_BACKGROUND);
 
 type AppResult<T> = Result<T, Box<dyn Error>>;
 
@@ -294,21 +307,31 @@ impl App {
             })
             .collect();
 
-        // Create a List from all list items and highlight the currently selected one
-        let items = List::new(items)
-            .block(inner_block)
-            .highlight_style(
-                Style::default()
-                    .add_modifier(Modifier::BOLD)
-                    .add_modifier(Modifier::REVERSED)
-                    .fg(SELECTED_STYLE_FG),
-            )
-            .highlight_spacing(HighlightSpacing::Always);
-
         // We can now render the item list
         // (look carefully, we are using StatefulWidget's render.)
         // ratatui::widgets::StatefulWidget::render as stateful_render
         if let Some(current_state) = self.state.last_mut() {
+            // Create a List from all list items and highlight the currently selected one
+
+            let current_item_active = if let Some(current) =
+                current_state.selected().and_then(|idx| {
+                    self.repository
+                        .current_level()
+                        .get(idx.min(items.len() - 1))
+                }) {
+                self.repository.config.is_active(current)
+            } else {
+                false
+            };
+
+            let items = List::new(items)
+                .block(inner_block)
+                .highlight_style(if current_item_active {
+                    SELECTED_ACTIVE_STYLE
+                } else {
+                    SELECTED_INACTIVE_STYLE
+                })
+                .highlight_spacing(HighlightSpacing::Always);
             StatefulWidget::render(items, inner_area, buf, current_state);
         } else {
             ratatui::restore();

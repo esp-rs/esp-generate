@@ -83,7 +83,7 @@ impl<'app> Repository<'app> {
             if self.config.can_be_disabled(&option.name) {
                 self.config.selected.swap_remove(i);
             }
-        } else if self.config.requirements_met(option) {
+        } else {
             self.config.select(option.name.clone());
         }
     }

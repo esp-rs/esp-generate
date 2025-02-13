@@ -146,7 +146,7 @@ fn enable_config_and_dependencies(config: &mut ActiveConfiguration, option: &str
         enable_config_and_dependencies(config, dependency)?;
     }
 
-    if !config.requirements_met(option) {
+    if !config.is_option_active(option) {
         return Ok(());
     }
 
@@ -158,7 +158,7 @@ fn enable_config_and_dependencies(config: &mut ActiveConfiguration, option: &str
 fn is_valid(config: &ActiveConfiguration) -> bool {
     for item in config.selected.iter() {
         let option = find_option(item, &config.options).unwrap();
-        if !config.requirements_met(option) {
+        if !config.is_option_active(option) {
             return false;
         }
     }

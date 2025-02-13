@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 pub struct GeneratorOption {
     pub name: String,
     pub display_name: String,
+    /// Selecting one option in the group deselect other options of the same group.
+    #[serde(default)]
+    pub selection_group: String,
     #[serde(default)]
     pub help: String,
     #[serde(default)]
@@ -25,6 +28,8 @@ pub struct GeneratorOptionCategory {
     pub display_name: String,
     #[serde(default)]
     pub help: String,
+    #[serde(default)]
+    pub requires: Vec<String>,
     #[serde(default)]
     pub options: Vec<GeneratorOptionItem>,
 }
@@ -80,7 +85,7 @@ impl GeneratorOptionItem {
 
     pub fn requires(&self) -> &[String] {
         match self {
-            GeneratorOptionItem::Category(_) => &[],
+            GeneratorOptionItem::Category(category) => category.requires.as_slice(),
             GeneratorOptionItem::Option(option) => option.requires.as_slice(),
         }
     }

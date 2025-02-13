@@ -35,13 +35,13 @@ const SELECTED_INACTIVE_STYLE: Style = Style::new()
 
 type AppResult<T> = Result<T, Box<dyn Error>>;
 
-pub struct Repository {
-    config: ActiveConfiguration<'static>,
+pub struct Repository<'app> {
+    config: ActiveConfiguration<'app>,
     path: Vec<usize>,
 }
 
-impl Repository {
-    pub fn new(chip: Chip, options: &'static [GeneratorOptionItem], selected: &[String]) -> Self {
+impl<'app> Repository<'app> {
+    pub fn new(chip: Chip, options: &'app [GeneratorOptionItem], selected: &[String]) -> Self {
         Self {
             config: ActiveConfiguration {
                 chip,
@@ -96,24 +96,33 @@ impl Repository {
         self.path.pop();
     }
 
-    fn current_level_desc(&self) -> Vec<(bool, String)> {
+    fn current_level_desc(&self, width: u16) -> Vec<(bool, String)> {
         let level = self.current_level();
 
         level
             .iter()
             .map(|v| {
+                let name = if let GeneratorOptionItem::Option(_) = v {
+                    v.name()
+                } else {
+                    ""
+                };
+                let indicator = if self.config.selected.iter().any(|o| o == v.name()) {
+                    "✅"
+                } else if v.is_category() {
+                    "▶️"
+                } else {
+                    "  "
+                };
+                let padding = width as usize - v.title().len() - 4; // 2 spaces + the indicator
                 (
                     self.config.is_active(v),
                     format!(
-                        " {} {}",
-                        if self.config.selected.iter().any(|o| o == v.name()) {
-                            "✅"
-                        } else if v.is_category() {
-                            "▶️"
-                        } else {
-                            "  "
-                        },
+                        " {} {}{:>padding$}",
+                        indicator,
                         v.title(),
+                        name,
+                        padding = padding,
                     ),
                 )
             })
@@ -135,14 +144,14 @@ pub fn restore_terminal() -> AppResult<()> {
     Ok(())
 }
 
-pub struct App {
+pub struct App<'app> {
     state: Vec<ListState>,
-    repository: Repository,
+    repository: Repository<'app>,
     confirm_quit: bool,
 }
 
-impl App {
-    pub fn new(repository: Repository) -> Self {
+impl<'app> App<'app> {
+    pub fn new(repository: Repository<'app>) -> Self {
         let mut initial_state = ListState::default();
         initial_state.select(Some(0));
 
@@ -182,7 +191,7 @@ impl App {
     }
 }
 
-impl App {
+impl App<'_> {
     pub fn run(&mut self, mut terminal: Terminal<impl Backend>) -> AppResult<Option<Vec<String>>> {
         loop {
             self.draw(&mut terminal)?;
@@ -247,7 +256,7 @@ impl App {
     }
 }
 
-impl Widget for &mut App {
+impl Widget for &mut App<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let vertical = Layout::vertical([
             Constraint::Length(2),
@@ -264,7 +273,7 @@ impl Widget for &mut App {
     }
 }
 
-impl App {
+impl App<'_> {
     fn render_title(&self, area: Rect, buf: &mut Buffer) {
         Paragraph::new("esp-generate")
             .bold()
@@ -296,7 +305,7 @@ impl App {
         // Iterate through all elements in the `items` and stylize them.
         let items: Vec<ListItem> = self
             .repository
-            .current_level_desc()
+            .current_level_desc(area.width)
             .into_iter()
             .map(|(enabled, value)| {
                 ListItem::new(value).style(if enabled {

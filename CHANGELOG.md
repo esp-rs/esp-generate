@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Template settings are now described in a template-specific `yaml` file (#103)
 - Test cases are now generated from template settings (#106)
 - Updated and removed some unused extensions (#109, #111)
+- The option names are now display in the menu (#116)
+- Options that are not applicable to the selected chip are not shown (#116)
 - Inactive menu items are now colored differently (#115)
 - The CLI now exits with success when the user quits (#117)
 

@@ -39,8 +39,7 @@ jobs:
           target: riscv32imac-unknown-none-elf
           toolchain: stable
           components: rust-src, rustfmt, clippy
-#ENDIF
-#IF option("xtensa")
+#ELIF option("xtensa")
 #+        uses: esp-rs/xtensa-toolchain@v1.5
 #+        with:
 #+          default: true

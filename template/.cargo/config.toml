@@ -3,16 +3,19 @@
 #IF option("probe-rs")
 #REPLACE esp32c6 mcu
 runner = "probe-rs run --chip=esp32c6 --always-print-stacktrace --no-location --catch-hardfault"
+#ELIF option("defmt")
+#REPLACE esp32c6 mcu
+#+runner = "espflash flash --monitor --chip esp32c6 --log-format defmt"
 #ELSE
 #REPLACE esp32c6 mcu
 #+runner = "espflash flash --monitor --chip esp32c6"
 #ENDIF
 
 [env]
-#IF option("probe-rs")
+#IF option("demft")
 DEFMT_LOG="info"
-#ELSE
-ESP_LOG="INFO"
+#ELIF option("log")
+ESP_LOG="info"
 #ENDIF
 
 [build]

@@ -2,18 +2,27 @@
 #![no_std]
 #![no_main]
 
-use esp_backtrace as _;
 use esp_hal::{clock::CpuClock, delay::Delay, main};
 //IF option("wifi") || option("ble")
 use esp_hal::timer::timg::TimerGroup;
 //ENDIF
 
-//IF option("probe-rs")
-//+ use defmt_rtt as _;
+//IF option("defmt")
 //+ use defmt::info;
-//ELSE
+//ELIF option("log")
 use log::info;
 //ENDIF probe-rs
+
+//IF !option("panic-handler")
+//+#[panic_handler]
+//+fn panic(_: &core::panic::PanicInfo) -> ! {
+//+    loop {}
+//+}
+//ELIF option("esp-backtrace")
+use esp_backtrace as _;
+//ELIF option("panic-rtt-target")
+//+use panic_rtt_target as _;
+//ENDIF
 
 //IF option("alloc")
 extern crate alloc;
@@ -24,7 +33,13 @@ fn main() -> ! {
     //REPLACE generate-version generate-version
     // generator version: generate-version
 
-    //IF !option("probe-rs")
+    //IF option("probe-rs")
+    //IF option("defmt")
+    rtt_target::rtt_init_defmt!();
+    //ELIF option("panic-rtt-target")
+    rtt_target::rtt_init!();
+    //ENDIF
+    //ELIF option("log")
     esp_println::logger::init_logger_from_env();
     //ENDIF
 
@@ -51,7 +66,9 @@ fn main() -> ! {
 
     let delay = Delay::new();
     loop {
+        //IF option("defmt") || option("log")
         info!("Hello world!");
+        //ENDIF
         delay.delay_millis(500);
     }
 

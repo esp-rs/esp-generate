@@ -1,6 +1,6 @@
 fn main() {
     linker_be_nice();
-    //IF option("probe-rs")
+    //IF option("defmt")
     println!("cargo:rustc-link-arg=-Tdefmt.x");
     //ENDIF
     // make sure linkall.x is the last linker script (otherwise might cause problems with flip-link)
@@ -41,9 +41,7 @@ fn linker_be_nice() {
         "cargo:rustc-link-arg=-Wl,--error-handling-script={}",
         std::env::current_exe().unwrap().display()
     );
-    //ENDIF
-
-    //IF option("riscv")
+    //ELIF option("riscv")
     println!(
         "cargo:rustc-link-arg=--error-handling-script={}",
         std::env::current_exe().unwrap().display()

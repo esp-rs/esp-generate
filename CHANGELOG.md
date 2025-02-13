@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added an option to enable unstable HAL features (#104)
 - Added support for selection groups (#119)
 - Added `runArgs` to DevContainer settings to allow flashing from Linux (#154)
+- It is now possible to select a panic handler, and log library. (#120)
 
 ### Changed
 - Update `probe-rs run` arguments (#90)

@@ -10,34 +10,47 @@ name = "project-name"
 path = "./src/bin/main.rs"
 
 [dependencies]
-esp-backtrace = { version = "0.15.0", features = [
-    #REPLACE esp32c6 mcu
-    "esp32c6",
-    "exception-handler",
-    "panic-handler",
-    #IF option("probe-rs")
-    #+"defmt",
-    #ELSE
-    "println",
-    #ENDIF
-]}
 esp-hal = { version = "0.23.1", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("unstable-hal")
     "unstable",
     #ENDIF
-    #IF option("probe-rs")
+    #IF option("defmt")
     #+"defmt",
     #ENDIF
 ] }
+#IF option("defmt")
+#+defmt = "0.3.10"
+#ELIF option("log")
+log = { version = "0.4.21" }
+#ENDIF
+#IF option("log-frontend") || option("panic-handler")
 #IF option("probe-rs")
-#+defmt            = "0.3.10"
-#+defmt-rtt        = "0.4.1"
-#ELSE
+rtt-target = { version = "0.6.1" , features = [
+    #IF option("defmt")
+    "defmt",
+    #ENDIF
+]}
+#ELSE probe-rs
 #REPLACE esp32c6 mcu
 esp-println = { version = "0.13.0", features = ["esp32c6", "log"] }
-log = { version = "0.4.21" }
+#ENDIF
+#ENDIF log-frontend || panic-handler
+#IF option("esp-backtrace")
+esp-backtrace = { version = "0.15.0", features = [
+    #REPLACE esp32c6 mcu
+    "esp32c6",
+    "exception-handler",
+    "panic-handler",
+    #IF option("defmt")
+    #+"defmt",
+    #ELSE
+    "println",
+    #ENDIF
+]}
+#ELIF option("panic-rtt-target")
+panic-rtt-target = { version = "0.2.0" }
 #ENDIF
 #IF option("alloc")
 esp-alloc = { version = "0.6.0" }
@@ -79,7 +92,7 @@ esp-wifi = { version = "0.12.0", default-features=false, features = [
     "coex",
     #ENDIF
     "esp-alloc",
-    #IF option("probe-rs")
+    #IF option("defmt")
     #+"defmt",
     #ELSE
     "log",
@@ -93,7 +106,7 @@ heapless = { version = "0.8.0", default-features = false }
 #IF option("embassy")
 embassy-executor = { version = "0.7.0",  features = [
     "task-arena-size-20480",
-    #IF option("probe-rs")
+    #IF option("defmt")
     #+"defmt"
     #ENDIF
 ] }

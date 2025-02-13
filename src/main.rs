@@ -9,6 +9,7 @@ use std::{
 
 use clap::Parser;
 use env_logger::{Builder, Env};
+use esp_generate::config::find_option;
 use esp_generate::config::{ActiveConfiguration, Relationships};
 use esp_generate::template::{GeneratorOptionItem, Template};
 use esp_metadata::Chip;
@@ -131,6 +132,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     } else {
         args.option.clone()
     };
+
+    // Also add the active selection groups
+    for idx in 0..selected.len() {
+        let option = find_option(&selected[idx], &template.options).unwrap();
+        selected.push(option.selection_group.clone());
+    }
 
     selected.push(args.chip.to_string());
 
@@ -276,11 +283,9 @@ fn process_file(
 
     // Create a new Rhai engine and scope
     let mut engine = rhai::Engine::new();
-    let mut scope = rhai::Scope::new();
-    scope.push("options", options.to_vec());
 
     // Define a custom function to check if conditions of the options.
-    let options_clone: Vec<String> = options.iter().map(|v| v.to_owned()).collect();
+    let options_clone: Vec<String> = options.to_vec();
     engine.register_fn("option", move |cond: &str| -> bool {
         let cond = cond.to_string();
         options_clone.contains(&cond)

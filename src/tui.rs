@@ -65,11 +65,30 @@ impl<'app> Repository<'app> {
         current
     }
 
+    fn current_level_is_active(&self) -> bool {
+        let mut current = self.config.options;
+
+        for &index in &self.path {
+            if !self.config.is_active(&current[index]) {
+                return false;
+            }
+            current = match &current[index] {
+                GeneratorOptionItem::Category(category) => category.options.as_slice(),
+                GeneratorOptionItem::Option(_) => unreachable!(),
+            }
+        }
+
+        true
+    }
+
     fn enter_group(&mut self, index: usize) {
         self.path.push(index);
     }
 
     fn toggle_current(&mut self, index: usize) {
+        if !self.current_level_is_active() {
+            return;
+        }
         if !self.config.is_active(&self.current_level()[index]) {
             return;
         }
@@ -98,6 +117,7 @@ impl<'app> Repository<'app> {
 
     fn current_level_desc(&self, width: u16) -> Vec<(bool, String)> {
         let level = self.current_level();
+        let level_active = self.current_level_is_active();
 
         level
             .iter()
@@ -107,16 +127,17 @@ impl<'app> Repository<'app> {
                 } else {
                     ""
                 };
-                let indicator = if self.config.selected.iter().any(|o| o == v.name()) {
-                    "✅"
-                } else if v.is_category() {
-                    "▶️"
-                } else {
-                    "  "
-                };
+                let indicator =
+                    if self.config.selected.iter().any(|o| o == v.name()) && level_active {
+                        "✅"
+                    } else if v.is_category() {
+                        "▶️"
+                    } else {
+                        "  "
+                    };
                 let padding = width as usize - v.title().len() - 4; // 2 spaces + the indicator
                 (
-                    self.config.is_active(v),
+                    level_active && self.config.is_active(v),
                     format!(
                         " {} {}{:>padding$}",
                         indicator,

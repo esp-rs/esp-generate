@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
@@ -164,12 +165,23 @@ fn enable_config_and_dependencies(config: &mut ActiveConfiguration, option: &str
 }
 
 fn is_valid(config: &ActiveConfiguration) -> bool {
+    let mut groups = HashSet::new();
+
     for item in config.selected.iter() {
         let option = find_option(item, &config.options).unwrap();
+
+        // Option could not have been selected on UI.
         if !config.is_option_active(option) {
             return false;
         }
+
+        // Reject combination if a selection group contains two selected options. This prevents
+        // testing mutually exclusive options like defmt and log.
+        if !groups.insert(option.selection_group.clone()) {
+            return false;
+        }
     }
+
     true
 }
 
@@ -177,18 +189,29 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     let options = include_str!("../../template/template.yaml");
     let template = serde_yaml::from_str::<Template>(options)?;
 
+    // Unfortunate hard-coded list of non-codegen options
+    let ignore_categories = ["editor", "optional"];
+
     // A list of each option, along with its dependencies
     let mut available_options = vec![];
-    for item in template.options.iter() {
+    let all_options = template.options.iter().flat_map(|o| match o {
+        GeneratorOptionItem::Option(option) => vec![option.name.clone()],
+        GeneratorOptionItem::Category(category)
+            if !ignore_categories.contains(&category.name.as_str()) =>
+        {
+            category.options()
+        }
+        _ => vec![],
+    });
+    for option in all_options {
+        let option = find_option(&option, &template.options).unwrap();
         let mut config = ActiveConfiguration {
             chip,
             selected: vec![],
             options: &template.options,
         };
 
-        if let GeneratorOptionItem::Option(option) = item {
-            enable_config_and_dependencies(&mut config, &option.name)?;
-        }
+        enable_config_and_dependencies(&mut config, &option.name)?;
 
         if is_valid(&config) {
             available_options.push(config.selected);

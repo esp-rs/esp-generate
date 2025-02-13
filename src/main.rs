@@ -435,20 +435,24 @@ fn process_options(template: &Template, args: &Args) {
     let mut success = true;
     for option in &args.option {
         // Find the matching option in OPTIONS
-        if let Some(option_item) = template.options.iter().find(|item| item.name() == *option) {
-            // Check if the chip is supported. If the chip list is empty,
-            // all chips are supported:
+        let mut option_found = false;
+        let mut option_found_for_chip = false;
+        for option_item in template
+            .options
+            .iter()
+            .filter(|item| item.name() == *option)
+        {
+            option_found = true;
+            // Check if the chip is supported. If the chip list is empty, all chips are supported.
+            // We don't immediately fail in case the option is present for the chip, but as a
+            // separate entry (e.g. with different properties).
             if !option_item.chips().iter().any(|chip| chip == &args.chip)
                 && !option_item.chips().is_empty()
             {
-                log::error!(
-                    "Option '{}' is not supported for chip {}",
-                    option,
-                    args.chip
-                );
-                success = false;
                 continue;
             }
+
+            option_found_for_chip = true;
             if !option_item
                 .requires()
                 .iter()
@@ -461,8 +465,17 @@ fn process_options(template: &Template, args: &Args) {
                 );
                 success = false;
             }
-        } else {
+        }
+
+        if !option_found {
             log::error!("Unknown option '{}'", option);
+            success = false;
+        } else if !option_found_for_chip {
+            log::error!(
+                "Option '{}' is not supported for chip {}",
+                option,
+                args.chip
+            );
             success = false;
         }
     }

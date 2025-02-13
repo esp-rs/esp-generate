@@ -46,11 +46,29 @@ options:
 
   - !Option
     name: probe-rs
-    display_name: Flashes using `probe-rs` instead of `espflash`.
-    help: "espflash uses a serial connection (UART) for programming and logging.\nprobe-rs is a
-      debugger that connects to the chips over JTAG. It can be used to flash and monitor, and
-      it can also be used to interactively debug an application, or run tests on the hardware.
-      Semihosting or RTT-based technologies like defmt-rtt require probe-rs."
+    display_name: Use probe-rs to flash and monitor instead of espflash.
+    help: probe-rs is a debugger that connects to the chips over JTAG. It can be used to flash and
+      monitor, and it can also be used to interactively debug an application, or run tests on the
+      hardware. Semihosting or RTT-based technologies like defmt-rtt require probe-rs.
+    chips:
+      - esp32c6
+      - esp32h2
+      - esp32s3
+
+  - !Option
+    name: probe-rs
+    display_name: Use probe-rs to flash and monitor instead of espflash.
+    help: probe-rs is a debugger that connects to the chips over JTAG. It can be used to flash and
+      monitor, and it can also be used to interactively debug an application, or run tests on the
+      hardware. Semihosting or RTT-based technologies like defmt-rtt require probe-rs.
+
+      probe-rs requires a debug probe like esp-prog, and will not work with USB-UART adapters that
+      often come on development boards.
+    chips:
+      - esp32
+      - esp32s2
+      - esp32c2
+      - esp32c3
 
   - !Category
     name: optional

@@ -63,7 +63,7 @@ impl ActiveConfiguration<'_> {
 
     pub fn select(&mut self, option: String) {
         let o = find_option(&option, self.options).unwrap();
-        if !self.requirements_met(o) {
+        if !self.is_option_active(o) {
             return;
         }
         if !Self::deselect_group(&mut self.selected, self.options, &o.selection_group) {
@@ -72,10 +72,13 @@ impl ActiveConfiguration<'_> {
         self.selected.push(option);
     }
 
+    /// Returns whether an item is active (can be selected).
+    ///
+    /// This function is different from `is_option_active` in that it handles categories as well.
     pub fn is_active(&self, item: &GeneratorOptionItem) -> bool {
         match item {
             GeneratorOptionItem::Category(category) => {
-                if !self.requirements_met2(&category.requires) {
+                if !self.requirements_met(&category.requires) {
                     return false;
                 }
                 for sub in category.options.iter() {
@@ -85,11 +88,21 @@ impl ActiveConfiguration<'_> {
                 }
                 false
             }
-            GeneratorOptionItem::Option(option) => self.requirements_met(option),
+            GeneratorOptionItem::Option(option) => self.is_option_active(option),
         }
     }
 
-    pub fn requirements_met2(&self, requires: &[String]) -> bool {
+    /// Returns whether all requirements are met.
+    ///
+    /// A requirement may be:
+    /// - an `option`
+    /// - the absence of an `!option`
+    /// - a `selection_group`, which means one option in that selection group must be selected
+    /// - the absence of a `!selection_group`, which means no option in that selection group must
+    ///   be selected
+    ///
+    /// A selection group must not have the same name as an option.
+    fn requirements_met(&self, requires: &[String]) -> bool {
         for requirement in requires {
             let (key, expected) = if let Some(requirement) = requirement.strip_prefix('!') {
                 (requirement, false)
@@ -114,13 +127,17 @@ impl ActiveConfiguration<'_> {
         true
     }
 
-    pub fn requirements_met(&self, option: &GeneratorOption) -> bool {
+    /// Returns whether an option is active (can be selected).
+    ///
+    /// This involves checking if the option is available for the current chip, if it's not
+    /// disabled by any other selected option, and if all its requirements are met.
+    pub fn is_option_active(&self, option: &GeneratorOption) -> bool {
         if !option.chips.is_empty() && !option.chips.contains(&self.chip) {
             return false;
         }
 
         // Are this option's requirements met?
-        if !self.requirements_met2(&option.requires) {
+        if !self.requirements_met(&option.requires) {
             return false;
         }
 
@@ -464,7 +481,7 @@ mod test {
 
         active.select("option1".to_string());
         let opt2 = find_option("option2", options).unwrap();
-        assert!(!active.requirements_met(opt2));
+        assert!(!active.is_option_active(opt2));
     }
 
     fn empty() -> &'static [&'static str] {

@@ -7,7 +7,7 @@ use crossterm::{
 };
 use esp_generate::{
     append_list_as_sentence,
-    config::{find_option, ActiveConfiguration},
+    config::{ActiveConfiguration, Relationships},
     template::GeneratorOptionItem,
 };
 use esp_metadata::Chip;
@@ -16,9 +16,22 @@ use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 const TODO_HEADER_BG: Color = tailwind::BLUE.c950;
 const NORMAL_ROW_COLOR: Color = tailwind::SLATE.c950;
 const HELP_ROW_COLOR: Color = tailwind::SLATE.c800;
-const SELECTED_STYLE_FG: Color = tailwind::BLUE.c300;
 const DISABLED_STYLE_FG: Color = tailwind::GRAY.c600;
 const TEXT_COLOR: Color = tailwind::SLATE.c200;
+
+const SELECTED_ACTIVE_BACKGROUND: Color = tailwind::BLUE.c950;
+const SELECTED_INACTIVE_TEXT: Color = tailwind::SLATE.c400;
+const SELECTED_INACTIVE_BACKGROUND: Color = tailwind::GRAY.c800;
+
+const SELECTED_ACTIVE_STYLE: Style = Style::new()
+    .add_modifier(Modifier::BOLD)
+    .fg(TEXT_COLOR)
+    .bg(SELECTED_ACTIVE_BACKGROUND);
+
+const SELECTED_INACTIVE_STYLE: Style = Style::new()
+    .add_modifier(Modifier::BOLD)
+    .fg(SELECTED_INACTIVE_TEXT)
+    .bg(SELECTED_INACTIVE_BACKGROUND);
 
 type AppResult<T> = Result<T, Box<dyn Error>>;
 
@@ -303,21 +316,31 @@ impl App<'_> {
             })
             .collect();
 
-        // Create a List from all list items and highlight the currently selected one
-        let items = List::new(items)
-            .block(inner_block)
-            .highlight_style(
-                Style::default()
-                    .add_modifier(Modifier::BOLD)
-                    .add_modifier(Modifier::REVERSED)
-                    .fg(SELECTED_STYLE_FG),
-            )
-            .highlight_spacing(HighlightSpacing::Always);
-
         // We can now render the item list
         // (look carefully, we are using StatefulWidget's render.)
         // ratatui::widgets::StatefulWidget::render as stateful_render
         if let Some(current_state) = self.state.last_mut() {
+            // Create a List from all list items and highlight the currently selected one
+
+            let current_item_active = if let Some(current) =
+                current_state.selected().and_then(|idx| {
+                    self.repository
+                        .current_level()
+                        .get(idx.min(items.len() - 1))
+                }) {
+                self.repository.config.is_active(current)
+            } else {
+                false
+            };
+
+            let items = List::new(items)
+                .block(inner_block)
+                .highlight_style(if current_item_active {
+                    SELECTED_ACTIVE_STYLE
+                } else {
+                    SELECTED_INACTIVE_STYLE
+                })
+                .highlight_spacing(HighlightSpacing::Always);
             StatefulWidget::render(items, inner_area, buf, current_state);
         } else {
             ratatui::restore();
@@ -331,31 +354,11 @@ impl App<'_> {
             .min(self.repository.current_level().len() - 1);
         let option = &self.repository.current_level()[selected];
 
-        let mut requires = Vec::new();
-        let mut required_by = Vec::new();
-        let mut disabled_by = Vec::new();
-
-        self.repository.config.selected.iter().for_each(|opt| {
-            let opt = find_option(opt.as_str(), self.repository.config.options).unwrap();
-            for o in opt.requires.iter() {
-                if let Some(disables) = o.strip_prefix("!") {
-                    if disables == option.name() {
-                        disabled_by.push(opt.name.as_str());
-                    }
-                } else if o == option.name() {
-                    required_by.push(o.as_str());
-                }
-            }
-        });
-        for req in option.requires() {
-            if let Some(disables) = req.strip_prefix("!") {
-                if self.repository.config.is_selected(disables) {
-                    disabled_by.push(disables);
-                }
-            } else {
-                requires.push(req);
-            }
-        }
+        let Relationships {
+            requires,
+            required_by,
+            disabled_by,
+        } = self.repository.config.collect_relationships(option);
 
         let help_text = option.help();
         let help_text = append_list_as_sentence(help_text, "Requires", &requires);

@@ -7,11 +7,13 @@ options:
 
   - !Option
     name: alloc
-    display_name: Enable allocations via the `esp-alloc` crate.
+    display_name: Enable allocations via the esp-alloc crate.
+    help: esp-alloc comes with no stability guarantees at this time.
 
   - !Option
     name: wifi
-    display_name: Enable Wi-Fi via the `esp-wifi` crate.
+    display_name: Enable Wi-Fi via the esp-wifi crate.
+    help: esp-wifi comes with no stability guarantees at this time.
     requires:
       - alloc
       - unstable-hal
@@ -25,7 +27,8 @@ options:
 
   - !Option
     name: ble
-    display_name: Enable BLE via the `esp-wifi` crate.
+    display_name: Enable BLE via the esp-wifi crate.
+    help: esp-wifi comes with no stability guarantees at this time.
     requires:
       - alloc
       - unstable-hal
@@ -46,11 +49,69 @@ options:
 
   - !Option
     name: probe-rs
-    display_name: Flashes using `probe-rs` instead of `espflash`.
-    help: "espflash uses a serial connection (UART) for programming and logging.\nprobe-rs is a
-      debugger that connects to the chips over JTAG. It can be used to flash and monitor, and
-      it can also be used to interactively debug an application, or run tests on the hardware.
-      Semihosting or RTT-based technologies like defmt-rtt require probe-rs."
+    display_name: Use probe-rs to flash and monitor instead of espflash.
+    help: probe-rs is a debugger that connects to the chips over JTAG. It can be used to flash and
+      monitor, and it can also be used to interactively debug an application, or run tests on the
+      hardware. Semihosting or RTT-based technologies like defmt-rtt require probe-rs.
+    chips:
+      - esp32c6
+      - esp32h2
+      - esp32s3
+
+  - !Option
+    name: probe-rs
+    display_name: Use probe-rs to flash and monitor instead of espflash.
+    help: probe-rs is a debugger that connects to the chips over JTAG. It can be used to flash and
+      monitor, and it can also be used to interactively debug an application, or run tests on the
+      hardware. Semihosting or RTT-based technologies like defmt-rtt require probe-rs.
+
+      probe-rs requires a debug probe like esp-prog, and will not work with USB-UART adapters that
+      often come on development boards.
+    chips:
+      - esp32
+      - esp32s2
+      - esp32c2
+      - esp32c3
+
+  - !Category
+    name: flashing-probe-rs
+    display_name: Flashing, logging and debugging (probe-rs)
+    requires:
+      - probe-rs
+    options:
+      - !Option
+        name: defmt
+        display_name: Use defmt to print messages.
+        selection_group: log-frontend
+      - !Option
+        name: panic-rtt-target
+        display_name: Use panic-rtt-target as the panic handler.
+        selection_group: panic-handler
+        requires:
+          - probe-rs
+
+  - !Category
+    name: flashing-espflash
+    display_name: Flashing, logging and debugging (espflash)
+    requires:
+      - "!probe-rs"
+    options:
+      - !Option
+        name: log
+        display_name: Use the log crate to print messages.
+        selection_group: log-frontend
+        requires:
+          - "!probe-rs"
+      - !Option
+        name: defmt
+        display_name: Use defmt to print messages.
+        selection_group: log-frontend
+      - !Option
+        name: esp-backtrace
+        display_name: Use esp-backtrace as the panic handler.
+        selection_group: panic-handler
+        requires:
+          - "!probe-rs"
 
   - !Category
     name: optional

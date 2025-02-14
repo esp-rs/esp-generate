@@ -9,6 +9,8 @@ use std::{
 
 use clap::Parser;
 use env_logger::{Builder, Env};
+use esp_generate::config::find_option;
+use esp_generate::config::{ActiveConfiguration, Relationships};
 use esp_generate::template::{GeneratorOptionItem, Template};
 use esp_metadata::Chip;
 use taplo::formatter::Options;
@@ -130,6 +132,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     } else {
         args.option.clone()
     };
+
+    // Also add the active selection groups
+    for idx in 0..selected.len() {
+        let option = find_option(&selected[idx], &template.options).unwrap();
+        selected.push(option.selection_group.clone());
+    }
 
     selected.push(args.chip.to_string());
 
@@ -275,11 +283,9 @@ fn process_file(
 
     // Create a new Rhai engine and scope
     let mut engine = rhai::Engine::new();
-    let mut scope = rhai::Scope::new();
-    scope.push("options", options.to_vec());
 
     // Define a custom function to check if conditions of the options.
-    let options_clone: Vec<String> = options.iter().map(|v| v.to_owned()).collect();
+    let options_clone: Vec<String> = options.to_vec();
     engine.register_fn("option", move |cond: &str| -> bool {
         let cond = cond.to_string();
         options_clone.contains(&cond)
@@ -433,36 +439,71 @@ fn process_file(
 
 fn process_options(template: &Template, args: &Args) {
     let mut success = true;
-    for option in &args.option {
-        // Find the matching option in OPTIONS
-        if let Some(option_item) = template.options.iter().find(|item| item.name() == *option) {
-            // Check if the chip is supported. If the chip list is empty,
-            // all chips are supported:
-            if !option_item.chips().iter().any(|chip| chip == &args.chip)
-                && !option_item.chips().is_empty()
+    let all_options = template.all_options();
+
+    let selected_config = ActiveConfiguration {
+        chip: args.chip,
+        selected: args.option.clone(),
+        options: &template.options,
+    };
+
+    for option in &selected_config.selected {
+        // Find the matching option in the template
+        let mut option_found = false;
+        let mut option_found_for_chip = false;
+        for &option_item in all_options.iter().filter(|item| item.name == *option) {
+            option_found = true; // The input refers to an existing option.
+
+            // Check if the chip is supported. If the chip list is empty, all chips are supported.
+            // We don't immediately fail in case the option is not present for the chip, because
+            // it may exist as a separate entry (e.g. with different properties).
+            if !option_item.chips.iter().any(|chip| chip == &args.chip)
+                && !option_item.chips.is_empty()
             {
-                log::error!(
-                    "Option '{}' is not supported for chip {}",
-                    option,
-                    args.chip
-                );
-                success = false;
                 continue;
             }
-            if !option_item
-                .requires()
+
+            option_found_for_chip = true;
+
+            // Is the option allowed to be selected?
+            if selected_config.is_option_active(option_item) {
+                continue;
+            }
+
+            // Something is wrong, print the constraints that are not met.
+            success = false;
+            let o = GeneratorOptionItem::Option(option_item.clone());
+            let Relationships {
+                requires,
+                disabled_by,
+                ..
+            } = selected_config.collect_relationships(&o);
+
+            if !requires
                 .iter()
                 .all(|requirement| args.option.iter().any(|r| r == requirement))
             {
                 log::error!(
                     "Option '{}' requires {}",
-                    option_item.name(),
-                    option_item.requires().join(", ")
+                    option_item.name,
+                    option_item.requires.join(", ")
                 );
-                success = false;
             }
-        } else {
+
+            for disabled in disabled_by {
+                log::error!("Option '{}' is disabled by {}", option_item.name, disabled);
+            }
+        }
+
+        if !option_found {
             log::error!("Unknown option '{}'", option);
+            success = false;
+        } else if !option_found_for_chip {
+            log::error!(
+                "Option '{}' is not supported for chip {}",
+                option,
+                args.chip
+            );
             success = false;
         }
     }

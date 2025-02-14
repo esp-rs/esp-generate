@@ -102,3 +102,19 @@ impl GeneratorOptionItem {
 pub struct Template {
     pub options: Vec<GeneratorOptionItem>,
 }
+
+impl Template {
+    pub fn all_options(&self) -> Vec<&GeneratorOption> {
+        all_options_in(&self.options)
+    }
+}
+
+fn all_options_in(options: &[GeneratorOptionItem]) -> Vec<&GeneratorOption> {
+    options
+        .iter()
+        .flat_map(|o| match o {
+            GeneratorOptionItem::Option(option) => vec![option],
+            GeneratorOptionItem::Category(category) => all_options_in(&category.options),
+        })
+        .collect()
+}

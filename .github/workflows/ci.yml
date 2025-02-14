@@ -9,6 +9,10 @@ on:
     - cron: "34 2 * * *"
   workflow_dispatch:
     inputs:
+      build:
+        description: "Fully build the tested configurations"
+        required: true
+        type: boolean
       all_combinations:
         description: "Checks all combinations of options"
         required: true
@@ -67,12 +71,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Generate and check project
-        if: github.event_name != 'schedule' &&  !inputs.all_combinations
-        run: cargo ${{ env.TOOLCHAIN }} xtask check ${{ matrix.chip }}
-
-      - name: Generate and check project (all combinations)
-        if: github.event_name == 'schedule' ||  inputs.all_combinations
-        run: cargo ${{ env.TOOLCHAIN }} xtask check ${{ matrix.chip }} --all-combinations
+        run: cargo ${{ env.TOOLCHAIN }} xtask check ${{ matrix.chip }} ${{ fromJSON('["", "--all-combinations"]')[inputs.all_combinations || github.event_name == 'schedule'] }} ${{ fromJSON('["", "--build"]')[inputs.build || github.event_name == 'schedule'] }}
 
   # --------------------------------------------------------------------------
   # Test

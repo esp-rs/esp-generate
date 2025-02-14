@@ -2,6 +2,7 @@ use core::str;
 
 use esp_metadata::Chip;
 
+#[derive(Debug)]
 struct Version {
     major: u8,
     minor: u8,
@@ -44,11 +45,19 @@ fn print_result(name: &str, check_result: CheckResult) {
 fn check_version(version: Option<Version>, major: u8, minor: u8, patch: u8) -> CheckResult {
     match version {
         Some(version) => {
-            if version.major >= major && version.minor >= minor && version.patch >= patch {
-                CheckResult::Ok
-            } else {
-                CheckResult::WrongVersion
+            if version.major < major {
+                return CheckResult::WrongVersion;
             }
+
+            if version.major == major && version.minor < minor {
+                return CheckResult::WrongVersion;
+            }
+
+            if version.major == major && version.minor == minor && version.patch < patch {
+                return CheckResult::WrongVersion;
+            }
+
+            CheckResult::Ok
         }
         None => CheckResult::NotFound,
     }

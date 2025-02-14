@@ -28,6 +28,9 @@ enum Commands {
         /// Verify all possible options combinations
         #[arg(short, long)]
         all_combinations: bool,
+        /// Actually build projects, instead of just checking them
+        #[arg(short, long)]
+        build: bool,
     },
 
     /// Prints all valid combinations of options for a given chip
@@ -55,7 +58,8 @@ fn main() -> Result<()> {
         Commands::Check {
             chip,
             all_combinations,
-        } => check(&workspace, chip, all_combinations),
+            build,
+        } => check(&workspace, chip, all_combinations, build),
 
         Commands::Options {
             chip,
@@ -72,8 +76,12 @@ fn main() -> Result<()> {
 // ----------------------------------------------------------------------------
 // CHECK
 
-fn check(workspace: &Path, chip: Chip, all_combinations: bool) -> Result<()> {
-    log::info!("CHECK: {chip}");
+fn check(workspace: &Path, chip: Chip, all_combinations: bool, build: bool) -> Result<()> {
+    if build {
+        log::info!("BUILD: {chip}");
+    } else {
+        log::info!("CHECK: {chip}");
+    }
 
     const PROJECT_NAME: &str = "test";
     for options in options_for_chip(chip, all_combinations)? {
@@ -91,7 +99,7 @@ fn check(workspace: &Path, chip: Chip, all_combinations: bool) -> Result<()> {
 
         // Ensure that the generated project builds without errors:
         let output = Command::new("cargo")
-            .args(["check"])
+            .args([if build { "build" } else { "check" }])
             .current_dir(project_path.join(PROJECT_NAME))
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())

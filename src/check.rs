@@ -44,13 +44,8 @@ fn print_result(name: &str, check_result: CheckResult) {
 
 fn check_version(version: Option<Version>, major: u8, minor: u8, patch: u8) -> CheckResult {
     match version {
-        Some(version) => {
-    match version {
         Some(v) if (v.major, v.minor, v.patch) < (major, minor, patch) => CheckResult::WrongVersion,
         Some(_) => CheckResult::Ok,
-        None => CheckResult::NotFound,
-    }
-        }
         None => CheckResult::NotFound,
     }
 }

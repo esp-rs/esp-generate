@@ -11,6 +11,9 @@ use esp_hal::timer::timg::TimerGroup;
 //ENDIF
 
 //IF option("defmt")
+//IF !option("probe-rs")
+//+ use esp_println as _;
+//ENDIF
 //+ use defmt::info;
 //ELIF option("log")
 use log::info;

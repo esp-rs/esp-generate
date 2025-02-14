@@ -33,8 +33,16 @@ rtt-target = { version = "0.6.1" , features = [
     #ENDIF
 ]}
 #ELSE probe-rs
-#REPLACE esp32c6 mcu
-esp-println = { version = "0.13.0", features = ["esp32c6", "log"] }
+esp-println = { version = "0.13.0", features = [
+    #REPLACE esp32c6 mcu
+    "esp32c6",
+    #IF option("defmt")
+    #+"defmt-espflash",
+    #ENDIF
+    #IF option("log")
+    "log",
+    #ENDIF
+] }
 #ENDIF
 #ENDIF log-frontend || panic-handler
 #IF option("esp-backtrace")

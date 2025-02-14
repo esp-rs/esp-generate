@@ -46,7 +46,14 @@ cargo install esp-generate
 - `wifi`: Enables Wi-Fi via the `esp-wifi` crate; requires `alloc`.
 - `ble`: Enables BLE via the `esp-wifi` crate; requires `alloc`.
 - `embassy`: Adds `embassy` framework support.
-- `probe-rs`: Enables `defmt` and flashes using `probe-rs` instead of `espflash`.
+- `probe-rs`: Replaces `espflash` with `probe-rs` and enables RTT-based options.
+- `flashing-probe-rs`: Contains options that require `probe-rs`:
+  - `defmt`: Adds support for `defmt` printing. Uses `rtt-target` as the RTT implementation.
+  - `panic-rtt-target`: Uses `panic-rtt-target` as the panic handler.
+- `flashing-espflash`: Contains options that require `espflash`:
+  - `log`: Uses the `log` library to print messages.
+  - `defmt`: Adds support for `defmt` printing. Uses `esp-println` and configures `espflash` to decode `defmt` logs.
+  - `esp-backtrace`: Uses `esp-backtrace` as the panic handler.
 - `optional`: Enables the following set of options:
   - `wokwi`: Adds support for Wokwi simulation using [VS Code Wokwi extension].
   - `dev-container`: Adds support for [VS Code Dev Containers] and [GitHub Codespaces].

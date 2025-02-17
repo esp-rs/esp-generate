@@ -12,7 +12,7 @@ runner = "probe-rs run --chip=esp32c6 --always-print-stacktrace --no-location --
 #ENDIF
 
 [env]
-#IF option("demft")
+#IF option("defmt")
 DEFMT_LOG="info"
 #ELIF option("log")
 ESP_LOG="info"

@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - No longer include `smoltcp` as a dependency for BLE-only configurations (#108)
+- Corrected a typo in `README.md`
 
 ### Removed
 

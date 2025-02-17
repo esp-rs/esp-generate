@@ -13,7 +13,7 @@ At present, this template supports the ESP32, ESP32-C2/C3/C6, ESP32-H2, and ESP3
 
 ## Quickstart
 
-To generate a proect using this template:
+To generate a project using this template:
 
 1. Install `esp-generate`:
 

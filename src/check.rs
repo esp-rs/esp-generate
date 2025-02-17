@@ -9,6 +9,7 @@ struct Version {
     patch: u8,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum CheckResult {
     Ok,
     WrongVersion,
@@ -80,5 +81,44 @@ fn get_version(cmd: &str, args: &[&str]) -> Option<Version> {
             None
         }
         Err(_) => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_check_version() {
+        // Ok
+        let version = Some(Version {
+            major: 1,
+            minor: 84,
+            patch: 0,
+        });
+        assert_eq!(check_version(version, 1, 84, 0), CheckResult::Ok);
+        // Wrong major
+        let version = Some(Version {
+            major: 0,
+            minor: 85,
+            patch: 0,
+        });
+        assert_eq!(check_version(version, 1, 84, 0), CheckResult::WrongVersion);
+        // Wrong minor
+        let version = Some(Version {
+            major: 1,
+            minor: 83,
+            patch: 0,
+        });
+        assert_eq!(check_version(version, 1, 84, 0), CheckResult::WrongVersion);
+        // Wrong patch
+        let version = Some(Version {
+            major: 1,
+            minor: 84,
+            patch: 0,
+        });
+        assert_eq!(check_version(version, 1, 84, 1), CheckResult::WrongVersion);
+        // Not found
+        assert_eq!(check_version(None, 1, 84, 0), CheckResult::NotFound);
     }
 }

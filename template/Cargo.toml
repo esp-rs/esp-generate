@@ -86,7 +86,7 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
 #IF option("embassy") && option("wifi")
 # for more networking protocol support see https://crates.io/crates/edge-net
 #ENDIF embassy && wifi
-esp-wifi = { version = "0.12.0", default-features=false, features = [
+esp-wifi = { version = "0.12.0", features = [
     "builtin-scheduler",
     #REPLACE esp32c6 mcu
     "esp32c6",

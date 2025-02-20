@@ -87,6 +87,7 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
 # for more networking protocol support see https://crates.io/crates/edge-net
 #ENDIF embassy && wifi
 esp-wifi = { version = "0.12.0", default-features=false, features = [
+    "builtin-scheduler",
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("wifi")
@@ -138,3 +139,12 @@ incremental = false
 lto = 'fat'
 opt-level = 's'
 overflow-checks = false
+
+
+[patch.crates-io]
+esp-alloc       = { git = "https://github.com/esp-rs/esp-hal/", package = "esp-alloc", rev = "b38d5cc8d5a8b19c82ac0724a8188d5c567acfa9" }
+esp-backtrace   = { git = "https://github.com/esp-rs/esp-hal/", package = "esp-backtrace", rev = "b38d5cc8d5a8b19c82ac0724a8188d5c567acfa9" }
+esp-hal         = { git = "https://github.com/esp-rs/esp-hal/", package = "esp-hal", rev = "b38d5cc8d5a8b19c82ac0724a8188d5c567acfa9" }
+esp-hal-embassy = { git = "https://github.com/esp-rs/esp-hal/", package = "esp-hal-embassy", rev = "b38d5cc8d5a8b19c82ac0724a8188d5c567acfa9" }
+esp-println     = { git = "https://github.com/esp-rs/esp-hal/", package = "esp-println", rev = "b38d5cc8d5a8b19c82ac0724a8188d5c567acfa9" }
+esp-wifi        = { git = "https://github.com/esp-rs/esp-hal/", package = "esp-wifi", rev = "b38d5cc8d5a8b19c82ac0724a8188d5c567acfa9" }

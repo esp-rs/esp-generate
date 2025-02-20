@@ -56,7 +56,7 @@ async fn main(spawner: Spawner) {
     let peripherals = esp_hal::init(config);
 
     //IF option("alloc")
-    esp_alloc::heap_allocator!(72 * 1024);
+    esp_alloc::heap_allocator!(size: 72 * 1024);
     //ENDIF
 
     //IF !option("esp32")

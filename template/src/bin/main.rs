@@ -2,7 +2,15 @@
 #![no_std]
 #![no_main]
 
-use esp_hal::{clock::CpuClock, delay::Delay, main};
+use esp_hal::{
+    clock::CpuClock,
+    //IF option("unestable-hal")
+    delay::Delay,
+    //ELSE
+    time::{Duration, Instant},
+    //ENDIF
+    main,
+};
 //IF option("wifi") || option("ble")
 use esp_hal::timer::timg::TimerGroup;
 //ENDIF
@@ -54,7 +62,7 @@ fn main() -> ! {
     //ENDIF
 
     //IF option("alloc")
-    esp_alloc::heap_allocator!(72 * 1024);
+    esp_alloc::heap_allocator!(size: 72 * 1024);
     //ENDIF
 
     //IF option("wifi") || option("ble")
@@ -67,12 +75,19 @@ fn main() -> ! {
     .unwrap();
     //ENDIF
 
+    //IF option("unestable-hal")
     let delay = Delay::new();
+    //ENDIF
     loop {
         //IF option("defmt") || option("log")
         info!("Hello world!");
         //ENDIF
+        //IF option("unestable-hal")
         delay.delay_millis(500);
+        //ELSE
+        let delay_start = Instant::now();
+        while delay_start.elapsed() < Duration::from_millis(500) {}
+        //ENDIF
     }
 
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/v0.23.1/examples/src/bin

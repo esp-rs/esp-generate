@@ -11,6 +11,7 @@ use esp_generate::{
     template::{GeneratorOptionItem, Template},
 };
 use esp_metadata::Chip;
+use log::info;
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -32,6 +33,9 @@ enum Commands {
         /// Actually build projects, instead of just checking them
         #[arg(short, long)]
         build: bool,
+        /// Just print what would be tested
+        #[arg(short, long)]
+        dry: bool,
     },
 
     /// Prints all valid combinations of options for a given chip
@@ -60,7 +64,8 @@ fn main() -> Result<()> {
             chip,
             all_combinations,
             build,
-        } => check(&workspace, chip, all_combinations, build),
+            dry,
+        } => check(&workspace, chip, all_combinations, build, dry),
 
         Commands::Options {
             chip,
@@ -77,15 +82,28 @@ fn main() -> Result<()> {
 // ----------------------------------------------------------------------------
 // CHECK
 
-fn check(workspace: &Path, chip: Chip, all_combinations: bool, build: bool) -> Result<()> {
+fn check(
+    workspace: &Path,
+    chip: Chip,
+    all_combinations: bool,
+    build: bool,
+    dry_run: bool,
+) -> Result<()> {
     if build {
         log::info!("BUILD: {chip}");
     } else {
         log::info!("CHECK: {chip}");
     }
 
+    let to_check = options_for_chip(chip, all_combinations)?;
+    info!("Going to check {:#?}", to_check);
+
+    if dry_run {
+        return Ok(());
+    }
+
     const PROJECT_NAME: &str = "test";
-    for options in options_for_chip(chip, all_combinations)? {
+    for options in to_check {
         log::info!("WITH OPTIONS: {options:?}");
 
         // We will generate the project in a temporary directory, to avoid
@@ -177,7 +195,7 @@ fn is_valid(config: &ActiveConfiguration) -> bool {
 
         // Reject combination if a selection group contains two selected options. This prevents
         // testing mutually exclusive options like defmt and log.
-        if !groups.insert(option.selection_group.clone()) {
+        if !option.selection_group.is_empty() && !groups.insert(option.selection_group.clone()) {
             return false;
         }
     }
@@ -225,7 +243,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
         return Ok(available_options);
     }
 
-    // Return all the combination of availble options
+    // Return all the combination of available options
     let mut result = vec![];
     for i in 0..(1 << available_options.len()) {
         let mut config = ActiveConfiguration {

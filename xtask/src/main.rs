@@ -8,10 +8,13 @@ use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 use esp_generate::{
     config::{find_option, ActiveConfiguration},
-    template::{GeneratorOptionItem, Template},
+    template::{GeneratorOptionCategory, GeneratorOptionItem, Template},
 };
 use esp_metadata::Chip;
 use log::info;
+
+// Unfortunate hard-coded list of non-codegen options
+const IGNORED_CATEGORIES: &[&str] = &["editor", "optional"];
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -207,20 +210,41 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     let options = include_str!("../../template/template.yaml");
     let template = serde_yaml::from_str::<Template>(options)?;
 
-    // Unfortunate hard-coded list of non-codegen options
-    let ignore_categories = ["editor", "optional"];
+    fn collect(all_options: &mut Vec<String>, category: &GeneratorOptionCategory) {
+        for option in &category.options {
+            match option {
+                GeneratorOptionItem::Option(option) => {
+                    all_options.push(option.name.clone());
+                }
+                GeneratorOptionItem::Category(category)
+                    if !IGNORED_CATEGORIES.contains(&category.name.as_str()) =>
+                {
+                    collect(all_options, category)
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut all_options = vec![];
+
+    for option in &template.options {
+        match option {
+            GeneratorOptionItem::Option(option) => {
+                all_options.push(option.name.clone());
+            }
+            GeneratorOptionItem::Category(category)
+                if !IGNORED_CATEGORIES.contains(&category.name.as_str()) =>
+            {
+                collect(&mut all_options, &category)
+            }
+            _ => {}
+        }
+    }
 
     // A list of each option, along with its dependencies
     let mut available_options = vec![];
-    let all_options = template.options.iter().flat_map(|o| match o {
-        GeneratorOptionItem::Option(option) => vec![option.name.clone()],
-        GeneratorOptionItem::Category(category)
-            if !ignore_categories.contains(&category.name.as_str()) =>
-        {
-            category.options()
-        }
-        _ => vec![],
-    });
+
     for option in all_options {
         let option = find_option(&option, &template.options).unwrap();
         let mut config = ActiveConfiguration {

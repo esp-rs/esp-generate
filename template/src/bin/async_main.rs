@@ -56,7 +56,7 @@ async fn main(spawner: Spawner) {
     let peripherals = esp_hal::init(config);
 
     //IF option("alloc")
-    esp_alloc::heap_allocator!(72 * 1024);
+    esp_alloc::heap_allocator!(size: 72 * 1024);
     //ENDIF
 
     //IF !option("esp32")
@@ -91,5 +91,5 @@ async fn main(spawner: Spawner) {
         Timer::after(Duration::from_secs(1)).await;
     }
 
-    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/v0.23.1/examples/src/bin
+    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.0.0-beta.0/examples/src/bin
 }

@@ -79,5 +79,5 @@ fn main() -> ! {
         while delay_start.elapsed() < Duration::from_millis(500) {}
     }
 
-    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/v0.23.1/examples/src/bin
+    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.0.0-beta.0/examples/src/bin
 }

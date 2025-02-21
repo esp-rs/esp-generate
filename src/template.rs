@@ -1,7 +1,7 @@
 use esp_metadata::Chip;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GeneratorOption {
     pub name: String,
     pub display_name: String,
@@ -22,7 +22,7 @@ impl GeneratorOption {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GeneratorOptionCategory {
     pub name: String,
     pub display_name: String,
@@ -44,7 +44,7 @@ impl GeneratorOptionCategory {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum GeneratorOptionItem {
     Category(GeneratorOptionCategory),
     Option(GeneratorOption),

@@ -2,6 +2,7 @@ use esp_metadata::Chip;
 
 use crate::template::{GeneratorOption, GeneratorOptionItem};
 
+#[derive(Debug)]
 pub struct ActiveConfiguration<'c> {
     /// The chip that is configured for
     pub chip: Chip,

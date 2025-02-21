@@ -8,9 +8,13 @@ use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 use esp_generate::{
     config::{find_option, ActiveConfiguration},
-    template::{GeneratorOptionItem, Template},
+    template::{GeneratorOptionCategory, GeneratorOptionItem, Template},
 };
 use esp_metadata::Chip;
+use log::info;
+
+// Unfortunate hard-coded list of non-codegen options
+const IGNORED_CATEGORIES: &[&str] = &["editor", "optional"];
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -32,16 +36,9 @@ enum Commands {
         /// Actually build projects, instead of just checking them
         #[arg(short, long)]
         build: bool,
-    },
-
-    /// Prints all valid combinations of options for a given chip
-    Options {
-        /// Target chip to check
-        #[arg(value_enum)]
-        chip: Chip,
-        /// Verify all possible options combinations
+        /// Just print what would be tested
         #[arg(short, long)]
-        all_combinations: bool,
+        dry_run: bool,
     },
 }
 
@@ -60,32 +57,39 @@ fn main() -> Result<()> {
             chip,
             all_combinations,
             build,
-        } => check(&workspace, chip, all_combinations, build),
-
-        Commands::Options {
-            chip,
-            all_combinations,
-        } => {
-            for options in options_for_chip(chip, all_combinations)? {
-                println!("{:?}", options);
-            }
-            Ok(())
-        }
+            dry_run,
+        } => check(&workspace, chip, all_combinations, build, dry_run),
     }
 }
 
 // ----------------------------------------------------------------------------
 // CHECK
 
-fn check(workspace: &Path, chip: Chip, all_combinations: bool, build: bool) -> Result<()> {
+fn check(
+    workspace: &Path,
+    chip: Chip,
+    all_combinations: bool,
+    build: bool,
+    dry_run: bool,
+) -> Result<()> {
     if build {
         log::info!("BUILD: {chip}");
     } else {
         log::info!("CHECK: {chip}");
     }
 
+    info!("Going to check");
+    let to_check = options_for_chip(chip, all_combinations)?;
+    for check in &to_check {
+        info!("\"{}\"", check.join(", "));
+    }
+
+    if dry_run {
+        return Ok(());
+    }
+
     const PROJECT_NAME: &str = "test";
-    for options in options_for_chip(chip, all_combinations)? {
+    for options in to_check {
         log::info!("WITH OPTIONS: {options:?}");
 
         // We will generate the project in a temporary directory, to avoid
@@ -177,7 +181,7 @@ fn is_valid(config: &ActiveConfiguration) -> bool {
 
         // Reject combination if a selection group contains two selected options. This prevents
         // testing mutually exclusive options like defmt and log.
-        if !groups.insert(option.selection_group.clone()) {
+        if !option.selection_group.is_empty() && !groups.insert(option.selection_group.clone()) {
             return false;
         }
     }
@@ -189,20 +193,41 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     let options = include_str!("../../template/template.yaml");
     let template = serde_yaml::from_str::<Template>(options)?;
 
-    // Unfortunate hard-coded list of non-codegen options
-    let ignore_categories = ["editor", "optional"];
+    fn collect(all_options: &mut Vec<String>, category: &GeneratorOptionCategory) {
+        for option in &category.options {
+            match option {
+                GeneratorOptionItem::Option(option) => {
+                    all_options.push(option.name.clone());
+                }
+                GeneratorOptionItem::Category(category)
+                    if !IGNORED_CATEGORIES.contains(&category.name.as_str()) =>
+                {
+                    collect(all_options, category)
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut all_options = vec![];
+
+    for option in &template.options {
+        match option {
+            GeneratorOptionItem::Option(option) => {
+                all_options.push(option.name.clone());
+            }
+            GeneratorOptionItem::Category(category)
+                if !IGNORED_CATEGORIES.contains(&category.name.as_str()) =>
+            {
+                collect(&mut all_options, &category)
+            }
+            _ => {}
+        }
+    }
 
     // A list of each option, along with its dependencies
     let mut available_options = vec![];
-    let all_options = template.options.iter().flat_map(|o| match o {
-        GeneratorOptionItem::Option(option) => vec![option.name.clone()],
-        GeneratorOptionItem::Category(category)
-            if !ignore_categories.contains(&category.name.as_str()) =>
-        {
-            category.options()
-        }
-        _ => vec![],
-    });
+
     for option in all_options {
         let option = find_option(&option, &template.options).unwrap();
         let mut config = ActiveConfiguration {
@@ -222,10 +247,11 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     available_options.dedup();
 
     if !all_combinations {
+        available_options.push(vec![]);
         return Ok(available_options);
     }
 
-    // Return all the combination of availble options
+    // Return all the combination of available options
     let mut result = vec![];
     for i in 0..(1 << available_options.len()) {
         let mut config = ActiveConfiguration {

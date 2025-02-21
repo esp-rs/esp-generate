@@ -38,17 +38,7 @@ enum Commands {
         build: bool,
         /// Just print what would be tested
         #[arg(short, long)]
-        dry: bool,
-    },
-
-    /// Prints all valid combinations of options for a given chip
-    Options {
-        /// Target chip to check
-        #[arg(value_enum)]
-        chip: Chip,
-        /// Verify all possible options combinations
-        #[arg(short, long)]
-        all_combinations: bool,
+        dry_run: bool,
     },
 }
 
@@ -67,18 +57,8 @@ fn main() -> Result<()> {
             chip,
             all_combinations,
             build,
-            dry,
-        } => check(&workspace, chip, all_combinations, build, dry),
-
-        Commands::Options {
-            chip,
-            all_combinations,
-        } => {
-            for options in options_for_chip(chip, all_combinations)? {
-                println!("{:?}", options);
-            }
-            Ok(())
-        }
+            dry_run,
+        } => check(&workspace, chip, all_combinations, build, dry_run),
     }
 }
 
@@ -98,8 +78,11 @@ fn check(
         log::info!("CHECK: {chip}");
     }
 
+    info!("Going to check");
     let to_check = options_for_chip(chip, all_combinations)?;
-    info!("Going to check {:#?}", to_check);
+    for check in &to_check {
+        info!("\"{}\"", check.join(", "));
+    }
 
     if dry_run {
         return Ok(());
@@ -264,6 +247,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     available_options.dedup();
 
     if !all_combinations {
+        available_options.push(vec![]);
         return Ok(available_options);
     }
 

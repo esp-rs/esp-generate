@@ -10,7 +10,7 @@ name = "project-name"
 path = "./src/bin/main.rs"
 
 [dependencies]
-esp-hal = { version = "0.23.1", features = [
+esp-hal = { git = "https://github.com/jessebraham/esp-hal/", branch = "feature/release", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("unstable-hal")
@@ -33,7 +33,7 @@ rtt-target = { version = "0.6.1" , features = [
     #ENDIF
 ]}
 #ELSE probe-rs
-esp-println = { version = "0.13.0", features = [
+esp-println = { git = "https://github.com/jessebraham/esp-hal/", branch = "feature/release", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("defmt")
@@ -46,7 +46,7 @@ esp-println = { version = "0.13.0", features = [
 #ENDIF
 #ENDIF log-frontend || panic-handler
 #IF option("esp-backtrace")
-esp-backtrace = { version = "0.15.0", features = [
+esp-backtrace = { git = "https://github.com/jessebraham/esp-hal/", branch = "feature/release", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     "exception-handler",
@@ -61,7 +61,7 @@ esp-backtrace = { version = "0.15.0", features = [
 panic-rtt-target = { version = "0.2.0" }
 #ENDIF
 #IF option("alloc")
-esp-alloc = { version = "0.6.0" }
+esp-alloc = { git = "https://github.com/jessebraham/esp-hal/", branch = "feature/release" }
 #ENDIF
 #IF option("wifi") || option("ble")
 embedded-io = "0.6.1"
@@ -86,7 +86,7 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
 #IF option("embassy") && option("wifi")
 # for more networking protocol support see https://crates.io/crates/edge-net
 #ENDIF embassy && wifi
-esp-wifi = { version = "0.12.0", features = [
+esp-wifi = { git = "https://github.com/jessebraham/esp-hal/", branch = "feature/release", features = [
     "builtin-scheduler",
     #REPLACE esp32c6 mcu
     "esp32c6",
@@ -120,7 +120,7 @@ embassy-executor = { version = "0.7.0",  features = [
 ] }
 embassy-time     = { version = "0.4.0",  features = ["generic-queue-8"] }
 #REPLACE esp32c6 mcu
-esp-hal-embassy  = { version = "0.6.0",  features = ["esp32c6"] }
+esp-hal-embassy  = { git = "https://github.com/jessebraham/esp-hal/", branch = "feature/release",  features = ["esp32c6"] }
 static_cell      = { version = "2.1.0",  features = ["nightly"] }
 #ENDIF
 critical-section = "1.2.0"
@@ -138,12 +138,3 @@ incremental = false
 lto = 'fat'
 opt-level = 's'
 overflow-checks = false
-
-
-[patch.crates-io]
-esp-alloc       = { git = "https://github.com/esp-rs/esp-hal/", package = "esp-alloc", rev = "b38d5cc8d5a8b19c82ac0724a8188d5c567acfa9" }
-esp-backtrace   = { git = "https://github.com/esp-rs/esp-hal/", package = "esp-backtrace", rev = "b38d5cc8d5a8b19c82ac0724a8188d5c567acfa9" }
-esp-hal         = { git = "https://github.com/esp-rs/esp-hal/", package = "esp-hal", rev = "b38d5cc8d5a8b19c82ac0724a8188d5c567acfa9" }
-esp-hal-embassy = { git = "https://github.com/esp-rs/esp-hal/", package = "esp-hal-embassy", rev = "b38d5cc8d5a8b19c82ac0724a8188d5c567acfa9" }
-esp-println     = { git = "https://github.com/esp-rs/esp-hal/", package = "esp-println", rev = "b38d5cc8d5a8b19c82ac0724a8188d5c567acfa9" }
-esp-wifi        = { git = "https://github.com/esp-rs/esp-hal/", package = "esp-wifi", rev = "b38d5cc8d5a8b19c82ac0724a8188d5c567acfa9" }

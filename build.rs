@@ -31,10 +31,6 @@ fn main() {
             continue;
         }
 
-        if path.file_name() == Some(std::ffi::OsStr::new("template.yaml")) {
-            continue;
-        }
-
         println!("{:?} {}", path, relative_path);
         let content = std::fs::read_to_string(path).unwrap();
 

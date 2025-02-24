@@ -19,10 +19,9 @@ mod check;
 mod template_files;
 mod tui;
 
-static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
-    let options = include_str!("../template/template.yaml");
-    serde_yaml::from_str(options).unwrap()
-});
+const OPTIONS: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/template/template.toml"));
+
+static TEMPLATE: LazyLock<Template> = LazyLock::new(|| serde_yaml::from_str(OPTIONS).unwrap());
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]

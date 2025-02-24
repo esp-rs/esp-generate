@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.3.0] - 2025-02-24
+
+### Added
+
 - Added a version checker that prints a warn message if not using latest esp-generate version (#87)
 - After generating the project the tool now checks the rust version, espflash version and probe-rs version (#88)
 - Be more helpful in case of common linker errors (#94)
@@ -81,7 +91,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/esp-rs/esp-generate/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/esp-rs/esp-generate/releases/tag/v0.2.2
 [0.2.1]: https://github.com/esp-rs/esp-generate/releases/tag/v0.2.1
 [0.2.0]: https://github.com/esp-rs/esp-generate/releases/tag/v0.2.0

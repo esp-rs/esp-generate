@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The `defmt` feature of `panic-rtt-target` is now enabled when needed. (#137)
+
 ### Removed
 
 ## [0.3.0] - 2025-02-24

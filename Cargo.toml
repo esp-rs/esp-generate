@@ -1,6 +1,6 @@
 [package]
 name         = "esp-generate"
-version      = "0.3.0"
+version      = "0.3.1"
 edition      = "2021"
 rust-version = "1.84"
 description  = "Template generation tool to create no_std applications targeting Espressif's chips"
@@ -23,10 +23,10 @@ default = ["update-informer"]
 update-informer = ["dep:update-informer"]
 
 [dependencies]
-clap            = { version = "4.5.30", features = ["derive"] }
+clap            = { version = "4.5.31", features = ["derive"] }
 crossterm       = "0.28.1"
 env_logger      = "0.11.6"
-esp-metadata    = { version = "0.5.0", features = ["clap"] }
+esp-metadata    = { version = "0.6.0", features = ["clap"] }
 log             = "0.4.26"
 ratatui         = { version = "0.29.0", features = ["crossterm", "unstable"] }
 rhai            = "1.21.0"
@@ -36,5 +36,5 @@ serde           = { version = "1.0.218", features = ["derive"] }
 serde_yaml      = "0.9"
 
 [build-dependencies]
-quote   = "1.0.38"
+quote   = "1.0.39"
 walkdir = "2.5.0"

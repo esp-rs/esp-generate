@@ -27,11 +27,11 @@ log = { version = "0.4.21" }
 #ENDIF
 #IF option("log-frontend") || option("panic-handler")
 #IF option("probe-rs")
-rtt-target = { version = "0.6.1" , features = [
-    #IF option("defmt")
-    "defmt",
-    #ENDIF
-]}
+#IF option("defmt")
+rtt-target = { version = "0.6.1", features = [ "defmt" ] }
+#ELSE
+#+rtt-target = "0.6.1"
+#ENDIF defmt
 #ELSE probe-rs
 esp-println = { version = "0.13.0", features = [
     #REPLACE esp32c6 mcu
@@ -43,7 +43,7 @@ esp-println = { version = "0.13.0", features = [
     "log",
     #ENDIF
 ] }
-#ENDIF
+#ENDIF probe-rs
 #ENDIF log-frontend || panic-handler
 #IF option("esp-backtrace")
 esp-backtrace = { version = "0.15.1", features = [
@@ -58,7 +58,11 @@ esp-backtrace = { version = "0.15.1", features = [
     #ENDIF
 ]}
 #ELIF option("panic-rtt-target")
-panic-rtt-target = { version = "0.2.0" }
+#IF option("defmt")
+panic-rtt-target = { version = "0.2.0", features = ["defmt"] }
+#ELSE
+#+panic-rtt-target = "0.2.0"
+#ENDIF defmt
 #ENDIF
 #IF option("alloc")
 esp-alloc = "0.7.0"

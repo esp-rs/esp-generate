@@ -1,0 +1,63 @@
+//INCLUDEFILE vscode
+{
+    "version": "0.2.0",
+    "configurations": [
+        //IF option("probe-rs")
+        {
+            "type": "probe-rs-debug",
+            "request": "launch",
+            "name": "Launch",
+            "cwd": "${workspaceFolder}",
+            //REPLACE esp32c3 mcu
+            "chip": "esp32c3",
+            "flashingConfig": {
+                "flashingEnabled": true,
+                "haltAfterReset": true,
+                "formatOptions": {
+                    "binaryFormat": "idf"
+                }
+            },
+            "coreConfigs": [
+                {
+                    "coreIndex": 0,
+                    //REPLACE riscv32imc-unknown-none-elf rust_target
+                    "programBinary": "target/riscv32imc-unknown-none-elf/debug/${workspaceFolderBasename}",
+                    //IF option("defmt")
+                    "rttEnabled": true,
+                    "rttChannelFormats": [
+                        {
+                            "channelNumber": 0,
+                            "dataFormat": "Defmt",
+                        }
+                    ],
+                    //ENDIF
+                }
+            ]
+        },
+        {
+            "type": "probe-rs-debug",
+            "request": "attach",
+            "name": "Attach",
+            "cwd": "${workspaceFolder}",
+            //REPLACE esp32c3 mcu
+            "chip": "esp32c3",
+            "coreConfigs": [
+                {
+                    "coreIndex": 0,
+                    //REPLACE riscv32imc-unknown-none-elf rust_target
+                    "programBinary": "target/riscv32imc-unknown-none-elf/debug/${workspaceFolderBasename}",
+                    //IF option("defmt")
+                    "rttEnabled": true,
+                    "rttChannelFormats": [
+                        {
+                            "channelNumber": 0,
+                            "dataFormat": "Defmt",
+                        }
+                    ],
+                    //ENDIF
+                }
+            ]
+        }
+        //ENDIF
+    ]
+}

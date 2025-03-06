@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added option to enable Stack smashing protection (#141)
+- Enabling `probe-rs` and `vscode` together now generates `.vscode/launch.json` (#143)
 
 ### Changed
 

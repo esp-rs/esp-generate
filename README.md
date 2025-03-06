@@ -58,7 +58,7 @@ You can also directly download pre-compiled [release binaries] or use [`cargo-bi
   - `wokwi`: Adds support for Wokwi simulation using [VS Code Wokwi extension].
   - `dev-container`: Adds support for [VS Code Dev Containers] and [GitHub Codespaces].
   - `ci` Adds GitHub Actions support with some basics checks.
-- `editors`: Select the editors that will be used with Rust-Analyzer:
+- `editors`: Select the editor integrations:
    - `helix`: The Helix Editor
    - `vscode`: Visual Studio Code
 

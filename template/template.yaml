@@ -144,12 +144,12 @@ options:
 
   - !Category
     name: editor
-    display_name: Optional editor config files for rust-analyzer
+    display_name: Optional editor integration
     options:
       - !Option
         name: helix
-        display_name: Add rust-analyzer settings for Helix Editor
+        display_name: Add settings for Helix Editor
 
       - !Option
         name: vscode
-        display_name: Add rust-analyzer settings for Visual Studio Code
+        display_name: Add settings for Visual Studio Code

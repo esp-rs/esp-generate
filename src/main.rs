@@ -301,12 +301,17 @@ fn process_file(
 
         // We check for the first line to see if we should include the file
         if first_line {
+            // IGNOREFILE can be used to exclude the file from the output.
+            if trimmed.starts_with("//IGNOREFILE") || trimmed.starts_with("#IGNOREFILE") {
+                return None;
+            }
+
             // Determine if the line starts with a known include directive
-            let cond = trimmed
+            let include = trimmed
                 .strip_prefix("//INCLUDEFILE ")
                 .or_else(|| trimmed.strip_prefix("#INCLUDEFILE "));
 
-            if let Some(cond) = cond {
+            if let Some(cond) = include {
                 if !cond.contains(" ") {
                     let include_file = if let Some(stripped) = cond.strip_prefix("!") {
                         !options.contains(&stripped.to_string())

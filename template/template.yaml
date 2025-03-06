@@ -1,3 +1,4 @@
+#IGNOREFILE
 options:
   - !Option
     name: unstable-hal

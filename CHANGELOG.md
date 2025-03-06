@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The generated project no longer contains `template.yaml`. (#142)
+
 ### Removed
 
 ## [0.3.1] - 2025-03-03

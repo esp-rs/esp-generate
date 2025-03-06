@@ -226,7 +226,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     }
 
     // A list of each option, along with its dependencies
-    let mut available_options = vec![];
+    let mut available_options = vec![vec![]];
 
     for option in all_options {
         let option = find_option(&option, &template.options).unwrap();
@@ -247,7 +247,6 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     available_options.dedup();
 
     if !all_combinations {
-        available_options.push(vec![]);
         return Ok(available_options);
     }
 

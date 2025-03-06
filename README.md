@@ -4,13 +4,6 @@ Template generation tool to create `no_std` applications targeting Espressif's l
 
 At present, this template supports the ESP32, ESP32-C2/C3/C6, ESP32-H2, and ESP32-S2/S3. Support for additional devices will be added as they become available.
 
-> [!NOTE]
->
-> This project is still in the early stages of development. If you encounter any problems, or you would like to see any feature added, please [open an issue] or [start a discussion].
-
-[open an issue]: https://github.com/esp-rs/esp-generate/issues/new
-[start a discussion]: https://github.com/esp-rs/esp-generate/discussions/new/choose
-
 ## Quickstart
 
 To generate a project using this template:
@@ -21,7 +14,9 @@ To generate a project using this template:
 cargo install esp-generate
 ```
 
-2. Generate a project. There are two options:
+You can also directly download pre-compiled [release binaries] or use [`cargo-binstall`].
+
+1. Generate a project. There are two options:
 
    1. Using the Terminal User Interface (TUI):
 
@@ -36,8 +31,12 @@ cargo install esp-generate
       ```
       esp-generate --chip esp32 -o alloc -o wifi your-project
       ```
+      Use the `--headless` flag to avoid using the TUI.
 
       Replace the chip and project name accordingly, and select the desired options using the `-o/--option` flag. For a full list of available options, see [Available Options](#available-options) section of this README.
+
+[release binaries]: https://github.com/esp-rs/esp-generate/releases
+[`cargo-binstall`]: https://github.com/cargo-bins/cargo-binstall
 
 ## Available Options
 

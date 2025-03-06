@@ -11,12 +11,12 @@ To generate a project using this template:
 1. Install `esp-generate`:
 
 ```
-cargo install esp-generate
+cargo install esp-generate --locked
 ```
 
 You can also directly download pre-compiled [release binaries] or use [`cargo-binstall`].
 
-1. Generate a project. There are two options:
+2. Generate a project. There are two options:
 
    1. Using the Terminal User Interface (TUI):
 

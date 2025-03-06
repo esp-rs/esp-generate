@@ -105,40 +105,38 @@ fn check(
         // Ensure that the generated project builds without errors:
         let output = Command::new("cargo")
             .args([if build { "build" } else { "check" }])
+            .env_remove("RUSTUP_TOOLCHAIN")
             .current_dir(project_path.join(PROJECT_NAME))
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .output()?;
         if !output.status.success() {
-            project_dir.close()?;
             bail!("Failed to execute cargo check subcommand")
         }
 
         // Run clippy against the generated project to check for lint errors:
         let output = Command::new("cargo")
             .args(["clippy", "--no-deps", "--", "-Dwarnings"])
+            .env_remove("RUSTUP_TOOLCHAIN")
             .current_dir(project_path.join(PROJECT_NAME))
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .output()?;
         if !output.status.success() {
-            project_dir.close()?;
             bail!("Failed to execute cargo clippy subcommand")
         }
 
         // Ensure that the generated project is correctly formatted:
         let output = Command::new("cargo")
             .args(["fmt", "--", "--check"])
+            .env_remove("RUSTUP_TOOLCHAIN")
             .current_dir(project_path.join(PROJECT_NAME))
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .output()?;
         if !output.status.success() {
-            project_dir.close()?;
             bail!("Failed to execute cargo fmt subcommand")
         }
-
-        project_dir.close()?;
     }
 
     Ok(())

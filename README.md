@@ -45,6 +45,7 @@ You can also directly download pre-compiled [release binaries] or use [`cargo-bi
 - `wifi`: Enables Wi-Fi via the `esp-wifi` crate; requires `alloc`.
 - `ble`: Enables BLE via the `esp-wifi` crate; requires `alloc`.
 - `embassy`: Adds `embassy` framework support.
+- `stack-smashing-protection`: Enables [stack smashing protection](https://doc.rust-lang.org/rustc/exploit-mitigations.html#stack-smashing-protection). Requires nightly Rust.
 - `probe-rs`: Replaces `espflash` with `probe-rs` and enables RTT-based options.
 - `flashing-probe-rs`: Contains options that require `probe-rs`:
   - `defmt`: Adds support for `defmt` printing. Uses `rtt-target` as the RTT implementation.

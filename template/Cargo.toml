@@ -8,6 +8,16 @@ edition = "2021"
 #REPLACE project-name project-name
 name = "project-name"
 path = "./src/bin/main.rs"
+#IF option("embedded-test")
+test = false
+
+[[test]]
+name    = "hello_test"
+harness = false
+
+[lib]
+test = false
+#ENDIF
 
 [dependencies]
 esp-hal = { version = "1.0.0-beta.0", features = [
@@ -122,12 +132,28 @@ embassy-executor = { version = "0.7.0",  features = [
     #+"defmt"
     #ENDIF
 ] }
-embassy-time     = { version = "0.4.0",  features = ["generic-queue-8"] }
+embassy-time     = { version = "0.4.0" }
 #REPLACE esp32c6 mcu
 esp-hal-embassy  = { version = "0.7.0",  features = ["esp32c6"] }
 static_cell      = { version = "2.1.0",  features = ["nightly"] }
 #ENDIF
 critical-section = "1.2.0"
+
+#IF option("embedded-test")
+[dev-dependencies]
+embedded-test = { version = "0.6.0", features = [
+    #IF option("xtensa")
+    "xtensa-semihosting",
+    #ENDIF xtensa
+    #IF option("embassy")
+    "embassy",
+    "external-executor",
+    #ENDIF defmt
+    #IF option("defmt")
+    "defmt",
+    #ENDIF defmt
+] }
+#ENDIF
 
 [profile.dev]
 # Rust debug is too slow.

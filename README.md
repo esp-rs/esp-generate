@@ -50,6 +50,7 @@ You can also directly download pre-compiled [release binaries] or use [`cargo-bi
 - `flashing-probe-rs`: Contains options that require `probe-rs`:
   - `defmt`: Adds support for `defmt` printing. Uses `rtt-target` as the RTT implementation.
   - `panic-rtt-target`: Uses `panic-rtt-target` as the panic handler.
+  - `embedded-test`: Enables embedded-test support and generates a simple demo test case.
 - `flashing-espflash`: Contains options that require `espflash`:
   - `log`: Uses the `log` library to print messages.
   - `defmt`: Adds support for `defmt` printing. Uses `esp-println` and configures `espflash` to decode `defmt` logs.

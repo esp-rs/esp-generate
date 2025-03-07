@@ -2,7 +2,7 @@
 [target.riscv32imac-unknown-none-elf]
 #IF option("probe-rs")
 #REPLACE esp32c6 mcu
-runner = "probe-rs run --chip=esp32c6 --always-print-stacktrace --no-location --catch-hardfault"
+runner = "probe-rs run --chip=esp32c6 --preverify --always-print-stacktrace --no-location --catch-hardfault"
 #ELIF option("defmt")
 #REPLACE esp32c6 mcu
 #+runner = "espflash flash --monitor --chip esp32c6 --log-format defmt"

@@ -1,0 +1,11 @@
+//INCLUDEFILE vscode
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-debug",
+            "command": "cargo build",
+            "type": "shell",
+        }
+    ]
+}

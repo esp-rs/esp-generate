@@ -8,6 +8,7 @@
             "request": "launch",
             "name": "Launch",
             "cwd": "${workspaceFolder}",
+            "preLaunchTask": "build-debug",
             //REPLACE esp32c3 mcu
             "chip": "esp32c3",
             "flashingConfig": {

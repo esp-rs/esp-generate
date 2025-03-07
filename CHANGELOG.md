@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added option to enable Stack smashing protection (#141)
+
 ### Changed
 
 ### Fixed

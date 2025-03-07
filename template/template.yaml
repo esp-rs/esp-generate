@@ -49,6 +49,11 @@ options:
       - unstable-hal
 
   - !Option
+    name: stack-smashing-protection
+    display_name: Enable stack smashing protection.
+    help: Requires nightly Rust.
+
+  - !Option
     name: probe-rs
     display_name: Use probe-rs to flash and monitor instead of espflash.
     help: probe-rs is a debugger that connects to the chips over JTAG. It can be used to flash and

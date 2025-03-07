@@ -27,6 +27,9 @@ rustflags = [
   # NOTE: May negatively impact performance of produced code
   "-C", "force-frame-pointers",
 #ENDIF
+#IF option("stack-smashing-protection")
+  "-Z", "stack-protector=all",
+#ENDIF
 ]
 
 #REPLACE riscv32imac-unknown-none-elf rust_target

@@ -114,6 +114,20 @@ fn check(
             bail!("Failed to execute cargo check subcommand")
         }
 
+        // Ensure that the generated test project builds also:
+        if options.iter().any(|o| o == "embedded-test") {
+            let output = Command::new("cargo")
+                .args(["test", "--no-run"])
+                .env_remove("RUSTUP_TOOLCHAIN")
+                .current_dir(project_path.join(PROJECT_NAME))
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .output()?;
+            if !output.status.success() {
+                bail!("Failed to execute cargo test subcommand")
+            }
+        }
+
         // Run clippy against the generated project to check for lint errors:
         let output = Command::new("cargo")
             .args(["clippy", "--no-deps", "--", "-Dwarnings"])

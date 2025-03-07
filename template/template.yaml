@@ -95,6 +95,11 @@ options:
         selection_group: panic-handler
         requires:
           - probe-rs
+      - !Option
+        name: embedded-test
+        display_name: Enable embedded-test support.
+        requires:
+          - probe-rs
 
   - !Category
     name: flashing-espflash

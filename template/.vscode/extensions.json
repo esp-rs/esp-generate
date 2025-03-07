@@ -6,6 +6,9 @@
         //IF option("wokwi")
         "Wokwi.wokwi-vscode",
         //ENDIF
+        //IF option("probe-rs")
+        "probe-rs.probe-rs-debugger",
+        //ENDIF
         "fill-labs.dependi"
     ]
 }

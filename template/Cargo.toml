@@ -132,7 +132,7 @@ embassy-executor = { version = "0.7.0",  features = [
     #+"defmt"
     #ENDIF
 ] }
-embassy-time     = { version = "0.4.0" }
+embassy-time     = "0.4.0"
 #REPLACE esp32c6 mcu
 esp-hal-embassy  = { version = "0.7.0",  features = ["esp32c6"] }
 static_cell      = { version = "2.1.0",  features = ["nightly"] }

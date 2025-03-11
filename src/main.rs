@@ -296,7 +296,8 @@ fn process_file(
         options_clone.contains(&cond)
     });
 
-    for line in contents.lines() {
+    for (line_no, line) in contents.lines().enumerate() {
+        let line_no = line_no + 1;
         let trimmed: &str = line.trim();
 
         // We check for the first line to see if we should include the file
@@ -417,7 +418,9 @@ fn process_file(
             let prev = include.pop();
             assert!(
                 matches!(prev, Some(BlockKind::IfElse(_, _))),
-                "ENDIF without IF"
+                "ENDIF without IF in {}:{}",
+                file_path,
+                line_no
             );
         // Trim #+ and //+
         } else if include.iter().all(|v| v.include_line()) {

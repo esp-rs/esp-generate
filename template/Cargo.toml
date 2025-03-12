@@ -81,9 +81,12 @@ esp-alloc = "0.7.0"
 embedded-io = "0.6.1"
 #IF option("embassy")
 embedded-io-async = "0.6.1"
-#ENDIF embassy
 #IF option("wifi")
 embassy-net = { version = "0.6.0", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet"] }
+# for more networking protocol support see https://crates.io/crates/edge-net
+#ENDIF wifi
+#ENDIF embassy
+#IF option("wifi")
 smoltcp = { version = "0.12.0", default-features = false, features = [
     "medium-ethernet",
     "multicast",
@@ -95,17 +98,21 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
     "socket-tcp",
     "socket-udp",
     "socket-icmp",
+    #IF option("defmt")
+    #+"defmt",
+    #ENDIF
+    #IF option("log")
+    "log",
+    #ENDIF
 ] }
 #ENDIF wifi
-#IF option("embassy") && option("wifi")
-# for more networking protocol support see https://crates.io/crates/edge-net
-#ENDIF embassy && wifi
 esp-wifi = { version = "0.13.0", features = [
     "builtin-scheduler",
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("wifi")
     "wifi",
+    "smoltcp",
     #ENDIF
     #IF option("ble")
     "ble",
@@ -116,7 +123,8 @@ esp-wifi = { version = "0.13.0", features = [
     "esp-alloc",
     #IF option("defmt")
     #+"defmt",
-    #ELSE
+    #ENDIF
+    #IF option("log")
     "log",
     #ENDIF
 ] }

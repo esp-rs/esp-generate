@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enabling `probe-rs` and `vscode` together now generates `.vscode/launch.json` (#143)
 - Provide hint when esp-wifi has no scheduler (#145)
 - Generate a simple `embedded-test` test suite (#144)
+- Enable `esp-wifi/smoltcp` when the dependency is present (#146)
 
 ### Changed
 

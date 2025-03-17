@@ -1,14 +1,16 @@
 use std::{error::Error, io};
 
+use crate::append_list_as_sentence;
+
+use esp_generate::{
+    config::{ActiveConfiguration, Relationships},
+    template::GeneratorOptionItem,
+};
+
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
-};
-use esp_generate::{
-    append_list_as_sentence,
-    config::{ActiveConfiguration, Relationships},
-    template::GeneratorOptionItem,
 };
 use esp_metadata::Chip;
 use ratatui::{prelude::*, style::palette::tailwind, widgets::*};

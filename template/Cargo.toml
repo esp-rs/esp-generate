@@ -29,6 +29,9 @@ esp-hal = { version = "1.0.0-beta.0", features = [
     #IF option("defmt")
     #+"defmt",
     #ENDIF
+    #IF option("log")
+    "log",
+    #ENDIF
 ] }
 #IF option("defmt")
 #+defmt = "0.3.10"
@@ -69,20 +72,43 @@ esp-backtrace = { version = "0.15.1", features = [
 ]}
 #ELIF option("panic-rtt-target")
 #IF option("defmt")
-panic-rtt-target = { version = "0.2.0", features = ["defmt"] }
+#+panic-rtt-target = { version = "0.2.0", features = ["defmt"] }
 #ELSE
-#+panic-rtt-target = "0.2.0"
+panic-rtt-target = "0.2.0"
 #ENDIF defmt
-#ENDIF
+#ENDIF esp-backtrace
 #IF option("alloc")
+#IF option("defmt")
+#+esp-alloc = { version = "0.7.0", features = ["defmt"] }
+#ELSE
 esp-alloc = "0.7.0"
-#ENDIF
+#ENDIF defmt
+#ENDIF alloc
 #IF option("wifi") || option("ble")
+#IF option("defmt")
+#+embedded-io = { version = "0.6.1", features = ["defmt"] }
+#ELSE
 embedded-io = "0.6.1"
+#ENDIF defmt
 #IF option("embassy")
+#IF option("defmt")
+#+embedded-io-async = { version = "0.6.1", features = ["defmt"] }
+#ELSE
 embedded-io-async = "0.6.1"
+#ENDIF defmt
 #IF option("wifi")
-embassy-net = { version = "0.6.0", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet"] }
+embassy-net = { version = "0.6.0", features = [
+    "tcp",
+    "udp",
+    "dhcpv4",
+    "medium-ethernet",
+    #IF option("defmt")
+    #+"defmt",
+    #ENDIF
+    #IF option("log")
+    "log",
+    #ENDIF
+] }
 # for more networking protocol support see https://crates.io/crates/edge-net
 #ENDIF wifi
 #ENDIF embassy
@@ -136,12 +162,31 @@ esp-wifi = { version = "0.13.0", features = [
 embassy-executor = { version = "0.7.0",  features = [
     "task-arena-size-20480",
     #IF option("defmt")
-    #+"defmt"
+    #+"defmt",
+    #ENDIF
+    #IF option("log")
+    "log",
     #ENDIF
 ] }
-embassy-time     = "0.4.0"
-#REPLACE esp32c6 mcu
-esp-hal-embassy  = { version = "0.7.0",  features = ["esp32c6"] }
+#IF option("defmt")
+#+embassy-time     = { version = "0.4.0", features = ["defmt"] }
+#ENDIF
+#IF option("log")
+embassy-time     = { version = "0.4.0", features = ["log"] }
+#ENDIF
+#IF !option("defmt") && !option("log")
+#+embassy-time     = "0.4.0"
+#ENDIF
+esp-hal-embassy  = { version = "0.7.0",  features = [
+    #REPLACE esp32c6 mcu
+    "esp32c6",
+    #IF option("defmt")
+    #+"defmt",
+    #ENDIF
+    #IF option("log")
+    "log",
+    #ENDIF
+] }
 static_cell      = { version = "2.1.0",  features = ["nightly"] }
 #ENDIF
 critical-section = "1.2.0"
@@ -151,16 +196,19 @@ critical-section = "1.2.0"
 embedded-test = { version = "0.6.0", features = [
     #IF option("xtensa")
     "xtensa-semihosting",
-    #ENDIF xtensa
+    #ENDIF
     #IF option("embassy")
     "embassy",
     "external-executor",
-    #ENDIF defmt
+    #ENDIF
     #IF option("defmt")
-    "defmt",
-    #ENDIF defmt
+    #+"defmt",
+    #ENDIF
+    #IF option("log")
+    "log",
+    #ENDIF
 ] }
-#ENDIF
+#ENDIF embedded-test
 
 [profile.dev]
 # Rust debug is too slow.

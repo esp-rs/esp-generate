@@ -128,7 +128,6 @@ esp-wifi = { version = "0.13.0", features = [
     "log",
     #ENDIF
 ] }
-heapless = { version = "0.8.0", default-features = false }
 #IF option("ble")
 #+bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
 #ENDIF

@@ -299,6 +299,7 @@ fn generate(
 ) -> Result<()> {
     let mut args = vec![
         "run",
+        "--bin=esp-generate",
         "--no-default-features",
         "--",
         "--headless",

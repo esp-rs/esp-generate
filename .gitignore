@@ -1,4 +1,4 @@
 **/target
-src/template_files.rs
+src/bin/esp-generate/template_files.rs
 template/Cargo.lock
 /.vscode

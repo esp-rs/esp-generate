@@ -48,6 +48,10 @@ fn main() {
         ];
     };
 
-    std::fs::write("src/template_files.rs", code.to_string().as_bytes()).unwrap();
+    std::fs::write(
+        "src/bin/esp-generate/template_files.rs",
+        code.to_string().as_bytes(),
+    )
+    .unwrap();
     println!("cargo:rerun-if-changed=template");
 }

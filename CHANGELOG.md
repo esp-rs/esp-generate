@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Generate a simple `embedded-test` test suite (#144)
 - Enable `esp-wifi/smoltcp` when the dependency is present (#146)
 - Enable `defmt` or `log` on all crates that know them (#148)
+- Have a second binary `esp-config` for changing config options (#149)
 
 ### Changed
 

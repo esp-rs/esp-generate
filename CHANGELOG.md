@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provide hint when esp-wifi has no scheduler (#145)
 - Generate a simple `embedded-test` test suite (#144)
 - Enable `esp-wifi/smoltcp` when the dependency is present (#146)
+- Enable `defmt` or `log` on all crates that know them (#148)
 
 ### Changed
 
@@ -22,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The generated project no longer contains `template.yaml`. (#142)
 
 ### Removed
+
+- `heapless` has been removed from dependencies. (#148)
 
 ## [0.3.1] - 2025-03-03
 

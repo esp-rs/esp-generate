@@ -1,4 +1,10 @@
-use std::{collections::HashMap, error::Error, fmt::Display, ops::Range, path::PathBuf};
+use std::{
+    collections::HashMap,
+    error::Error,
+    fmt::Display,
+    ops::Range,
+    path::{Path, PathBuf},
+};
 
 use clap::Parser;
 use env_logger::{Builder, Env};
@@ -54,7 +60,7 @@ impl Display for Value {
             match self {
                 Value::Bool(v) => format!("{v}"),
                 Value::Integer(i) => format!("{i}"),
-                Value::String(s) => format!("{s}"),
+                Value::String(s) => s.to_string(),
             }
         )
         .ok();
@@ -150,7 +156,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn apply_config(path: &PathBuf, updated_cfg: Vec<CrateConfig>) -> Result<(), Box<dyn Error>> {
+fn apply_config(path: &Path, updated_cfg: Vec<CrateConfig>) -> Result<(), Box<dyn Error>> {
     let config_toml = path.join(".cargo/config.toml");
 
     let mut config = std::fs::read_to_string(&config_toml)?
@@ -188,7 +194,7 @@ fn apply_config(path: &PathBuf, updated_cfg: Vec<CrateConfig>) -> Result<(), Box
     Ok(())
 }
 
-fn parse_configs(path: &PathBuf) -> Result<Vec<CrateConfig>, Box<dyn Error>> {
+fn parse_configs(path: &Path) -> Result<Vec<CrateConfig>, Box<dyn Error>> {
     // we cheat by just trying to find the latest version of the config files
     // this should be fine since we force a fresh build before
     let mut candidates: Vec<_> = WalkDir::new(path.join("target"))
@@ -290,5 +296,5 @@ fn check_build_after_changes(path: &PathBuf) -> Option<String> {
         }
     }
 
-    return Some(errors);
+    Some(errors)
 }

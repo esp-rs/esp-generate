@@ -1,4 +1,4 @@
-use std::{error::Error, i128, io};
+use std::{error::Error, io};
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -172,7 +172,7 @@ pub struct App<'a> {
     initial_message: Option<String>,
 }
 
-impl<'a> App<'a> {
+impl App<'_> {
     pub fn new(errors_to_show: Option<String>, repository: Repository) -> Self {
         let mut initial_state = ListState::default();
         initial_state.select(Some(0));
@@ -223,7 +223,7 @@ impl<'a> App<'a> {
     }
 }
 
-impl<'a> App<'a> {
+impl App<'_> {
     pub fn run(
         &mut self,
         mut terminal: Terminal<impl Backend>,
@@ -271,35 +271,19 @@ impl<'a> App<'a> {
                                     let invalid = match constraint {
                                         crate::Constraint::NegativeInteger => {
                                             let val = text.parse::<i128>().unwrap_or(i128::MAX);
-                                            if val < 0 {
-                                                false
-                                            } else {
-                                                true
-                                            }
+                                            val >= 0
                                         }
                                         crate::Constraint::NonNegativeInteger => {
                                             let val = text.parse::<i128>().unwrap_or(i128::MIN);
-                                            if val >= 0 {
-                                                false
-                                            } else {
-                                                true
-                                            }
+                                            val < 0
                                         }
                                         crate::Constraint::PositiveInteger => {
                                             let val = text.parse::<i128>().unwrap_or(0);
-                                            if val >= 1 {
-                                                false
-                                            } else {
-                                                true
-                                            }
+                                            val < 1
                                         }
                                         crate::Constraint::IntegerInRange(range) => {
                                             let val = text.parse::<i128>().unwrap_or(i128::MIN);
-                                            if range.contains(&val) {
-                                                false
-                                            } else {
-                                                true
-                                            }
+                                            !range.contains(&val)
                                         }
                                         _ => false,
                                     };
@@ -346,80 +330,76 @@ impl<'a> App<'a> {
                         }
                         _ => (),
                     }
-                } else {
-                    if key.kind == KeyEventKind::Press {
-                        use KeyCode::*;
+                } else if key.kind == KeyEventKind::Press {
+                    use KeyCode::*;
 
-                        if self.confirm_quit {
-                            match key.code {
-                                Char('y') | Char('Y') => return Ok(None),
-                                _ => self.confirm_quit = false,
-                            }
-                            continue;
-                        }
-
+                    if self.confirm_quit {
                         match key.code {
-                            Char('q') => self.confirm_quit = true,
-                            Char('s') | Char('S') => {
-                                return Ok(Some(self.repository.configs.clone()))
-                            }
-                            Esc => {
-                                if self.state.len() == 1 {
-                                    self.confirm_quit = true;
-                                } else {
-                                    self.repository.up();
-                                    self.exit_menu();
-                                }
-                            }
-                            Char('h') | Left => {
+                            Char('y') | Char('Y') => return Ok(None),
+                            _ => self.confirm_quit = false,
+                        }
+                        continue;
+                    }
+
+                    match key.code {
+                        Char('q') => self.confirm_quit = true,
+                        Char('s') | Char('S') => return Ok(Some(self.repository.configs.clone())),
+                        Esc => {
+                            if self.state.len() == 1 {
+                                self.confirm_quit = true;
+                            } else {
                                 self.repository.up();
                                 self.exit_menu();
                             }
-                            Char('l') | Char(' ') | Right | Enter => {
-                                let selected = self.selected();
-                                if self.repository.is_option(selected) {
-                                    let current = self.repository.current_level()[selected].value();
-                                    let constraint =
-                                        self.repository.current_level()[selected].constraint();
+                        }
+                        Char('h') | Left => {
+                            self.repository.up();
+                            self.exit_menu();
+                        }
+                        Char('l') | Char(' ') | Right | Enter => {
+                            let selected = self.selected();
+                            if self.repository.is_option(selected) {
+                                let current = self.repository.current_level()[selected].value();
+                                let constraint =
+                                    self.repository.current_level()[selected].constraint();
 
-                                    match current {
-                                        crate::Value::Bool(value) => self
-                                            .repository
-                                            .set_current(selected, crate::Value::Bool(!value)),
-                                        crate::Value::Integer(value) => {
-                                            self.textarea = make_text_area(&format!("{value}"));
-                                            self.editing_constraints = Some(constraint);
+                                match current {
+                                    crate::Value::Bool(value) => self
+                                        .repository
+                                        .set_current(selected, crate::Value::Bool(!value)),
+                                    crate::Value::Integer(value) => {
+                                        self.textarea = make_text_area(&format!("{value}"));
+                                        self.editing_constraints = Some(constraint);
+                                        self.editing = true;
+                                    }
+                                    crate::Value::String(s) => match constraint {
+                                        crate::Constraint::Enumeration(items) => {
+                                            let selected_option =
+                                                items.iter().position(|v| *v == s);
+                                            self.list_popup = make_popup(items);
+                                            self.list_popup_state = ListState::default();
+                                            self.list_popup_state.select(selected_option);
+                                            self.showing_selection_popup = true;
+                                        }
+                                        _ => {
+                                            self.textarea = make_text_area(&s);
+                                            self.editing_constraints = None;
                                             self.editing = true;
                                         }
-                                        crate::Value::String(s) => match constraint {
-                                            crate::Constraint::Enumeration(items) => {
-                                                let selected_option =
-                                                    items.iter().position(|v| *v == s);
-                                                self.list_popup = make_popup(items);
-                                                self.list_popup_state = ListState::default();
-                                                self.list_popup_state.select(selected_option);
-                                                self.showing_selection_popup = true;
-                                            }
-                                            _ => {
-                                                self.textarea = make_text_area(&s);
-                                                self.editing_constraints = None;
-                                                self.editing = true;
-                                            }
-                                        },
-                                    }
-                                } else {
-                                    self.repository.enter_group(self.selected());
-                                    self.enter_menu();
+                                    },
                                 }
+                            } else {
+                                self.repository.enter_group(self.selected());
+                                self.enter_menu();
                             }
-                            Char('j') | Down => {
-                                self.select_next();
-                            }
-                            Char('k') | Up => {
-                                self.select_previous();
-                            }
-                            _ => {}
                         }
+                        Char('j') | Down => {
+                            self.select_next();
+                        }
+                        Char('k') | Up => {
+                            self.select_previous();
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -462,7 +442,7 @@ fn make_popup<'a>(items: Vec<String>) -> List<'a> {
         .repeat_highlight_symbol(true)
 }
 
-impl<'a> Widget for &mut App<'a> {
+impl Widget for &mut App<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let vertical = Layout::vertical([
             Constraint::Length(2),
@@ -522,7 +502,7 @@ impl<'a> Widget for &mut App<'a> {
     }
 }
 
-impl<'a> App<'a> {
+impl App<'_> {
     fn render_title(&self, area: Rect, buf: &mut Buffer) {
         Paragraph::new("esp-config")
             .bold()

@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The generated project no longer contains `template.yaml`. (#142)
+- Fixed parsing version output of old `espflash`. (#152)
 
 ### Removed
 

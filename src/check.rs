@@ -2,7 +2,7 @@ use core::str;
 
 use esp_metadata::Chip;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct Version {
     major: u8,
     minor: u8,
@@ -17,8 +17,9 @@ enum CheckResult {
 }
 
 pub fn check(chip: Chip) {
+    // TODO: check +nightly if needed
     let rust_version = get_version(
-        "cargo",
+        "rustc",
         if chip.is_xtensa() {
             &["+esp"]
         } else {
@@ -57,31 +58,48 @@ fn get_version(cmd: &str, args: &[&str]) -> Option<Version> {
         .arg("--version")
         .output();
 
-    match output {
-        Ok(output) => {
-            if output.status.success() {
-                if let Ok(output) = str::from_utf8(&output.stdout) {
-                    let mut parts = output.split_whitespace();
-                    let _name = parts.next();
-                    let version = parts.next();
-                    if let Some(version) = version {
-                        let mut version = version.split(&['.', '-', '+']);
-                        let major = version.next().unwrap().parse::<u8>().unwrap();
-                        let minor = version.next().unwrap().parse::<u8>().unwrap();
-                        let patch = version.next().unwrap().parse::<u8>().unwrap();
-                        return Some(Version {
-                            major,
-                            minor,
-                            patch,
-                        });
-                    }
-                }
-            }
+    let Ok(output) = output else {
+        return None;
+    };
 
-            None
-        }
-        Err(_) => None,
+    if !output.status.success() {
+        return None;
     }
+
+    str::from_utf8(&output.stdout)
+        .ok()
+        .and_then(|s| extract_version(cmd, s))
+}
+
+fn extract_version(cmd: &str, output: &str) -> Option<Version> {
+    for line in output.lines() {
+        if let Some(version) = try_extract_version(cmd, line) {
+            return Some(version);
+        }
+    }
+
+    None
+}
+
+fn try_extract_version(cmd: &str, line: &str) -> Option<Version> {
+    let mut parts = line.split_whitespace();
+    let name = parts.next();
+
+    if name != Some(cmd) {
+        return None;
+    }
+
+    let version = parts.next()?;
+
+    let mut version = version.split(&['.', '-', '+']);
+    let major = version.next()?.parse::<u8>().ok()?;
+    let minor = version.next()?.parse::<u8>().ok()?;
+    let patch = version.next()?.parse::<u8>().ok()?;
+    Some(Version {
+        major,
+        minor,
+        patch,
+    })
 }
 
 #[cfg(test)]
@@ -120,5 +138,22 @@ mod tests {
         assert_eq!(check_version(version, 1, 84, 1), CheckResult::WrongVersion);
         // Not found
         assert_eq!(check_version(None, 1, 84, 0), CheckResult::NotFound);
+    }
+
+    #[test]
+    fn test_extract_version() {
+        let input = r#"New version of espflash is available: v3.3.0
+
+espflash 1.7.0"#;
+
+        let output = extract_version("espflash", input);
+        assert_eq!(
+            output,
+            Some(Version {
+                major: 1,
+                minor: 7,
+                patch: 0
+            })
+        );
     }
 }

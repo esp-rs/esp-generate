@@ -129,11 +129,21 @@ fn main() -> Result<(), Box<dyn Error>> {
         tui::restore_terminal()?;
         // done with the TUI
 
-        if let Some(selected) = selected {
-            selected
-        } else {
+        let Some(selected) = selected else {
             process::exit(0);
-        }
+        };
+
+        println!(
+            "Selected options: --chip {}{}",
+            args.chip,
+            selected.iter().fold(String::new(), |mut acc, s| {
+                use std::fmt::Write;
+                write!(&mut acc, " -o {s}").unwrap();
+                acc
+            })
+        );
+
+        selected
     } else {
         args.option.clone()
     };

@@ -86,13 +86,13 @@ esp-alloc = "0.7.0"
 #ENDIF alloc
 #IF option("wifi") || option("ble")
 #IF option("defmt")
-#+embedded-io = { version = "0.6.1", features = ["defmt"] }
+#+embedded-io = { version = "0.6.1", features = ["defmt-03"] }
 #ELSE
 embedded-io = "0.6.1"
 #ENDIF defmt
 #IF option("embassy")
 #IF option("defmt")
-#+embedded-io-async = { version = "0.6.1", features = ["defmt"] }
+#+embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
 #ELSE
 embedded-io-async = "0.6.1"
 #ENDIF defmt

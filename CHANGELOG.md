@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enable `esp-wifi/smoltcp` when the dependency is present (#146)
 - Enable `defmt` or `log` on all crates that know them (#148)
 - The tool now prints the selected options (#154)
+- Enable the `clippy::mem_forget` lint since mem::forget is generall not safe to use with esp-hal. (#161)
 
 ### Changed
 

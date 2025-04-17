@@ -73,6 +73,10 @@ jobs:
       - name: Generate and check project
         run: cargo ${{ env.TOOLCHAIN }} xtask check ${{ matrix.chip }} ${{ fromJSON('["", "--all-combinations"]')[inputs.all_combinations || github.event_name == 'schedule'] }} ${{ fromJSON('["", "--build"]')[inputs.build || github.event_name == 'schedule'] }}
 
+      - if: github.event_name == 'schedule'
+        name: Run cargo-pacakge
+        run: cargo package --allow-dirty
+
       - if: ${{ github.event_name == 'schedule' && failure() }}
         name: Create or Update GitHub Issue
         env:
@@ -88,6 +92,7 @@ jobs:
               --body "Sheduled CI Workflow Failed! [View the failed job](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})." \
               --label "all-combinations"
           fi
+
   # --------------------------------------------------------------------------
   # Test
 

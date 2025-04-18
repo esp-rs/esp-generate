@@ -47,7 +47,13 @@ struct Args {
     #[arg(short, long, help = {
         let mut all_options = Vec::new();
         for option in TEMPLATE.options.iter() {
-            all_options.extend(option.options());
+            for opt in option.options() {
+                // Remove duplicates, which usually are chip-specific variations of an option.
+                // An example of this is probe-rs.
+                if !all_options.contains(&opt) {
+                    all_options.push(opt);
+                }
+            }
         }
         format!("Generation options: {} - For more information regarding the different options check the esp-generate README.md (https://github.com/esp-rs/esp-generate/blob/main/README.md).",all_options.join(", "))
     })]

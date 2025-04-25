@@ -57,6 +57,8 @@ fn main() -> ! {
     esp_println::logger::init_logger_from_env();
     //ENDIF
 
+    esp_bootloader_esp_idf::esp_app_desc!();
+
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     //IF option("wifi") || option("ble-bleps")
     let peripherals = esp_hal::init(config);

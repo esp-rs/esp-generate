@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The tool now prints the selected options (#154)
 - Enable the `clippy::mem_forget` lint since mem::forget is generally not safe to use with esp-hal. (#161)
 - Added option to enable integration with the `trouble` BLE library (#179)
+- Added `esp-bootloader-esp-idf` package (#166)
 
 ### Changed
 

@@ -40,6 +40,9 @@ use esp_backtrace as _;
 extern crate alloc;
 //ENDIF
 
+// needed for esp-idf bootloader support
+esp_bootloader_esp_idf::esp_app_desc!();
+
 #[main]
 fn main() -> ! {
     //REPLACE generate-version generate-version
@@ -54,8 +57,6 @@ fn main() -> ! {
     //ELIF option("log")
     esp_println::logger::init_logger_from_env();
     //ENDIF
-
-    esp_bootloader_esp_idf::esp_app_desc!();
 
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     //IF option("wifi") || option("ble")

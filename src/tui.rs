@@ -13,26 +13,6 @@ use esp_generate::{
 use esp_metadata::Chip;
 use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 
-const TODO_HEADER_BG: Color = tailwind::BLUE.c950;
-const NORMAL_ROW_COLOR: Color = tailwind::SLATE.c950;
-const HELP_ROW_COLOR: Color = tailwind::SLATE.c800;
-const DISABLED_STYLE_FG: Color = tailwind::GRAY.c600;
-const TEXT_COLOR: Color = tailwind::SLATE.c200;
-
-const SELECTED_ACTIVE_BACKGROUND: Color = tailwind::BLUE.c950;
-const SELECTED_INACTIVE_TEXT: Color = tailwind::SLATE.c400;
-const SELECTED_INACTIVE_BACKGROUND: Color = tailwind::GRAY.c800;
-
-const SELECTED_ACTIVE_STYLE: Style = Style::new()
-    .add_modifier(Modifier::BOLD)
-    .fg(TEXT_COLOR)
-    .bg(SELECTED_ACTIVE_BACKGROUND);
-
-const SELECTED_INACTIVE_STYLE: Style = Style::new()
-    .add_modifier(Modifier::BOLD)
-    .fg(SELECTED_INACTIVE_TEXT)
-    .bg(SELECTED_INACTIVE_BACKGROUND);
-
 type AppResult<T> = Result<T, Box<dyn Error>>;
 
 pub struct Repository<'app> {
@@ -115,7 +95,7 @@ impl<'app> Repository<'app> {
         self.path.pop();
     }
 
-    fn current_level_desc(&self, width: u16) -> Vec<(bool, String)> {
+    fn current_level_desc(&self, width: u16, style: &UiElements) -> Vec<(bool, String)> {
         let level = self.current_level();
         let level_active = self.current_level_is_active();
 
@@ -129,11 +109,11 @@ impl<'app> Repository<'app> {
                 };
                 let indicator =
                     if self.config.selected.iter().any(|o| o == v.name()) && level_active {
-                        "✅"
+                        style.selected
                     } else if v.is_category() {
-                        "▶️"
+                        style.category
                     } else {
-                        "  "
+                        style.unselected
                     };
                 let padding = width as usize - v.title().len() - 4; // 2 spaces + the indicator
                 (
@@ -165,10 +145,80 @@ pub fn restore_terminal() -> AppResult<()> {
     Ok(())
 }
 
+struct UiElements {
+    selected: &'static str,
+    unselected: &'static str,
+    category: &'static str,
+}
+
+struct Colors {
+    app_background: Color,
+    header_bg: Color,
+    normal_row_color: Color,
+    help_row_color: Color,
+    disabled_style_fg: Color,
+    text_color: Color,
+
+    selected_active_style: Style,
+    selected_inactive_style: Style,
+}
+
+impl Colors {
+    const RGB: Self = Self {
+        app_background: tailwind::SLATE.c950,
+        header_bg: tailwind::BLUE.c950,
+        normal_row_color: tailwind::SLATE.c950,
+        help_row_color: tailwind::SLATE.c800,
+        disabled_style_fg: tailwind::GRAY.c600,
+        text_color: tailwind::SLATE.c200,
+
+        selected_active_style: Style::new()
+            .add_modifier(Modifier::BOLD)
+            .fg(tailwind::SLATE.c200)
+            .bg(tailwind::BLUE.c950),
+        selected_inactive_style: Style::new()
+            .add_modifier(Modifier::BOLD)
+            .fg(tailwind::SLATE.c400)
+            .bg(tailwind::GRAY.c800),
+    };
+    const ANSI: Self = Self {
+        app_background: Color::Black,
+        header_bg: Color::DarkGray,
+        normal_row_color: Color::Black,
+        help_row_color: Color::DarkGray,
+        disabled_style_fg: Color::DarkGray,
+        text_color: Color::Gray,
+
+        selected_active_style: Style::new()
+            .add_modifier(Modifier::BOLD)
+            .fg(Color::White)
+            .bg(Color::Blue),
+        selected_inactive_style: Style::new()
+            .add_modifier(Modifier::BOLD)
+            .fg(Color::DarkGray)
+            .bg(Color::LightBlue),
+    };
+}
+
+impl UiElements {
+    const FANCY: Self = Self {
+        selected: "✅",
+        unselected: "  ",
+        category: "▶️",
+    };
+    const FALLBACK: Self = Self {
+        selected: "*",
+        unselected: " ",
+        category: ">",
+    };
+}
+
 pub struct App<'app> {
     state: Vec<ListState>,
     repository: Repository<'app>,
     confirm_quit: bool,
+    ui_elements: UiElements,
+    colors: Colors,
 }
 
 impl<'app> App<'app> {
@@ -176,10 +226,18 @@ impl<'app> App<'app> {
         let mut initial_state = ListState::default();
         initial_state.select(Some(0));
 
+        let (ui_elements, colors) = match std::env::var("TERM_PROGRAM").as_deref() {
+            Ok("vscode") => (UiElements::FALLBACK, Colors::RGB),
+            Ok("Apple_Terminal") => (UiElements::FALLBACK, Colors::ANSI),
+            _ => (UiElements::FANCY, Colors::RGB),
+        };
+
         Self {
             repository,
             state: vec![initial_state],
             confirm_quit: false,
+            ui_elements,
+            colors,
         }
     }
     pub fn selected(&self) -> usize {
@@ -299,6 +357,7 @@ impl App<'_> {
         Paragraph::new("esp-generate")
             .bold()
             .centered()
+            .bg(self.colors.app_background)
             .render(area, buf);
     }
 
@@ -307,13 +366,13 @@ impl App<'_> {
         // list (inner).
         let outer_block = Block::default()
             .borders(Borders::NONE)
-            .fg(TEXT_COLOR)
-            .bg(TODO_HEADER_BG)
+            .fg(self.colors.text_color)
+            .bg(self.colors.header_bg)
             .title_alignment(Alignment::Center);
         let inner_block = Block::default()
             .borders(Borders::NONE)
-            .fg(TEXT_COLOR)
-            .bg(NORMAL_ROW_COLOR);
+            .fg(self.colors.text_color)
+            .bg(self.colors.normal_row_color);
 
         // We get the inner area from outer_block. We'll use this area later to render
         // the table.
@@ -326,13 +385,13 @@ impl App<'_> {
         // Iterate through all elements in the `items` and stylize them.
         let items: Vec<ListItem> = self
             .repository
-            .current_level_desc(area.width)
+            .current_level_desc(area.width, &self.ui_elements)
             .into_iter()
             .map(|(enabled, value)| {
                 ListItem::new(value).style(if enabled {
                     Style::default()
                 } else {
-                    Style::default().fg(DISABLED_STYLE_FG)
+                    Style::default().fg(self.colors.disabled_style_fg)
                 })
             })
             .collect();
@@ -349,7 +408,8 @@ impl App<'_> {
                         .current_level()
                         .get(idx.min(items.len() - 1))
                 }) {
-                self.repository.config.is_active(current)
+                self.repository.current_level_is_active()
+                    && self.repository.config.is_active(current)
             } else {
                 false
             };
@@ -357,9 +417,9 @@ impl App<'_> {
             let items = List::new(items)
                 .block(inner_block)
                 .highlight_style(if current_item_active {
-                    SELECTED_ACTIVE_STYLE
+                    self.colors.selected_active_style
                 } else {
-                    SELECTED_INACTIVE_STYLE
+                    self.colors.selected_inactive_style
                 })
                 .highlight_spacing(HighlightSpacing::Always);
             StatefulWidget::render(items, inner_area, buf, current_state);
@@ -392,8 +452,8 @@ impl App<'_> {
 
         let help_block = Block::default()
             .borders(Borders::NONE)
-            .fg(TEXT_COLOR)
-            .bg(HELP_ROW_COLOR);
+            .fg(self.colors.text_color)
+            .bg(self.colors.help_row_color);
 
         Some(
             Paragraph::new(help_text)
@@ -424,7 +484,10 @@ impl App<'_> {
             "Use ↓↑ to move, ESC/← to go up, → to go deeper or change the value, s/S to save and generate, ESC/q to cancel"
         };
 
-        Paragraph::new(text).centered().wrap(Wrap { trim: false })
+        Paragraph::new(text)
+            .centered()
+            .bg(self.colors.app_background)
+            .wrap(Wrap { trim: false })
     }
 
     fn footer_lines(&self, area: Rect) -> u16 {

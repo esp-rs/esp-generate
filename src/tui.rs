@@ -185,13 +185,13 @@ impl Colors {
         app_background: Color::Black,
         header_bg: Color::DarkGray,
         normal_row_color: Color::Black,
-        help_row_color: Color::Black,
+        help_row_color: Color::DarkGray,
         disabled_style_fg: Color::DarkGray,
         text_color: Color::Gray,
 
         selected_active_style: Style::new()
             .add_modifier(Modifier::BOLD)
-            .fg(Color::Blue)
+            .fg(Color::White)
             .bg(Color::Blue),
         selected_inactive_style: Style::new()
             .add_modifier(Modifier::BOLD)
@@ -227,8 +227,8 @@ impl<'app> App<'app> {
         initial_state.select(Some(0));
 
         let (ui_elements, colors) = match std::env::var("TERM_PROGRAM").as_deref() {
-            Ok(s) if s == "vscode" => (UiElements::FALLBACK, Colors::RGB),
-            Ok(s) if s == "Apple_Terminal" => (UiElements::FALLBACK, Colors::ANSI),
+            Ok("vscode") => (UiElements::FALLBACK, Colors::RGB),
+            Ok("Apple_Terminal") => (UiElements::FALLBACK, Colors::ANSI),
             _ => (UiElements::FANCY, Colors::RGB),
         };
 
@@ -408,7 +408,8 @@ impl App<'_> {
                         .current_level()
                         .get(idx.min(items.len() - 1))
                 }) {
-                self.repository.config.is_active(current)
+                self.repository.current_level_is_active()
+                    && self.repository.config.is_active(current)
             } else {
                 false
             };

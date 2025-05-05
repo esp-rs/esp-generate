@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The visual style in certain terminals no longer uses emojis (#173)
+
 ### Fixed
 
 - The generated project no longer contains `template.yaml`. (#142)

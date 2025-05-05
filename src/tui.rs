@@ -115,7 +115,7 @@ impl<'app> Repository<'app> {
         self.path.pop();
     }
 
-    fn current_level_desc(&self, width: u16) -> Vec<(bool, String)> {
+    fn current_level_desc(&self, width: u16, style: &UiStyle) -> Vec<(bool, String)> {
         let level = self.current_level();
         let level_active = self.current_level_is_active();
 
@@ -129,11 +129,11 @@ impl<'app> Repository<'app> {
                 };
                 let indicator =
                     if self.config.selected.iter().any(|o| o == v.name()) && level_active {
-                        "✅"
+                        style.selected
                     } else if v.is_category() {
-                        "▶️"
+                        style.category
                     } else {
-                        "  "
+                        style.unselected
                     };
                 let padding = width as usize - v.title().len() - 4; // 2 spaces + the indicator
                 (
@@ -165,10 +165,32 @@ pub fn restore_terminal() -> AppResult<()> {
     Ok(())
 }
 
+struct UiStyle {
+    selected: &'static str,
+    unselected: &'static str,
+    category: &'static str,
+}
+
+impl UiStyle {
+    const FANCY: Self = Self {
+        selected: "✅",
+        unselected: "  ",
+        category: "▶️",
+    };
+    const FALLBACK: Self = Self {
+        selected: "*",
+        unselected: " ",
+        category: ">",
+    };
+
+    const NEEDS_FALLBACK: &[&str] = &["vscode", "Apple_Terminal"];
+}
+
 pub struct App<'app> {
     state: Vec<ListState>,
     repository: Repository<'app>,
     confirm_quit: bool,
+    ui_style: UiStyle,
 }
 
 impl<'app> App<'app> {
@@ -176,10 +198,20 @@ impl<'app> App<'app> {
         let mut initial_state = ListState::default();
         initial_state.select(Some(0));
 
+        let use_fallback_style = match std::env::var("TERM_PROGRAM").as_deref() {
+            Ok(s) => UiStyle::NEEDS_FALLBACK.contains(&s),
+            _ => true,
+        };
+
         Self {
             repository,
             state: vec![initial_state],
             confirm_quit: false,
+            ui_style: if use_fallback_style {
+                UiStyle::FALLBACK
+            } else {
+                UiStyle::FANCY
+            },
         }
     }
     pub fn selected(&self) -> usize {
@@ -326,7 +358,7 @@ impl App<'_> {
         // Iterate through all elements in the `items` and stylize them.
         let items: Vec<ListItem> = self
             .repository
-            .current_level_desc(area.width)
+            .current_level_desc(area.width, &self.ui_style)
             .into_iter()
             .map(|(enabled, value)| {
                 ListItem::new(value).style(if enabled {

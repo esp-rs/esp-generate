@@ -16,7 +16,7 @@ enum CheckResult {
     NotFound,
 }
 
-pub fn check(chip: Chip) {
+pub fn check(chip: Chip, probe_rs_required: bool) {
     // TODO: check +nightly if needed
     let rust_version = get_version(
         "rustc",
@@ -33,21 +33,71 @@ pub fn check(chip: Chip) {
     let probers_version = get_version("probe-rs", &[]);
 
     println!("\nChecking installed versions");
-    print_result(
+
+    let mut requirements_unsatisfied = false;
+    requirements_unsatisfied |= print_result(
         &format!("Rust ({rust_toolchain})"),
         check_version(rust_version, 1, 84, 0),
+        if chip.is_xtensa() {
+            "minimum required version is 1.84 - use `espup` to upgrade"
+        } else {
+            "minimum required version is 1.84 - use `rustup` to upgrade"
+        },
+        if chip.is_xtensa() {
+            "not found - use `espup` to install"
+        } else {
+            "not found - use `rustup` to install"
+        },
+        true,
     );
-    print_result("espflash", check_version(espflash_version, 3, 3, 0));
-    print_result("probe-rs", check_version(probers_version, 0, 25, 0));
+    requirements_unsatisfied |= print_result(
+        "espflash",
+        check_version(espflash_version, 3, 3, 0),
+        "minimum required version is 3.3.0 - see https://crates.io/crates/espflash",
+        "not found - see https://crates.io/crates/espflash for installation instructions",
+        true,
+    );
+    requirements_unsatisfied |= print_result(
+        "probe-rs",
+        check_version(probers_version, 0, 25, 0),
+        if probe_rs_required {
+            "minimum version required is 0.25.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"
+        } else {
+            "minimum suggested version is 0.25.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"
+        },
+        if probe_rs_required {
+            "not found - see https://probe.rs/docs/getting-started/installation/ for how to install"
+        } else {
+            "not found - while not required see https://probe.rs/docs/getting-started/installation/ for how to install"
+        },
+        probe_rs_required,
+    );
+
+    if requirements_unsatisfied {
+        println!("\nFor more details see https://docs.espressif.com/projects/rust/book/")
+    }
 }
 
-fn print_result(name: &str, check_result: CheckResult) {
+fn print_result(
+    name: &str,
+    check_result: CheckResult,
+    wrong_version_help: &str,
+    not_found_help: &str,
+    required: bool,
+) -> bool {
     match check_result {
-        CheckResult::Ok => println!("🆗 {}", name),
-        CheckResult::WrongVersion => {
-            println!("🛑 {} (version requirements are not satisfied)", name)
+        CheckResult::Ok => {
+            println!("🆗 {name}");
+            false
         }
-        CheckResult::NotFound => println!("❌ {} (not found)", name),
+        CheckResult::WrongVersion => {
+            println!("🛑 {name} ({wrong_version_help})");
+            required
+        }
+        CheckResult::NotFound => {
+            println!("❌ {name} ({not_found_help})");
+            required
+        }
     }
 }
 

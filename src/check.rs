@@ -27,11 +27,16 @@ pub fn check(chip: Chip) {
         },
     );
 
+    let rust_toolchain = if chip.is_xtensa() { "esp" } else { "stable" };
+
     let espflash_version = get_version("espflash", &[]);
     let probers_version = get_version("probe-rs", &[]);
 
     println!("\nChecking installed versions");
-    print_result("Rust", check_version(rust_version, 1, 84, 0));
+    print_result(
+        &format!("Rust ({rust_toolchain})"),
+        check_version(rust_version, 1, 84, 0),
+    );
     print_result("espflash", check_version(espflash_version, 3, 3, 0));
     print_result("probe-rs", check_version(probers_version, 0, 25, 0));
 }
@@ -39,8 +44,10 @@ pub fn check(chip: Chip) {
 fn print_result(name: &str, check_result: CheckResult) {
     match check_result {
         CheckResult::Ok => println!("🆗 {}", name),
-        CheckResult::WrongVersion => println!("🛑 {}", name),
-        CheckResult::NotFound => println!("❌ {}", name),
+        CheckResult::WrongVersion => {
+            println!("🛑 {} (version requirements are not satisfied)", name)
+        }
+        CheckResult::NotFound => println!("❌ {} (not found)", name),
     }
 }
 

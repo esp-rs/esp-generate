@@ -214,6 +214,7 @@ embedded-test = { version = "0.6.0", features = [
 # Rust debug is too slow.
 # For debug builds always builds with some optimization
 opt-level = "s"
+codegen-units = 1        # LLVM can perform better optimizations using a single thread 
 
 [profile.release]
 codegen-units = 1        # LLVM can perform better optimizations using a single thread

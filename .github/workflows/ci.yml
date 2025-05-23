@@ -64,6 +64,13 @@ jobs:
           target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
           components: clippy,rustfmt,rust-src
 
+      # Rust toolchain for RISC-V:
+      - if: ${{ !contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.chip) }}
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
+          components: clippy,rustfmt,rust-src
+
       # //Define a new environment variable called toolchain
       - if: ${{ contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.chip) }}
         run: echo "TOOLCHAIN=+esp" >> $GITHUB_ENV

@@ -237,7 +237,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         log::warn!("Current directory is already in a git repository, skipping git initialization");
     }
 
-    check::check(args.chip);
+    check::check(args.chip, selected.contains(&"probe-rs".to_string()));
 
     Ok(())
 }

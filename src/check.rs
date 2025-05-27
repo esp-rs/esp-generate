@@ -16,7 +16,7 @@ enum CheckResult {
     NotFound,
 }
 
-pub fn check(chip: Chip) {
+pub fn check(chip: Chip, probe_rs_required: bool) {
     // TODO: check +nightly if needed
     let rust_version = get_version(
         "rustc",
@@ -27,20 +27,71 @@ pub fn check(chip: Chip) {
         },
     );
 
+    let rust_toolchain = if chip.is_xtensa() { "esp" } else { "stable" };
+    let rust_toolchain_tool = if chip.is_xtensa() { "espup" } else { "rustup" };
+
     let espflash_version = get_version("espflash", &[]);
+
     let probers_version = get_version("probe-rs", &[]);
+    let probers_suggestion_kind = if probe_rs_required {
+        "required"
+    } else {
+        "suggested"
+    };
 
     println!("\nChecking installed versions");
-    print_result("Rust", check_version(rust_version, 1, 84, 0));
-    print_result("espflash", check_version(espflash_version, 3, 3, 0));
-    print_result("probe-rs", check_version(probers_version, 0, 25, 0));
+
+    let mut requirements_unsatisfied = false;
+    requirements_unsatisfied |= print_result(
+        &format!("Rust ({rust_toolchain})"),
+        check_version(rust_version, 1, 84, 0),
+        format!("minimum required version is 1.84 - use `{rust_toolchain_tool}` to upgrade"),
+        format!("not found - use `{rust_toolchain_tool}` to install"),
+        true,
+    );
+    requirements_unsatisfied |= print_result(
+        "espflash",
+        check_version(espflash_version, 3, 3, 0),
+        "minimum required version is 3.3.0 - see https://crates.io/crates/espflash",
+        "not found - see https://crates.io/crates/espflash for installation instructions",
+        true,
+    );
+    requirements_unsatisfied |= print_result(
+        "probe-rs",
+        check_version(probers_version, 0, 25, 0),
+        format!("minimum {probers_suggestion_kind} version is 0.25.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"),
+        "not found - see https://probe.rs/docs/getting-started/installation/ for how to install",
+        probe_rs_required,
+    );
+
+    if requirements_unsatisfied {
+        println!("\nFor more details see https://docs.espressif.com/projects/rust/book/")
+    }
 }
 
-fn print_result(name: &str, check_result: CheckResult) {
+fn print_result(
+    name: &str,
+    check_result: CheckResult,
+    wrong_version_help: impl AsRef<str>,
+    not_found_help: impl AsRef<str>,
+    required: bool,
+) -> bool {
+    let wrong_version_help = wrong_version_help.as_ref();
+    let not_found_help = not_found_help.as_ref();
+
     match check_result {
-        CheckResult::Ok => println!("🆗 {}", name),
-        CheckResult::WrongVersion => println!("🛑 {}", name),
-        CheckResult::NotFound => println!("❌ {}", name),
+        CheckResult::Ok => {
+            println!("🆗 {name}");
+            false
+        }
+        CheckResult::WrongVersion => {
+            println!("🛑 {name} ({wrong_version_help})");
+            required
+        }
+        CheckResult::NotFound => {
+            println!("❌ {name} ({not_found_help})");
+            required
+        }
     }
 }
 

@@ -5,7 +5,7 @@
 #ELSE
 channel    = "stable"
 #ENDIF
-components = ["rust-src"]
+components = ["rust-src", "clippy"]
 #REPLACE riscv32imac-unknown-none-elf rust_target
 targets = ["riscv32imac-unknown-none-elf"]
 #ELIF option("xtensa")

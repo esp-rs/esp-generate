@@ -63,9 +63,10 @@ async fn main(spawner: Spawner) {
     //IF option("alloc")
     esp_alloc::heap_allocator!(size: 72 * 1024);
     //IF option("wifi") && (option("ble") || option("ble-trouble"))
-    // COEX needs more RAM - add some more
+    // COEX needs more RAM - so we've added some more
     esp_alloc::heap_allocator!(#[link_section = ".dram2_uninit"] size: 64 * 1024);
     //ENDIF
+    //ENDIF alloc
 
     //IF !option("esp32")
     let timer0 = SystemTimer::new(peripherals.SYSTIMER);

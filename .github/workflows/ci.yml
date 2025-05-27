@@ -96,8 +96,7 @@ jobs:
           then
             gh issue create \
               --title "Sheduled CI Failure" \
-              --body "Sheduled CI Workflow Failed! [View the failed job](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})." \
-              --label "all-combinations"
+              --body "Sheduled CI Workflow Failed! [View the failed job](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})."
           fi
 
   # --------------------------------------------------------------------------

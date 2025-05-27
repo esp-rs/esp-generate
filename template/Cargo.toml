@@ -160,7 +160,6 @@ esp-wifi = { version = "0.13.0", features = [
 #IF option("ble-trouble")
 #+trouble-host = { version = "0.1.0", features = ["gatt"] }
 #+bt-hci = { version = "0.2.1", features = [] }
-#+embassy-sync = { version = "0.6.0", features = [] }
 #ENDIF
 #ENDIF wifi || ble || ble-trouble
 #IF option("embassy")

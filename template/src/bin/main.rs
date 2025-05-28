@@ -40,6 +40,9 @@ use esp_backtrace as _;
 extern crate alloc;
 //ENDIF
 
+// needed for esp-idf bootloader support
+esp_bootloader_esp_idf::esp_app_desc!();
+
 #[main]
 fn main() -> ! {
     //REPLACE generate-version generate-version

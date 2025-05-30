@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The generated project no longer contains `template.yaml`. (#142)
 - Fixed parsing version output of old `espflash`. (#152)
 - Specified `defmt-03` feature for `embedded-io` and `embedded-io-async`. (#157)
+- Fixed RTT initialization without `defmt` (#183)
 
 ### Removed
 

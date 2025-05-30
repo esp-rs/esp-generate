@@ -38,7 +38,8 @@ esp-hal = { version = "1.0.0-beta.0", features = [
 #ELIF option("log")
 log = { version = "0.4.21" }
 #ENDIF
-#IF option("log-frontend") || option("panic-handler")
+
+#IF option("log-frontend") || option("panic-handler") || option("probe-rs")
 #IF option("probe-rs")
 #IF option("defmt")
 rtt-target = { version = "0.6.1", features = [ "defmt" ] }
@@ -57,7 +58,7 @@ esp-println = { version = "0.13.0", features = [
     #ENDIF
 ] }
 #ENDIF probe-rs
-#ENDIF log-frontend || panic-handler
+#ENDIF log-frontend || panic-handler || probe-rs
 #IF option("esp-backtrace")
 esp-backtrace = { version = "0.15.1", features = [
     #REPLACE esp32c6 mcu

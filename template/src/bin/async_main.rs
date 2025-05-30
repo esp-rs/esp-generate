@@ -22,7 +22,9 @@ use esp_hal::timer::timg::TimerGroup;
 //+ use defmt::info;
 //ELIF option("log")
 use log::info;
-//ENDIF probe-rs
+//ELIF option("probe-rs") // without defmt
+use rtt_target::rprintln;
+//ENDIF !defmt
 
 use embassy_executor::Spawner;
 use embassy_time::{Duration, Timer};
@@ -50,8 +52,8 @@ async fn main(spawner: Spawner) {
     //IF option("probe-rs")
     //IF option("defmt")
     rtt_target::rtt_init_defmt!();
-    //ELIF option("panic-rtt-target")
-    rtt_target::rtt_init!();
+    //ELSE
+    rtt_target::rtt_init_print!();
     //ENDIF
     //ELIF option("log")
     esp_println::logger::init_logger_from_env();
@@ -74,6 +76,8 @@ async fn main(spawner: Spawner) {
 
     //IF option("defmt") || option("log")
     info!("Embassy initialized!");
+    //ELIF option("probe-rs") // without defmt
+    rprintln!("Embassy initialized!");
     //ENDIF
 
     //IF option("wifi") || option("ble")
@@ -92,6 +96,8 @@ async fn main(spawner: Spawner) {
     loop {
         //IF option("defmt") || option("log")
         info!("Hello world!");
+        //ELIF option("probe-rs") // without defmt
+        rprintln!("Hello world!");
         //ENDIF
         Timer::after(Duration::from_secs(1)).await;
     }

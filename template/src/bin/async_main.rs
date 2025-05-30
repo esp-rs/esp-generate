@@ -52,7 +52,7 @@ async fn main(spawner: Spawner) {
     //IF option("probe-rs")
     //IF option("defmt")
     rtt_target::rtt_init_defmt!();
-    //ELIF option("panic-rtt-target")
+    //ELSE
     rtt_target::rtt_init_print!();
     //ENDIF
     //ELIF option("log")

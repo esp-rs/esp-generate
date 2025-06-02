@@ -23,7 +23,9 @@ use esp_hal::timer::timg::TimerGroup;
 //+ use defmt::info;
 //ELIF option("log")
 use log::info;
-//ENDIF probe-rs
+//ELIF option("probe-rs") // without defmt
+use rtt_target::rprintln;
+//ENDIF !defmt
 
 //IF !option("panic-handler")
 //+#[panic_handler]
@@ -48,8 +50,8 @@ fn main() -> ! {
     //IF option("probe-rs")
     //IF option("defmt")
     rtt_target::rtt_init_defmt!();
-    //ELIF option("panic-rtt-target")
-    rtt_target::rtt_init!();
+    //ELSE
+    rtt_target::rtt_init_print!();
     //ENDIF
     //ELIF option("log")
     esp_println::logger::init_logger_from_env();
@@ -79,6 +81,8 @@ fn main() -> ! {
     loop {
         //IF option("defmt") || option("log")
         info!("Hello world!");
+        //ELIF option("probe-rs") // without defmt
+        rprintln!("Hello world!");
         //ENDIF
         let delay_start = Instant::now();
         while delay_start.elapsed() < Duration::from_millis(500) {}

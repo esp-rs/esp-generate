@@ -33,7 +33,7 @@ esp-hal = { version = "=1.0.0-beta.0", features = [
     "log",
     #ENDIF
 ] }
-esp-bootloader-esp-idf = { package = "esp-bootloader-esp-idf", git = "https://github.com/esp-rs/esp-hal", rev = "b1f4870" }
+esp-bootloader-esp-idf = { version = "0.1.0" }
 #IF option("defmt")
 #+defmt = "0.3.10"
 #ELIF option("log")

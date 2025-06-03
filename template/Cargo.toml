@@ -42,7 +42,7 @@ log = { version = "0.4.21" }
 #IF option("log-frontend") || option("panic-handler") || option("probe-rs")
 #IF option("probe-rs")
 #IF option("defmt")
-rtt-target = { version = "0.6.1", features = [ "defmt" ] }
+rtt-target = { version = "0.6.1", features = ["defmt"] }
 #ELSE
 #+rtt-target = "0.6.1"
 #ENDIF defmt
@@ -70,7 +70,7 @@ esp-backtrace = { version = "0.15.1", features = [
     #ELSE
     "println",
     #ENDIF
-]}
+] }
 #ELIF option("panic-rtt-target")
 #IF option("defmt")
 #+panic-rtt-target = { version = "0.2.0", features = ["defmt"] }
@@ -85,7 +85,7 @@ panic-rtt-target = "0.2.0"
 esp-alloc = "0.7.0"
 #ENDIF defmt
 #ENDIF alloc
-#IF option("wifi") || option("ble")
+#IF option("wifi") || option("ble") || option("ble-trouble")
 #IF option("defmt")
 #+embedded-io = { version = "0.6.1", features = ["defmt-03"] }
 #ELSE
@@ -141,10 +141,10 @@ esp-wifi = { version = "0.13.0", features = [
     "wifi",
     "smoltcp",
     #ENDIF
-    #IF option("ble")
+    #IF option("ble") || option("ble-trouble")
     "ble",
     #ENDIF
-    #IF option("wifi") && option("ble")
+    #IF option("wifi") && (option("ble") || option("ble-trouble"))
     "coex",
     #ENDIF
     "esp-alloc",
@@ -158,9 +158,13 @@ esp-wifi = { version = "0.13.0", features = [
 #IF option("ble")
 #+bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
 #ENDIF
-#ENDIF wifi || ble
+#IF option("ble-trouble")
+#+trouble-host = { version = "0.1.0", features = ["gatt"] }
+#+bt-hci = { version = "0.2.1", features = [] }
+#ENDIF
+#ENDIF wifi || ble || ble-trouble
 #IF option("embassy")
-embassy-executor = { version = "0.7.0",  features = [
+embassy-executor = { version = "0.7.0", features = [
     "task-arena-size-20480",
     #IF option("defmt")
     #+"defmt",
@@ -173,12 +177,12 @@ embassy-executor = { version = "0.7.0",  features = [
 #+embassy-time     = { version = "0.4.0", features = ["defmt"] }
 #ENDIF
 #IF option("log")
-embassy-time     = { version = "0.4.0", features = ["log"] }
+embassy-time = { version = "0.4.0", features = ["log"] }
 #ENDIF
 #IF !option("defmt") && !option("log")
 #+embassy-time     = "0.4.0"
 #ENDIF
-esp-hal-embassy  = { version = "0.7.0",  features = [
+esp-hal-embassy = { version = "0.7.0", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("defmt")
@@ -188,7 +192,7 @@ esp-hal-embassy  = { version = "0.7.0",  features = [
     "log",
     #ENDIF
 ] }
-static_cell      = { version = "2.1.0",  features = ["nightly"] }
+static_cell = { version = "2.1.0", features = ["nightly"] }
 #ENDIF
 critical-section = "1.2.0"
 

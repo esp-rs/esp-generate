@@ -11,7 +11,7 @@ use esp_hal::clock::CpuClock;
 //IF !option("esp32")
 use esp_hal::timer::systimer::SystemTimer;
 //ENDIF
-//IF option("wifi") || option("ble") || option("esp32")
+//IF option("wifi") || option("ble") || option("esp32") || option("ble-trouble")
 use esp_hal::timer::timg::TimerGroup;
 //ENDIF
 
@@ -64,7 +64,11 @@ async fn main(spawner: Spawner) {
 
     //IF option("alloc")
     esp_alloc::heap_allocator!(size: 72 * 1024);
+    //IF option("wifi") && (option("ble") || option("ble-trouble"))
+    // COEX needs more RAM - so we've added some more
+    esp_alloc::heap_allocator!(#[link_section = ".dram2_uninit"] size: 64 * 1024);
     //ENDIF
+    //ENDIF alloc
 
     //IF !option("esp32")
     let timer0 = SystemTimer::new(peripherals.SYSTIMER);
@@ -80,14 +84,30 @@ async fn main(spawner: Spawner) {
     rprintln!("Embassy initialized!");
     //ENDIF
 
-    //IF option("wifi") || option("ble")
+    //IF option("ble-trouble") || option("ble") || option("wifi")
+    let rng = esp_hal::rng::Rng::new(peripherals.RNG);
     let timer1 = TimerGroup::new(peripherals.TIMG0);
-    let _init = esp_wifi::init(
-        timer1.timer0,
-        esp_hal::rng::Rng::new(peripherals.RNG),
-        peripherals.RADIO_CLK,
-    )
-    .unwrap();
+    let wifi_init = &esp_wifi::init(timer1.timer0, rng, peripherals.RADIO_CLK)
+        .expect("Failed to initialize WIFI/BLE controller");
+    //ENDIF
+    //IF option("wifi")
+    let (mut _controller, _interfaces) = {
+        let device = peripherals.WIFI;
+        esp_wifi::wifi::new(wifi_init, device).expect("Failed to initialize WIFI controller")
+    };
+    //ENDIF
+    //IF option("ble-trouble")
+    // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
+    let _controller = {
+        let device = peripherals.BT;
+        let transport = esp_wifi::ble::controller::BleConnector::new(wifi_init, device);
+        bt_hci::controller::ExternalController::<_, 20>::new(transport)
+    };
+    //ELIF option("ble")
+    let _connector = {
+        let device = peripherals.BT;
+        esp_wifi::ble::controller::BleConnector::new(wifi_init, device)
+    };
     //ENDIF
 
     // TODO: Spawn some tasks

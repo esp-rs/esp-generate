@@ -11,8 +11,14 @@ use esp_hal::clock::CpuClock;
 //IF !option("esp32")
 use esp_hal::timer::systimer::SystemTimer;
 //ENDIF
-//IF option("wifi") || option("ble") || option("esp32") || option("ble-trouble")
+//IF option("wifi") || option("ble-bleps") || option("esp32") || option("ble-trouble")
 use esp_hal::timer::timg::TimerGroup;
+//ENDIF
+//IF option("ble-trouble") || option("ble-bleps")
+use esp_wifi::ble::controller::BleConnector;
+//ENDIF
+//IF option("ble-trouble")
+use bt_hci::controller::ExternalController;
 //ENDIF
 
 //IF option("defmt")
@@ -64,7 +70,7 @@ async fn main(spawner: Spawner) {
 
     //IF option("alloc")
     esp_alloc::heap_allocator!(size: 72 * 1024);
-    //IF option("wifi") && (option("ble") || option("ble-trouble"))
+    //IF option("wifi") && (option("ble-bleps") || option("ble-trouble"))
     // COEX needs more RAM - so we've added some more
     esp_alloc::heap_allocator!(#[link_section = ".dram2_uninit"] size: 64 * 1024);
     //ENDIF
@@ -84,30 +90,22 @@ async fn main(spawner: Spawner) {
     rprintln!("Embassy initialized!");
     //ENDIF
 
-    //IF option("ble-trouble") || option("ble") || option("wifi")
+    //IF option("ble-trouble") || option("ble-bleps") || option("wifi")
     let rng = esp_hal::rng::Rng::new(peripherals.RNG);
     let timer1 = TimerGroup::new(peripherals.TIMG0);
-    let wifi_init = &esp_wifi::init(timer1.timer0, rng, peripherals.RADIO_CLK)
+    let wifi_init = esp_wifi::init(timer1.timer0, rng, peripherals.RADIO_CLK)
         .expect("Failed to initialize WIFI/BLE controller");
     //ENDIF
     //IF option("wifi")
-    let (mut _controller, _interfaces) = {
-        let device = peripherals.WIFI;
-        esp_wifi::wifi::new(wifi_init, device).expect("Failed to initialize WIFI controller")
-    };
+    let (mut _wifi_controller, _interfaces) = esp_wifi::wifi::new(peripherals.WIFI, device)
+        .expect("Failed to initialize WIFI controller");
     //ENDIF
     //IF option("ble-trouble")
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
-    let _controller = {
-        let device = peripherals.BT;
-        let transport = esp_wifi::ble::controller::BleConnector::new(wifi_init, device);
-        bt_hci::controller::ExternalController::<_, 20>::new(transport)
-    };
-    //ELIF option("ble")
-    let _connector = {
-        let device = peripherals.BT;
-        esp_wifi::ble::controller::BleConnector::new(wifi_init, device)
-    };
+    let transport = BleConnector::new(&wifi_init, peripherals.BT);
+    let _ble_controller = ExternalController::<_, 20>::new(transport);
+    //ELIF option("ble-bleps")
+    let _connector = BleConnector::new(&wifi_init, peripherals.BT);
     //ENDIF
 
     // TODO: Spawn some tasks

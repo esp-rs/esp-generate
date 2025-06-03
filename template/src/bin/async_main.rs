@@ -27,7 +27,7 @@ use bt_hci::controller::ExternalController;
 //ENDIF
 //+ use defmt::info;
 //ELIF option("log")
-use log::info;
+use log_04::info;
 //ELIF option("probe-rs") // without defmt
 use rtt_target::rprintln;
 //ENDIF !defmt
@@ -50,7 +50,7 @@ use esp_backtrace as _;
 extern crate alloc;
 //ENDIF
 
-// needed for esp-idf bootloader support
+// This creates a default app-descriptor read by the bootloader.
 esp_bootloader_esp_idf::esp_app_desc!();
 
 #[esp_hal_embassy::main]
@@ -75,7 +75,7 @@ async fn main(spawner: Spawner) {
     esp_alloc::heap_allocator!(size: 72 * 1024);
     //IF option("wifi") && (option("ble-bleps") || option("ble-trouble"))
     // COEX needs more RAM - so we've added some more
-    esp_alloc::heap_allocator!(#[link_section = ".dram2_uninit"] size: 64 * 1024);
+    esp_alloc::heap_allocator!(#[unsafe(link_section = ".dram2_uninit")] size: 64 * 1024);
     //ENDIF
     //ENDIF alloc
 
@@ -96,7 +96,7 @@ async fn main(spawner: Spawner) {
     //IF option("ble-trouble") || option("ble-bleps") || option("wifi")
     let rng = esp_hal::rng::Rng::new(peripherals.RNG);
     let timer1 = TimerGroup::new(peripherals.TIMG0);
-    let wifi_init = esp_wifi::init(timer1.timer0, rng, peripherals.RADIO_CLK)
+    let wifi_init = esp_wifi::init(timer1.timer0, rng.clone(), peripherals.RADIO_CLK)
         .expect("Failed to initialize WIFI/BLE controller");
     //ENDIF
     //IF option("wifi")

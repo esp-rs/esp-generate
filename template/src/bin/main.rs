@@ -22,7 +22,7 @@ use esp_hal::timer::timg::TimerGroup;
 //ENDIF
 //+ use defmt::info;
 //ELIF option("log")
-use log::info;
+use log_04::info;
 //ELIF option("probe-rs") // without defmt
 use rtt_target::rprintln;
 //ENDIF !defmt
@@ -42,7 +42,7 @@ use esp_backtrace as _;
 extern crate alloc;
 //ENDIF
 
-// needed for esp-idf bootloader support
+// This creates a default app-descriptor read by the bootloader.
 esp_bootloader_esp_idf::esp_app_desc!();
 
 #[main]

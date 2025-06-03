@@ -27,7 +27,7 @@ options:
       - esp32s3
 
   - !Option
-    name: ble
+    name: ble-bleps
     display_name: Enable BLE via the esp-wifi crate (bleps).
     help: esp-wifi comes with no stability guarantees at this time.
     selection_group: ble-lib

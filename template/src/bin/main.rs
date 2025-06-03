@@ -12,7 +12,7 @@ use esp_hal::{
     main,
     time::{Duration, Instant},
 };
-//IF option("wifi") || option("ble")
+//IF option("wifi") || option("ble-bleps")
 use esp_hal::timer::timg::TimerGroup;
 //ENDIF
 
@@ -58,7 +58,7 @@ fn main() -> ! {
     //ENDIF
 
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
-    //IF option("wifi") || option("ble")
+    //IF option("wifi") || option("ble-bleps")
     let peripherals = esp_hal::init(config);
     //ELSE
     //+let _peripherals = esp_hal::init(config);
@@ -68,7 +68,7 @@ fn main() -> ! {
     esp_alloc::heap_allocator!(size: 72 * 1024);
     //ENDIF
 
-    //IF option("wifi") || option("ble")
+    //IF option("wifi") || option("ble-bleps")
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let _init = esp_wifi::init(
         timg0.timer0,

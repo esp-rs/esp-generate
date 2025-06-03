@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enable `defmt` or `log` on all crates that know them (#148)
 - The tool now prints the selected options (#154)
 - Enable the `clippy::mem_forget` lint since mem::forget is generall not safe to use with esp-hal. (#161)
-- Added option to enable trouble BLE example (#179)
+- Added option to enable integration with the `trouble` BLE library (#179)
 
 ### Changed
 

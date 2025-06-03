@@ -85,7 +85,7 @@ panic-rtt-target = "0.2.0"
 esp-alloc = "0.7.0"
 #ENDIF defmt
 #ENDIF alloc
-#IF option("wifi") || option("ble") || option("ble-trouble")
+#IF option("wifi") || option("ble-bleps") || option("ble-trouble")
 #IF option("defmt")
 #+embedded-io = { version = "0.6.1", features = ["defmt-03"] }
 #ELSE
@@ -141,10 +141,10 @@ esp-wifi = { version = "0.13.0", features = [
     "wifi",
     "smoltcp",
     #ENDIF
-    #IF option("ble") || option("ble-trouble")
+    #IF option("ble-bleps") || option("ble-trouble")
     "ble",
     #ENDIF
-    #IF option("wifi") && (option("ble") || option("ble-trouble"))
+    #IF option("wifi") && (option("ble-bleps") || option("ble-trouble"))
     "coex",
     #ENDIF
     "esp-alloc",
@@ -155,7 +155,7 @@ esp-wifi = { version = "0.13.0", features = [
     "log",
     #ENDIF
 ] }
-#IF option("ble")
+#IF option("ble-bleps")
 #+bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
 #ENDIF
 #IF option("ble-trouble")

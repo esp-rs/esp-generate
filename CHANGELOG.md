@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The visual style in certain terminals no longer uses emojis (#173)
 - Add a description to the version check output (#178)
 - `esp-hal` is now pinned to avoid updating to a new prerelease by accident (#186)
+- `esp-hal` updated and pinned to `beta.1` (#166)
 
 ### Fixed
 

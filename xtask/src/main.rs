@@ -222,11 +222,18 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     }
 
     let mut all_options = vec![];
+    // When no base template is selected, the blocking one is used, which doesn't have any visible
+    // options, so we need to add a placeholder for it.
+    let mut template_selectors = vec![None];
 
     for option in &template.options {
         match option {
             GeneratorOptionItem::Option(option) => {
-                all_options.push(option.name.clone());
+                if option.selection_group == "base-template" {
+                    template_selectors.push(Some(option.name.clone()));
+                } else {
+                    all_options.push(option.name.clone());
+                }
             }
             GeneratorOptionItem::Category(category)
                 if !IGNORED_CATEGORIES.contains(&category.name.as_str()) =>
@@ -240,18 +247,25 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     // A list of each option, along with its dependencies
     let mut available_options = vec![vec![]];
 
-    for option in all_options {
-        let option = find_option(&option, &template.options).unwrap();
-        let mut config = ActiveConfiguration {
-            chip,
-            selected: vec![],
-            options: &template.options,
-        };
+    for base_template in &template_selectors {
+        for option in &all_options {
+            let option = find_option(&option, &template.options).unwrap();
+            let mut config = ActiveConfiguration {
+                chip,
+                selected: vec![],
+                options: &template.options,
+            };
 
-        enable_config_and_dependencies(&mut config, &option.name)?;
+            if let Some(base_template) = base_template {
+                enable_config_and_dependencies(&mut config, &base_template)?;
+            }
 
-        if is_valid(&config) {
-            available_options.push(config.selected);
+            enable_config_and_dependencies(&mut config, &option.name)?;
+
+            if is_valid(&config) {
+                config.selected.sort();
+                available_options.push(config.selected);
+            }
         }
     }
 

@@ -27,7 +27,7 @@ use bt_hci::controller::ExternalController;
 //ENDIF
 //+ use defmt::info;
 //ELIF option("log")
-use log_04::info;
+use log::info;
 //ELIF option("probe-rs") // without defmt
 use rtt_target::rprintln;
 //ENDIF !defmt

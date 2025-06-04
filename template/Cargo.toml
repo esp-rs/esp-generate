@@ -29,7 +29,7 @@ esp-hal = { version = "=1.0.0-beta.1", features = [
     #IF option("defmt")
     #+"defmt",
     #ENDIF
-    #IF option("log-04")
+    #IF option("log")
     "log-04",
     #ENDIF
 ] }
@@ -37,8 +37,7 @@ esp-bootloader-esp-idf = "0.1.0"
 #IF option("defmt")
 #+defmt = "1.0.1"
 #ELIF option("log")
-# log = "0.4.21"
-log-04                   = { package = "log", version = "0.4.27" }
+log = "0.4.27"
 #ENDIF
 
 #IF option("log-frontend") || option("panic-handler") || option("probe-rs")

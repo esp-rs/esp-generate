@@ -97,7 +97,7 @@ async fn main(spawner: Spawner) {
         .expect("Failed to initialize WIFI/BLE controller");
     //ENDIF
     //IF option("wifi")
-    let (mut _wifi_controller, _interfaces) = esp_wifi::wifi::new(peripherals.WIFI, device)
+    let (mut _wifi_controller, _interfaces) = esp_wifi::wifi::new(&wifi_init, peripherals.WIFI)
         .expect("Failed to initialize WIFI controller");
     //ENDIF
     //IF option("ble-trouble")

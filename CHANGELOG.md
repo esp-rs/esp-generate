@@ -16,13 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enable `esp-wifi/smoltcp` when the dependency is present (#146)
 - Enable `defmt` or `log` on all crates that know them (#148)
 - The tool now prints the selected options (#154)
-- Enable the `clippy::mem_forget` lint since mem::forget is generall not safe to use with esp-hal. (#161)
+- Enable the `clippy::mem_forget` lint since mem::forget is generally not safe to use with esp-hal. (#161)
 - Added option to enable integration with the `trouble` BLE library (#179)
 
 ### Changed
 
 - The visual style in certain terminals no longer uses emojis (#173)
 - Add a description to the version check output (#178)
+- `esp-hal` is now pinned to avoid updating to a new prerelease by accident (#186)
 
 ### Fixed
 

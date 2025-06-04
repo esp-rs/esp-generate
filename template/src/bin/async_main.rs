@@ -50,6 +50,10 @@ use esp_backtrace as _;
 extern crate alloc;
 //ENDIF
 
+// This creates a default app-descriptor required by the esp-idf bootloader.
+// For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
+esp_bootloader_esp_idf::esp_app_desc!();
+
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) {
     //REPLACE generate-version generate-version
@@ -72,7 +76,7 @@ async fn main(spawner: Spawner) {
     esp_alloc::heap_allocator!(size: 72 * 1024);
     //IF option("wifi") && (option("ble-bleps") || option("ble-trouble"))
     // COEX needs more RAM - so we've added some more
-    esp_alloc::heap_allocator!(#[link_section = ".dram2_uninit"] size: 64 * 1024);
+    esp_alloc::heap_allocator!(#[unsafe(link_section = ".dram2_uninit")] size: 64 * 1024);
     //ENDIF
     //ENDIF alloc
 

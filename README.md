@@ -1,5 +1,9 @@
 # `esp-generate`
 
+[![Crates.io](https://img.shields.io/crates/v/esp-generate?labelColor=1C2C2E&color=C96329&logo=Rust&style=flat-square)](https://crates.io/crates/esp-generate)
+![MSRV](https://img.shields.io/badge/MSRV-1.86-blue?labelColor=1C2C2E&logo=Rust&style=flat-square)
+![Crates.io](https://img.shields.io/crates/l/esp-generate?labelColor=1C2C2E&style=flat-square)
+
 Template generation tool to create `no_std` applications targeting Espressif's line of SoCs and modules.
 
 At present, this template supports the ESP32, ESP32-C2/C3/C6, ESP32-H2, and ESP32-S2/S3. Support for additional devices will be added as they become available.

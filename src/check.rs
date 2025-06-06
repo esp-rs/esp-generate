@@ -44,8 +44,8 @@ pub fn check(chip: Chip, probe_rs_required: bool) {
     let mut requirements_unsatisfied = false;
     requirements_unsatisfied |= print_result(
         &format!("Rust ({rust_toolchain})"),
-        check_version(rust_version, 1, 84, 0),
-        format!("minimum required version is 1.84 - use `{rust_toolchain_tool}` to upgrade"),
+        check_version(rust_version, 1, 86, 0),
+        format!("minimum required version is 1.86 - use `{rust_toolchain_tool}` to upgrade"),
         format!("not found - use `{rust_toolchain_tool}` to install"),
         true,
     );

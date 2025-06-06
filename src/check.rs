@@ -1,22 +1,51 @@
 use core::str;
+use std::{fmt::Display, str::FromStr};
 
 use esp_metadata::Chip;
 
-#[derive(Debug, PartialEq)]
-struct Version {
+#[derive(Debug, PartialEq, Eq)]
+pub struct Version {
     major: u8,
     minor: u8,
     patch: u8,
 }
 
+impl Display for Version {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
+
+impl FromStr for Version {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split(&['.', '-', '+']);
+        let major = parts
+            .next()
+            .and_then(|s| s.parse::<u8>().ok())
+            .ok_or("Invalid major version")?;
+        let minor = parts
+            .next()
+            .and_then(|s| s.parse::<u8>().ok())
+            .ok_or("Invalid minor version")?;
+        let patch = parts.next().and_then(|s| s.parse::<u8>().ok()).unwrap_or(0);
+        Ok(Version {
+            major,
+            minor,
+            patch,
+        })
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum CheckResult {
-    Ok,
+    Ok(Version),
     WrongVersion,
     NotFound,
 }
 
-pub fn check(chip: Chip, probe_rs_required: bool) {
+pub fn check(chip: Chip, probe_rs_required: bool, msrv: Version) {
     // TODO: check +nightly if needed
     let rust_version = get_version(
         "rustc",
@@ -44,7 +73,7 @@ pub fn check(chip: Chip, probe_rs_required: bool) {
     let mut requirements_unsatisfied = false;
     requirements_unsatisfied |= print_result(
         &format!("Rust ({rust_toolchain})"),
-        check_version(rust_version, 1, 86, 0),
+        check_version(rust_version, msrv.major, msrv.minor, msrv.patch),
         format!("minimum required version is 1.86 - use `{rust_toolchain_tool}` to upgrade"),
         format!("not found - use `{rust_toolchain_tool}` to install"),
         true,
@@ -80,8 +109,8 @@ fn print_result(
     let not_found_help = not_found_help.as_ref();
 
     match check_result {
-        CheckResult::Ok => {
-            println!("🆗 {name}");
+        CheckResult::Ok(found) => {
+            println!("🆗 {name}: {found}");
             false
         }
         CheckResult::WrongVersion => {
@@ -98,7 +127,7 @@ fn print_result(
 fn check_version(version: Option<Version>, major: u8, minor: u8, patch: u8) -> CheckResult {
     match version {
         Some(v) if (v.major, v.minor, v.patch) < (major, minor, patch) => CheckResult::WrongVersion,
-        Some(_) => CheckResult::Ok,
+        Some(v) => CheckResult::Ok(v),
         None => CheckResult::NotFound,
     }
 }
@@ -165,7 +194,14 @@ mod tests {
             minor: 84,
             patch: 0,
         });
-        assert_eq!(check_version(version, 1, 84, 0), CheckResult::Ok);
+        assert_eq!(
+            check_version(version, 1, 84, 0),
+            CheckResult::Ok(Version {
+                major: 1,
+                minor: 84,
+                patch: 0,
+            })
+        );
         // Wrong major
         let version = Some(Version {
             major: 0,

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `rust-version` to the generated Cargo.toml (#192)
+
 ### Changed
 
 ### Fixed

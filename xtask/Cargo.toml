@@ -5,11 +5,11 @@ edition = "2021"
 publish = false
 
 [dependencies]
-anyhow       = "1.0.97"
-clap         = { version = "4.5.21", features = ["derive"] }
-env_logger   = "0.11.5"
-esp-metadata = { version = "0.6.0", features = ["clap"] }
+anyhow       = "1.0.98"
+clap         = { version = "4.5.39", features = ["derive"] }
+env_logger   = "0.11.8"
+esp-metadata = { version = "0.7.0", features = ["clap"] }
 esp-generate = { path = "..", default-features = false }
-log          = "0.4.22"
-tempfile     = "3.17.1"
-serde_yaml   = "0.9"
+log          = "0.4.27"
+tempfile     = "3.20.0"
+serde_yaml   = "0.9.34+deprecated"

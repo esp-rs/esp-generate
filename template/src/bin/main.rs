@@ -69,7 +69,7 @@ fn main() -> ! {
     //ENDIF
 
     //IF option("alloc")
-    esp_alloc::heap_allocator!(size: 72 * 1024);
+    esp_alloc::heap_allocator!(size: 64 * 1024);
     //ENDIF
 
     //IF option("wifi") || option("ble-bleps")

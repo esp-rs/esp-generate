@@ -22,6 +22,7 @@ env:
   CARGO_TARGET_DIR: ${{ github.workspace }}/target
   CARGO_TERM_COLOR: always
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  MSRV: "1.86"
   SSID: ""
   PASSWORD: ""
 
@@ -124,3 +125,19 @@ jobs:
 
       - name: Run clippy
         run: cargo clippy -- -D warnings
+
+  # --------------------------------------------------------------------------
+  # MSRV
+
+  msrv:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.MSRV }}
+      - run: cargo check -p esp-generate
+
+

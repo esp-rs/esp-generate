@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added interactive flow option instead of setting target chip and name in arguments (#196)
 
 ### Changed
 

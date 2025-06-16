@@ -101,7 +101,7 @@ fn setup_args_interactive(args: &mut Args) -> Result<(), Box<dyn Error>> {
                     .unwrap()
             })?;
 
-        args.chip = Some(chip_variants[chip_index].clone());
+        args.chip = Some(chip_variants[chip_index]);
     }
 
     if args.name.is_none() {
@@ -135,7 +135,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         setup_args_interactive(&mut args)?;
     }
 
-    let chip = args.chip.clone().unwrap();
+    let chip = args.chip.unwrap();
     let name = args.name.clone().unwrap();
 
     let path = &args

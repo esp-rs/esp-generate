@@ -7,15 +7,15 @@ use std::{
     sync::LazyLock,
 };
 
-use strum::IntoEnumIterator;
 use clap::Parser;
 use env_logger::{Builder, Env};
 use esp_generate::config::{ActiveConfiguration, Relationships};
 use esp_generate::template::{GeneratorOptionItem, Template};
 use esp_generate::{cargo, config::find_option};
 use esp_metadata::Chip;
+use inquire::{Select, Text};
+use strum::IntoEnumIterator;
 use taplo::formatter::Options;
-use inquire::{Text, Select};
 
 use crate::template_files::TEMPLATE_FILES;
 
@@ -96,13 +96,17 @@ fn setup_args_interactive(args: &mut Args) -> Result<(), Box<dyn Error>> {
 
         let chip_index = Select::new("Select your target chip:", chip_names.clone())
             .prompt()
-            .map(|selected| chip_names.iter().position(|&name| name == selected).unwrap())?;
+            .map(|selected| {
+                chip_names
+                    .iter()
+                    .position(|&name| name == selected)
+                    .unwrap()
+            })?;
 
         args.chip = Some(chip_variants[chip_index].clone());
     }
 
     if args.name.is_none() {
-
         let project_name = Text::new("Enter project name:")
             .with_default("my-esp-project")
             .prompt()?;
@@ -561,11 +565,7 @@ fn process_options(template: &Template, args: &Args) {
             log::error!("Unknown option '{}'", option);
             success = false;
         } else if !option_found_for_chip {
-            log::error!(
-                "Option '{}' is not supported for chip {}",
-                option,
-                arg_chip
-            );
+            log::error!("Option '{}' is not supported for chip {}", option, arg_chip);
             success = false;
         }
     }

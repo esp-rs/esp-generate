@@ -7,6 +7,7 @@ use std::{
     sync::LazyLock,
 };
 
+use strum::IntoEnumIterator;
 use clap::Parser;
 use env_logger::{Builder, Env};
 use esp_generate::config::find_option;
@@ -85,17 +86,9 @@ fn check_for_update(name: &str, version: &str) {
     }
 }
 
-fn interactive_flow(args: &mut Args) -> Result<(), Box<dyn Error>> {
-    if args.chip.is_none() || args.name.is_none() {
-        let chip_variants = vec![
-            Chip::Esp32,
-            Chip::Esp32c2,
-            Chip::Esp32c3,
-            Chip::Esp32c6,
-            Chip::Esp32h2,
-            Chip::Esp32s2,
-            Chip::Esp32s3,
-        ];
+fn setup_args_interactive(args: &mut Args) -> Result<(), Box<dyn Error>> {
+    if args.chip.is_none() {
+        let chip_variants: Vec<Chip> = Chip::iter().collect();
 
         let chip_names: Vec<&str> = chip_variants.iter().map(|c| c.pretty_name()).collect();
 
@@ -104,6 +97,9 @@ fn interactive_flow(args: &mut Args) -> Result<(), Box<dyn Error>> {
             .map(|selected| chip_names.iter().position(|&name| name == selected).unwrap())?;
 
         args.chip = Some(chip_variants[chip_index].clone());
+    }
+
+    if args.name.is_none() {
 
         let project_name = Text::new("Enter project name:")
             .with_default("my-esp-project")
@@ -130,7 +126,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         check_for_update(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
     }
 
-    interactive_flow(&mut args)?;
+    // Run the interactive TUI only if chip or name is missing
+    if args.chip.is_none() || args.name.is_none() {
+        setup_args_interactive(&mut args)?;
+    }
 
     let chip = args.chip.clone().unwrap();
     let name = args.name.clone().unwrap();

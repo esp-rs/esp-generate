@@ -10,12 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added `rust-version` to the generated Cargo.toml (#192)
+- Generate settings for Zed (#200)
 
 ### Changed
 
 - The generated project no longer enables `static_cell/nightly` (#199)
 
 ### Fixed
+
+- Test source is no longer generated if not needed (#201)
 
 ### Removed
 

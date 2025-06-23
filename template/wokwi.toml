@@ -1,4 +1,4 @@
-#INCLUDEFILE wokwi
+#INCLUDEFILE option("wokwi")
 [wokwi]
 version = 1
 gdbServerPort = 3333

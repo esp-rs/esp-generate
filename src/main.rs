@@ -315,7 +315,7 @@ fn process_file(
 
     let mut replace: Option<Vec<(String, String)>> = None;
     let mut include = vec![BlockKind::Root];
-    let mut first_line = true;
+    let mut file_directives = true;
 
     // Create a new Rhai engine and scope
     let mut engine = rhai::Engine::new();
@@ -327,56 +327,34 @@ fn process_file(
         options_clone.contains(&cond)
     });
 
+    let mut include_file = true;
+
     for (line_no, line) in contents.lines().enumerate() {
         let line_no = line_no + 1;
         let trimmed: &str = line.trim();
 
         // We check for the first line to see if we should include the file
-        if first_line {
-            // IGNOREFILE can be used to exclude the file from the output.
-            if trimmed.starts_with("//IGNOREFILE") || trimmed.starts_with("#IGNOREFILE") {
-                return None;
-            }
-
+        if file_directives {
             // Determine if the line starts with a known include directive
-            let include = trimmed
+            if let Some(cond) = trimmed
                 .strip_prefix("//INCLUDEFILE ")
-                .or_else(|| trimmed.strip_prefix("#INCLUDEFILE "));
-
-            if let Some(cond) = include {
-                if !cond.contains(" ") {
-                    let include_file = if let Some(stripped) = cond.strip_prefix("!") {
-                        !options.contains(&stripped.to_string())
-                    } else {
-                        options.contains(&cond.to_string())
-                    };
-                    if !include_file {
-                        return None;
-                    } else {
-                        continue;
-                    }
-                } else {
-                    let mut parts = cond.split_whitespace();
-                    let include_file = if let Some(stripped) = parts.next() {
-                        if let Some(stripped) = stripped.strip_prefix("!") {
-                            !options.contains(&stripped.to_string())
-                        } else {
-                            options.contains(&stripped.to_string())
-                        }
-                    } else {
-                        false
-                    };
-                    if !include_file {
-                        return None;
-                    } else {
-                        let new_name = parts.next().unwrap();
-                        *file_path = new_name.to_string();
-                        continue;
-                    }
-                }
+                .or_else(|| trimmed.strip_prefix("#INCLUDEFILE "))
+            {
+                include_file = engine.eval::<bool>(cond).unwrap();
+                continue;
+            } else if let Some(include_as) = trimmed
+                .strip_prefix("//INCLUDE_AS ")
+                .or_else(|| trimmed.strip_prefix("#INCLUDE_AS "))
+            {
+                *file_path = include_as.trim().to_string();
+                continue;
             }
         }
-        first_line = false;
+        if !include_file {
+            return None;
+        }
+
+        file_directives = false;
 
         // that's a bad workaround
         if trimmed == "#[rustfmt::skip]" {

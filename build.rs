@@ -31,7 +31,7 @@ fn main() {
             continue;
         }
 
-        println!("{:?} {}", path, relative_path);
+        //println!("{:?} {}", path, relative_path);
         let content = std::fs::read_to_string(path).unwrap();
 
         files.push((relative_path, content));

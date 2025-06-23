@@ -1,4 +1,4 @@
-#INCLUDEFILE helix
+#INCLUDEFILE option("helix")
 [[language]]
 name = "rust"
 

@@ -1,4 +1,4 @@
-//INCLUDEFILE vscode
+//INCLUDEFILE option("vscode")
 {
     "version": "0.2.0",
     "configurations": [

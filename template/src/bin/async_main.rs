@@ -1,4 +1,5 @@
-//INCLUDEFILE embassy src/bin/main.rs
+//INCLUDEFILE option("embassy")
+//INCLUDE_AS src/bin/main.rs
 #![no_std]
 #![no_main]
 #![deny(

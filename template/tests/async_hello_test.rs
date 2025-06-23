@@ -1,4 +1,5 @@
-//INCLUDEFILE embassy tests/hello_test.rs
+//INCLUDEFILE option("embassy") && option("embedded-test")
+//INCLUDE_AS tests/hello_test.rs
 //! Demo test suite using embedded-test
 //!
 //! You can run this using `cargo test` as usual.

@@ -70,7 +70,8 @@ options:
   - !Option
     name: stack-smashing-protection
     display_name: Enable stack smashing protection.
-    help: Requires nightly Rust.
+    help: Requires nightly Rust. Note that this option generates additional checks in most functions
+      and will slow down your code.
 
   - !Option
     name: probe-rs

@@ -1,0 +1,31 @@
+//INCLUDEFILE zed
+{
+    "lsp": {
+        "rust-analyzer": {
+            "initialization_options": {
+                "cargo": {
+                    "allTargets": false,
+                    //REPLACE riscv32imac-unknown-none-elf rust_target
+                    "target": "riscv32imac-unknown-none-elf",
+                    //IF option("xtensa")
+                    "extraEnv": {
+                        "RUSTUP_TOOLCHAIN": "esp"
+                    }
+                    //ENDIF
+                },
+                //IF option("xtensa")
+                "server": {
+                    "extraEnv": {
+                        "RUSTUP_TOOLCHAIN": "stable"
+                    }
+                },
+                "check": {
+                    "extraEnv": {
+                        "RUSTUP_TOOLCHAIN": "esp"
+                    }
+                },
+                //ENDIF
+            }
+        }
+    }
+}

@@ -177,3 +177,7 @@ options:
       - !Option
         name: vscode
         display_name: Add settings for Visual Studio Code
+
+      - !Option
+        name: zed
+        display_name: Add settings for Zed

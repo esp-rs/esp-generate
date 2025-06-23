@@ -1,4 +1,4 @@
-//INCLUDEFILE zed
+//INCLUDEFILE option("zed")
 {
     "lsp": {
         "rust-analyzer": {

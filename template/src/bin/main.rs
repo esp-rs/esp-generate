@@ -1,4 +1,4 @@
-//INCLUDEFILE !embassy
+//INCLUDEFILE !option("embassy")
 #![no_std]
 #![no_main]
 #![deny(

@@ -1,4 +1,4 @@
-//INCLUDEFILE vscode
+//INCLUDEFILE option("vscode")
 {
     "recommendations": [
         "rust-lang.rust-analyzer",

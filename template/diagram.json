@@ -1,4 +1,4 @@
-//INCLUDEFILE wokwi
+//INCLUDEFILE option("wokwi")
 {
     "version": 1,
     "editor": "wokwi",

@@ -1,2 +1,2 @@
-//INCLUDEFILE dev-container
+//INCLUDEFILE option("dev-container")
 target

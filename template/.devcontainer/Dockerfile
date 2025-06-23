@@ -1,4 +1,4 @@
-#INCLUDEFILE dev-container
+#INCLUDEFILE option("dev-container")
 # Base image
 ARG VARIANT=bookworm-slim
 FROM debian:${VARIANT}

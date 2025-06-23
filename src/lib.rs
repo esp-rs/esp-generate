@@ -1,3 +1,4 @@
+pub mod cargo;
 pub mod config;
 pub mod template;
 

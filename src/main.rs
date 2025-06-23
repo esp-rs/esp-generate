@@ -9,11 +9,13 @@ use std::{
 
 use clap::Parser;
 use env_logger::{Builder, Env};
-use esp_generate::config::find_option;
 use esp_generate::config::{ActiveConfiguration, Relationships};
 use esp_generate::template::{GeneratorOptionItem, Template};
+use esp_generate::{cargo, config::find_option};
 use esp_metadata::Chip;
 use taplo::formatter::Options;
+
+use crate::template_files::TEMPLATE_FILES;
 
 mod check;
 mod template_files;
@@ -178,6 +180,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         Chip::Esp32s3 => "board-esp32-s3-devkitc-1",
     };
 
+    let versions = cargo::CargoToml::load(
+        TEMPLATE_FILES
+            .iter()
+            .find(|(k, _)| *k == "Cargo.toml")
+            .expect("Cargo.toml not found in template")
+            .1,
+    )
+    .expect("Failed to read Cargo.toml");
+
+    let esp_hal_version = versions.dependency_version("esp-hal");
+    let msrv = versions.msrv().parse().unwrap();
+
     let mut variables = vec![
         ("project-name".to_string(), args.name.clone()),
         ("mcu".to_string(), args.chip.to_string()),
@@ -186,6 +200,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             "generate-version".to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
         ),
+        ("esp-hal-version".to_string(), esp_hal_version),
     ];
 
     variables.push(("rust_target".to_string(), args.chip.target().to_string()));
@@ -237,7 +252,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         log::warn!("Current directory is already in a git repository, skipping git initialization");
     }
 
-    check::check(args.chip, selected.contains(&"probe-rs".to_string()));
+    check::check(args.chip, selected.contains(&"probe-rs".to_string()), msrv);
 
     Ok(())
 }

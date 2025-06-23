@@ -194,7 +194,7 @@ esp-hal-embassy = { version = "0.8.1", features = [
     "log-04",
     #ENDIF
 ] }
-static_cell = { version = "2.1.0", features = ["nightly"] }
+static_cell = "2.1.0"
 #ENDIF
 critical-section = "1.2.0"
 

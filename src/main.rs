@@ -89,6 +89,13 @@ fn check_for_update(name: &str, version: &str) {
 }
 
 fn setup_args_interactive(args: &mut Args) -> Result<(), Box<dyn Error>> {
+    if args.headless {
+        log::error!(
+            "You can't use TUI to set the target chip or output directory name in headless mode"
+        );
+        process::exit(-1);
+    }
+
     if args.chip.is_none() {
         let chip_variants = Chip::iter().collect::<Vec<_>>();
 
@@ -124,19 +131,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // Run the interactive TUI only if chip or name is missing
-    if (args.chip.is_none() || args.name.is_none()) && !args.headless {
+    if args.chip.is_none() || args.name.is_none() {
         setup_args_interactive(&mut args)?;
     }
 
-    let Some(chip) = args.chip else {
-        log::error!("Chip was not set");
-        process::exit(-1);
-    };
+    let chip = args.chip.unwrap();
 
-    let Some(name) = args.name.clone() else {
-        log::error!("Output directory name was not set");
-        process::exit(-1);
-    };
+    let name = args.name.clone().unwrap();
 
     let path = &args
         .output_path

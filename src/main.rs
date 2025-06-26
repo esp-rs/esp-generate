@@ -90,20 +90,11 @@ fn check_for_update(name: &str, version: &str) {
 
 fn setup_args_interactive(args: &mut Args) -> Result<(), Box<dyn Error>> {
     if args.chip.is_none() {
-        let chip_variants: Vec<Chip> = Chip::iter().collect();
+        let chip_variants = Chip::iter().collect::<Vec<_>>();
 
-        let chip_names: Vec<&str> = chip_variants.iter().map(|c| c.pretty_name()).collect();
+        let chip = Select::new("Select your target chip:", chip_variants).prompt()?;
 
-        let chip_index = Select::new("Select your target chip:", chip_names.clone())
-            .prompt()
-            .map(|selected| {
-                chip_names
-                    .iter()
-                    .position(|&name| name == selected)
-                    .unwrap()
-            })?;
-
-        args.chip = Some(chip_variants[chip_index]);
+        args.chip = Some(chip);
     }
 
     if args.name.is_none() {
@@ -133,12 +124,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // Run the interactive TUI only if chip or name is missing
-    if args.chip.is_none() || args.name.is_none() {
+    if (args.chip.is_none() || args.name.is_none()) && !args.headless {
         setup_args_interactive(&mut args)?;
     }
 
-    let chip = args.chip.unwrap();
-    let name = args.name.clone().unwrap();
+    let Some(chip) = args.chip else {
+        log::error!("Chip was not set");
+        process::exit(-1);
+    };
+
+    let Some(name) = args.name.clone() else {
+        log::error!("Output directory name was not set");
+        process::exit(-1);
+    };
 
     let path = &args
         .output_path
@@ -502,10 +500,7 @@ fn process_options(template: &Template, args: &Args) {
     let mut success = true;
     let all_options = template.all_options();
 
-    let Some(arg_chip) = args.chip else {
-        log::error!("Chip was not set");
-        process::exit(-1);
-    };
+    let arg_chip = args.chip.unwrap();
 
     let selected_config = ActiveConfiguration {
         chip: arg_chip,
@@ -523,9 +518,7 @@ fn process_options(template: &Template, args: &Args) {
             // Check if the chip is supported. If the chip list is empty, all chips are supported.
             // We don't immediately fail in case the option is not present for the chip, because
             // it may exist as a separate entry (e.g. with different properties).
-            if !option_item.chips.iter().any(|chip| chip == &arg_chip)
-                && !option_item.chips.is_empty()
-            {
+            if !option_item.chips.contains(&arg_chip) && !option_item.chips.is_empty() {
                 continue;
             }
 

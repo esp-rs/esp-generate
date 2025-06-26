@@ -13,6 +13,8 @@ use esp_generate::config::{ActiveConfiguration, Relationships};
 use esp_generate::template::{GeneratorOptionItem, Template};
 use esp_generate::{cargo, config::find_option};
 use esp_metadata::Chip;
+use inquire::{Select, Text};
+use strum::IntoEnumIterator;
 use taplo::formatter::Options;
 
 use crate::template_files::TEMPLATE_FILES;
@@ -35,11 +37,11 @@ static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Name of the project to generate
-    name: String,
+    name: Option<String>,
 
     /// Chip to target
     #[arg(short, long)]
-    chip: Chip,
+    chip: Option<Chip>,
 
     /// Run in headless mode (i.e. do not use the TUI)
     #[arg(long)]
@@ -86,12 +88,39 @@ fn check_for_update(name: &str, version: &str) {
     }
 }
 
+fn setup_args_interactive(args: &mut Args) -> Result<(), Box<dyn Error>> {
+    if args.headless {
+        log::error!(
+            "You can't use TUI to set the target chip or output directory name in headless mode"
+        );
+        process::exit(-1);
+    }
+
+    if args.chip.is_none() {
+        let chip_variants = Chip::iter().collect::<Vec<_>>();
+
+        let chip = Select::new("Select your target chip:", chip_variants).prompt()?;
+
+        args.chip = Some(chip);
+    }
+
+    if args.name.is_none() {
+        let project_name = Text::new("Enter project name:")
+            .with_default("my-esp-project")
+            .prompt()?;
+
+        args.name = Some(project_name);
+    }
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     Builder::from_env(Env::default().default_filter_or(log::LevelFilter::Info.as_str()))
         .format_target(false)
         .init();
 
-    let args = Args::parse();
+    let mut args = Args::parse();
 
     // Only check for updates once the command-line arguments have been processed,
     // to avoid printing any update notifications when the help message is
@@ -100,6 +129,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     if !args.skip_update_check {
         check_for_update(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
     }
+
+    // Run the interactive TUI only if chip or name is missing
+    if args.chip.is_none() || args.name.is_none() {
+        setup_args_interactive(&mut args)?;
+    }
+
+    let chip = args.chip.unwrap();
+
+    let name = args.name.clone().unwrap();
 
     let path = &args
         .output_path
@@ -111,7 +149,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         process::exit(-1);
     }
 
-    if path.join(&args.name).exists() {
+    if path.join(&name).exists() {
         log::error!("Directory already exists");
         process::exit(-1);
     }
@@ -123,10 +161,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Now we filterout the incompatible options, so that they are not shown and they also don't
     // screw with our position-based data model.
     let mut template = TEMPLATE.clone();
-    remove_incompatible_chip_options(args.chip, &mut template.options);
+    remove_incompatible_chip_options(chip, &mut template.options);
 
     let mut selected = if !args.headless {
-        let repository = tui::Repository::new(args.chip, &template.options, &args.option);
+        let repository = tui::Repository::new(chip, &template.options, &args.option);
 
         // TUI stuff ahead
         let terminal = tui::init_terminal()?;
@@ -143,7 +181,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         println!(
             "Selected options: --chip {}{}",
-            args.chip,
+            chip,
             selected.iter().fold(String::new(), |mut acc, s| {
                 use std::fmt::Write;
                 write!(&mut acc, " -o {s}").unwrap();
@@ -162,15 +200,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         selected.push(option.selection_group.clone());
     }
 
-    selected.push(args.chip.to_string());
+    selected.push(chip.to_string());
 
-    selected.push(if args.chip.is_riscv() {
+    selected.push(if chip.is_riscv() {
         "riscv".to_string()
     } else {
         "xtensa".to_string()
     });
 
-    let wokwi_devkit = match args.chip {
+    let wokwi_devkit = match chip {
         Chip::Esp32 => "board-esp32-devkit-c-v4",
         Chip::Esp32c2 => "",
         Chip::Esp32c3 => "board-esp32-c3-devkitm-1",
@@ -193,8 +231,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let msrv = versions.msrv().parse().unwrap();
 
     let mut variables = vec![
-        ("project-name".to_string(), args.name.clone()),
-        ("mcu".to_string(), args.chip.to_string()),
+        ("project-name".to_string(), name.clone()),
+        ("mcu".to_string(), chip.to_string()),
         ("wokwi-board".to_string(), wokwi_devkit.to_string()),
         (
             "generate-version".to_string(),
@@ -203,9 +241,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         ("esp-hal-version".to_string(), esp_hal_version),
     ];
 
-    variables.push(("rust_target".to_string(), args.chip.target().to_string()));
+    variables.push(("rust_target".to_string(), chip.target().to_string()));
 
-    let project_dir = path.join(&args.name);
+    let project_dir = path.join(&name);
     fs::create_dir(&project_dir)?;
 
     for &(file_path, contents) in template_files::TEMPLATE_FILES.iter() {
@@ -252,7 +290,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         log::warn!("Current directory is already in a git repository, skipping git initialization");
     }
 
-    check::check(args.chip, selected.contains(&"probe-rs".to_string()), msrv);
+    check::check(chip, selected.contains(&"probe-rs".to_string()), msrv);
 
     Ok(())
 }
@@ -463,8 +501,10 @@ fn process_options(template: &Template, args: &Args) {
     let mut success = true;
     let all_options = template.all_options();
 
+    let arg_chip = args.chip.unwrap();
+
     let selected_config = ActiveConfiguration {
-        chip: args.chip,
+        chip: arg_chip,
         selected: args.option.clone(),
         options: &template.options,
     };
@@ -479,9 +519,7 @@ fn process_options(template: &Template, args: &Args) {
             // Check if the chip is supported. If the chip list is empty, all chips are supported.
             // We don't immediately fail in case the option is not present for the chip, because
             // it may exist as a separate entry (e.g. with different properties).
-            if !option_item.chips.iter().any(|chip| chip == &args.chip)
-                && !option_item.chips.is_empty()
-            {
+            if !option_item.chips.contains(&arg_chip) && !option_item.chips.is_empty() {
                 continue;
             }
 
@@ -521,11 +559,7 @@ fn process_options(template: &Template, args: &Args) {
             log::error!("Unknown option '{}'", option);
             success = false;
         } else if !option_found_for_chip {
-            log::error!(
-                "Option '{}' is not supported for chip {}",
-                option,
-                args.chip
-            );
+            log::error!("Option '{}' is not supported for chip {}", option, arg_chip);
             success = false;
         }
     }

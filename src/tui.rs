@@ -1,4 +1,5 @@
-use std::{error::Error, io};
+use anyhow::Result;
+use std::io;
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -12,8 +13,6 @@ use esp_generate::{
 };
 use esp_metadata::Chip;
 use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
-
-type AppResult<T> = Result<T, Box<dyn Error>>;
 
 pub struct Repository<'app> {
     config: ActiveConfiguration<'app>,
@@ -131,7 +130,7 @@ impl<'app> Repository<'app> {
     }
 }
 
-pub fn init_terminal() -> AppResult<Terminal<impl Backend>> {
+pub fn init_terminal() -> Result<Terminal<impl Backend>> {
     enable_raw_mode()?;
     io::stdout().execute(EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(io::stdout());
@@ -139,7 +138,7 @@ pub fn init_terminal() -> AppResult<Terminal<impl Backend>> {
     Ok(terminal)
 }
 
-pub fn restore_terminal() -> AppResult<()> {
+pub fn restore_terminal() -> Result<()> {
     disable_raw_mode()?;
     io::stdout().execute(LeaveAlternateScreen)?;
     Ok(())
@@ -271,7 +270,7 @@ impl<'app> App<'app> {
 }
 
 impl App<'_> {
-    pub fn run(&mut self, mut terminal: Terminal<impl Backend>) -> AppResult<Option<Vec<String>>> {
+    pub fn run(&mut self, mut terminal: Terminal<impl Backend>) -> Result<Option<Vec<String>>> {
         loop {
             self.draw(&mut terminal)?;
 
@@ -326,7 +325,7 @@ impl App<'_> {
         }
     }
 
-    fn draw(&mut self, terminal: &mut Terminal<impl Backend>) -> AppResult<()> {
+    fn draw(&mut self, terminal: &mut Terminal<impl Backend>) -> Result<()> {
         terminal.draw(|f| {
             f.render_widget(self, f.area());
         })?;

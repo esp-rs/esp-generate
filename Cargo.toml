@@ -23,6 +23,7 @@ default = ["update-informer"]
 update-informer = ["dep:update-informer"]
 
 [dependencies]
+anyhow          = "1.0.98"
 strum           = "0.27.1"
 inquire         = "0.7.5"
 clap            = { version = "4.5.39", features = ["derive"] }

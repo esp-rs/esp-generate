@@ -459,9 +459,7 @@ fn process_file(
             let prev = include.pop();
             assert!(
                 matches!(prev, Some(BlockKind::IfElse(_, _))),
-                "ENDIF without IF in {}:{}",
-                file_path,
-                line_no
+                "ENDIF without IF in {file_path}:{line_no}"
             );
         // Trim #+ and //+
         } else if include.iter().all(|v| v.include_line()) {
@@ -550,10 +548,10 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
         }
 
         if !option_found {
-            log::error!("Unknown option '{}'", option);
+            log::error!("Unknown option '{option}'");
             success = false;
         } else if !option_found_for_chip {
-            log::error!("Option '{}' is not supported for chip {}", option, arg_chip);
+            log::error!("Option '{option}' is not supported for chip {arg_chip}");
             success = false;
         }
     }

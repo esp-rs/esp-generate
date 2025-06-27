@@ -1,12 +1,11 @@
 use std::{
-    env,
-    error::Error,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
-    process::{self, Command},
+    process::Command,
     sync::LazyLock,
 };
 
+use anyhow::{bail, Result};
 use clap::Parser;
 use env_logger::{Builder, Env};
 use esp_generate::config::{ActiveConfiguration, Relationships};
@@ -88,12 +87,9 @@ fn check_for_update(name: &str, version: &str) {
     }
 }
 
-fn setup_args_interactive(args: &mut Args) -> Result<(), Box<dyn Error>> {
+fn setup_args_interactive(args: &mut Args) -> Result<()> {
     if args.headless {
-        log::error!(
-            "You can't use TUI to set the target chip or output directory name in headless mode"
-        );
-        process::exit(-1);
+        bail!("You can't use TUI to set the target chip or output directory name in headless mode");
     }
 
     if args.chip.is_none() {
@@ -115,7 +111,7 @@ fn setup_args_interactive(args: &mut Args) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     Builder::from_env(Env::default().default_filter_or(log::LevelFilter::Info.as_str()))
         .format_target(false)
         .init();
@@ -145,18 +141,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         .unwrap_or_else(|| env::current_dir().unwrap());
 
     if !path.is_dir() {
-        log::error!("Output path must be a directory");
-        process::exit(-1);
+        bail!("Output path must be a directory");
     }
 
     if path.join(&name).exists() {
-        log::error!("Directory already exists");
-        process::exit(-1);
+        bail!("Directory already exists");
     }
 
     // Validate options. We pass the unmodified template to the function, so that it can tell
     // the user which options are not supported for the selected chip.
-    process_options(&TEMPLATE, &args);
+    process_options(&TEMPLATE, &args)?;
 
     // Now we filterout the incompatible options, so that they are not shown and they also don't
     // screw with our position-based data model.
@@ -176,7 +170,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // done with the TUI
 
         let Some(selected) = selected else {
-            process::exit(0);
+            return Ok(());
         };
 
         println!(
@@ -465,9 +459,7 @@ fn process_file(
             let prev = include.pop();
             assert!(
                 matches!(prev, Some(BlockKind::IfElse(_, _))),
-                "ENDIF without IF in {}:{}",
-                file_path,
-                line_no
+                "ENDIF without IF in {file_path}:{line_no}"
             );
         // Trim #+ and //+
         } else if include.iter().all(|v| v.include_line()) {
@@ -497,7 +489,7 @@ fn process_file(
     Some(res)
 }
 
-fn process_options(template: &Template, args: &Args) {
+fn process_options(template: &Template, args: &Args) -> Result<()> {
     let mut success = true;
     let all_options = template.all_options();
 
@@ -556,16 +548,18 @@ fn process_options(template: &Template, args: &Args) {
         }
 
         if !option_found {
-            log::error!("Unknown option '{}'", option);
+            log::error!("Unknown option '{option}'");
             success = false;
         } else if !option_found_for_chip {
-            log::error!("Option '{}' is not supported for chip {}", option, arg_chip);
+            log::error!("Option '{option}' is not supported for chip {arg_chip}");
             success = false;
         }
     }
 
     if !success {
-        process::exit(-1);
+        bail!("Invalid options provided");
+    } else {
+        Ok(())
     }
 }
 

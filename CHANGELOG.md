@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The generated project no longer enables `static_cell/nightly` (#199)
+- Use `anyhow::bail` instead of log + exit (#204)
 
 ### Fixed
 

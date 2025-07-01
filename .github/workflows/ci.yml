@@ -91,13 +91,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           sudo apt-get install gh -y
-          ISSUE_NAME=$(gh issue list --state open --search "Sheduled CI Failure in:title" --json number --jq '.[0].number')
+          ISSUE_NAME=$(gh issue list --state open --search "Scheduled CI Failure in:title" --json number --jq '.[0].number')
 
           if [[ -z "$ISSUE_NAME" ]];
           then
             gh issue create \
-              --title "Sheduled CI Failure" \
-              --body "Sheduled CI Workflow Failed! [View the failed job](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+              --title "Scheduled CI Failure" \
+              --body "Scheduled CI Workflow Failed! [View the failed job](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})."
           fi
 
   # --------------------------------------------------------------------------

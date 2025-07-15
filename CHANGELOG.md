@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Test source is no longer generated if not needed (#201)
+- Conflicting options specified via `-o` are now rejected (#213)
 
 ### Removed
 

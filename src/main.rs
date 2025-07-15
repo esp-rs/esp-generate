@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     env, fs,
     path::{Path, PathBuf},
     process::Command,
@@ -8,8 +9,11 @@ use std::{
 use anyhow::{bail, Result};
 use clap::Parser;
 use env_logger::{Builder, Env};
-use esp_generate::config::{ActiveConfiguration, Relationships};
 use esp_generate::template::{GeneratorOptionItem, Template};
+use esp_generate::{
+    append_list_as_sentence,
+    config::{ActiveConfiguration, Relationships},
+};
 use esp_generate::{cargo, config::find_option};
 use esp_metadata::Chip;
 use inquire::{Select, Text};
@@ -501,6 +505,8 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
         options: &template.options,
     };
 
+    let mut same_selection_group: HashMap<&str, Vec<&str>> = HashMap::new();
+
     for option in &selected_config.selected {
         // Find the matching option in the template
         let mut option_found = false;
@@ -519,6 +525,20 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
 
             // Is the option allowed to be selected?
             if selected_config.is_option_active(option_item) {
+                // Even if the option is active, another from the same selection group may be present.
+                // The TUI would deselect the previous option, but when specified from the command line,
+                // we shouldn't assume which one the user actually wants. Therefore, we collect the selected
+                // options that belong to a selection group and return an error (later) if multiple ones
+                // are selected in the same group.
+                if !option_item.selection_group.is_empty() {
+                    let options = same_selection_group
+                        .entry(&option_item.selection_group)
+                        .or_default();
+
+                    if !options.contains(&option.as_str()) {
+                        options.push(option);
+                    }
+                }
                 continue;
             }
 
@@ -552,6 +572,20 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
             success = false;
         } else if !option_found_for_chip {
             log::error!("Option '{option}' is not supported for chip {arg_chip}");
+            success = false;
+        }
+    }
+
+    for (_group, entries) in same_selection_group {
+        if entries.len() > 1 {
+            log::error!(
+                "{}",
+                append_list_as_sentence(
+                    "The following options can not be enabled together:",
+                    "",
+                    &entries
+                )
+            );
             success = false;
         }
     }

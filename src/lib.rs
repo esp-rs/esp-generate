@@ -11,6 +11,10 @@ pub mod template;
 /// let list = &["foo", "bar", "baz"];
 /// let sentence = append_list_as_sentence("Here is a sentence.", "My elements are", list);
 /// assert_eq!(sentence, "Here is a sentence. My elements are `foo`, `bar` and `baz`.");
+///
+/// let list = &["foo", "bar", "baz"];
+/// let sentence = append_list_as_sentence("The following list is problematic:", "", list);
+/// assert_eq!(sentence, "The following list is problematic: `foo`, `bar` and `baz`.");
 /// ```
 pub fn append_list_as_sentence<S: AsRef<str>>(base: &str, word: &str, els: &[S]) -> String {
     if !els.is_empty() {
@@ -23,8 +27,10 @@ pub fn append_list_as_sentence<S: AsRef<str>>(base: &str, word: &str, els: &[S])
 
         for (i, r) in els.iter().enumerate() {
             if i == 0 {
-                requires.push_str(word);
-                requires.push(' ');
+                if !word.is_empty() {
+                    requires.push_str(word);
+                    requires.push(' ');
+                }
             } else if i == els.len() - 1 {
                 requires.push_str(" and ");
             } else {

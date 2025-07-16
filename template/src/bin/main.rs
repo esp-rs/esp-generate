@@ -77,7 +77,6 @@ fn main() -> ! {
     let _init = esp_wifi::init(
         timg0.timer0,
         esp_hal::rng::Rng::new(peripherals.RNG),
-        peripherals.RADIO_CLK,
     )
     .unwrap();
     //ENDIF

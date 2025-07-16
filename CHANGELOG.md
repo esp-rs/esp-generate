@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.5.0]
+
+### Added
+
 - Added interactive flow option instead of setting target chip and name in arguments (#196)
 - Added `rust-version` to the generated Cargo.toml (#192)
 - Generate settings for Zed (#200)
@@ -141,7 +152,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/esp-rs/esp-generate/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/esp-rs/esp-generate/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/esp-rs/esp-generate/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/esp-rs/esp-generate/compare/v0.2.2...v0.3.0

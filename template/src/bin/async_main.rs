@@ -98,7 +98,7 @@ async fn main(spawner: Spawner) {
     //IF option("ble-trouble") || option("ble-bleps") || option("wifi")
     let rng = esp_hal::rng::Rng::new(peripherals.RNG);
     let timer1 = TimerGroup::new(peripherals.TIMG0);
-    let wifi_init = esp_wifi::init(timer1.timer0, rng, peripherals.RADIO_CLK)
+    let wifi_init = esp_wifi::init(timer1.timer0, rng)
         .expect("Failed to initialize WIFI/BLE controller");
     //ENDIF
     //IF option("wifi")

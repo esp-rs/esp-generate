@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added interactive flow option instead of setting target chip and name in arguments (#196)
-
 - Added `rust-version` to the generated Cargo.toml (#192)
 - Generate settings for Zed (#200)
+- Updated dependencies for new esp-hal 1.0.0-rc.0 release (#215)
 
 ### Changed
 

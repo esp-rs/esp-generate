@@ -354,13 +354,11 @@ fn process_file(
     let mut file_directives = true;
 
     // Create a new Rhai engine and scope
-    let mut engine = rhai::Engine::new();
+    let mut engine = somni_expr::Context::new();
 
     // Define a custom function to check if conditions of the options.
-    let options_clone: Vec<String> = options.to_vec();
-    engine.register_fn("option", move |cond: &str| -> bool {
-        let cond = cond.to_string();
-        options_clone.contains(&cond)
+    engine.add_function("option", move |cond: &str| -> bool {
+        options.iter().any(|c| c == cond)
     });
 
     let mut include_file = true;
@@ -376,7 +374,7 @@ fn process_file(
                 .strip_prefix("//INCLUDEFILE ")
                 .or_else(|| trimmed.strip_prefix("#INCLUDEFILE "))
             {
-                include_file = engine.eval::<bool>(cond).unwrap();
+                include_file = engine.evaluate::<bool>(cond).unwrap();
                 continue;
             } else if let Some(include_as) = trimmed
                 .strip_prefix("//INCLUDE_AS ")
@@ -434,7 +432,7 @@ fn process_file(
 
             // Only evaluate condition if this IF is in a branch that should be included
             let current = if last.include_line() {
-                engine.eval::<bool>(cond).unwrap()
+                engine.evaluate::<bool>(cond).unwrap()
             } else {
                 false
             };
@@ -450,7 +448,7 @@ fn process_file(
 
             // Only evaluate condition if no other branches evaluated to true
             let current = if matches!(last, BlockKind::IfElse(false, false)) {
-                engine.eval::<bool>(cond).unwrap()
+                engine.evaluate::<bool>(cond).unwrap()
             } else {
                 false
             };

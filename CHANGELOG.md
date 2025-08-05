@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added Wi-Fi/BLE setup code to the blocking template (#233)
 
+- Check for the `esp-config` tool (#221)
+
 ### Changed
 
 - Updated bt-hci and trouble-host dependencies

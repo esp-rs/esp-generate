@@ -83,6 +83,7 @@ pub fn check(chip: Chip, probe_rs_required: bool, msrv: Version, requires_nightl
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_check_results(
     probe_rs_required: bool,
     msrv: Version,
@@ -126,7 +127,7 @@ fn create_check_results(
     requirements_unsatisfied |= format_result(
         "esp-config",
         check_version(esp_config_version, 0, 5, 0),
-        format!("minimum suggested version is 0.5.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"),
+        "minimum suggested version is 0.5.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade",
         "not found - see https://probe.rs/docs/getting-started/installation/ for how to install (installation is optional)",
         probe_rs_required,
         &mut result,

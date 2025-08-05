@@ -70,16 +70,19 @@ pub fn check(chip: Chip, probe_rs_required: bool, msrv: Version, requires_nightl
         "suggested"
     };
 
-    create_check_results(
-        probe_rs_required,
-        msrv,
-        rust_toolchain,
-        rust_version,
-        rust_toolchain_tool,
-        espflash_version,
-        probers_version,
-        esp_config_version,
-        probers_suggestion_kind,
+    println!(
+        "{}",
+        create_check_results(
+            probe_rs_required,
+            msrv,
+            rust_toolchain,
+            rust_version,
+            rust_toolchain_tool,
+            espflash_version,
+            probers_version,
+            esp_config_version,
+            probers_suggestion_kind,
+        )
     );
 }
 
@@ -127,8 +130,8 @@ fn create_check_results(
     requirements_unsatisfied |= format_result(
         "esp-config",
         check_version(esp_config_version, 0, 5, 0),
-        "minimum suggested version is 0.5.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade",
-        "not found - see https://probe.rs/docs/getting-started/installation/ for how to install (installation is optional)",
+        "minimum suggested version is 0.5.0",
+        "not found - use `cargo install esp-config --features=tui --locked` to install (installation is optional)",
         probe_rs_required,
         &mut result,
     );
@@ -406,7 +409,7 @@ Checking installed versions
 ❌ Rust (stable) (not found - use `rustup` to install)
 ❌ espflash (not found - see https://crates.io/crates/espflash for installation instructions)
 ❌ probe-rs (not found - see https://probe.rs/docs/getting-started/installation/ for how to install (required))
-❌ esp-config (not found - see https://probe.rs/docs/getting-started/installation/ for how to install (installation is optional))
+❌ esp-config (not found - use `cargo install esp-config --features=tui --locked` to install (installation is optional))
 
 For more details see https://docs.espressif.com/projects/rust/book/
 "

@@ -301,7 +301,13 @@ fn main() -> Result<()> {
         log::warn!("Current directory is already in a git repository, skipping git initialization");
     }
 
-    check::check(chip, selected.contains(&"probe-rs".to_string()), msrv);
+    check::check(
+        chip,
+        selected.contains(&"probe-rs".to_string()),
+        msrv,
+        selected.contains(&"stack-smashing-protection".to_string())
+            && selected.contains(&"riscv".to_string()),
+    );
 
     Ok(())
 }

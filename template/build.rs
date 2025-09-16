@@ -3,11 +3,12 @@ fn main() {
     //IF option("embedded-test")
     println!("cargo:rustc-link-arg-tests=-Tembedded-test.x");
     //ENDIF
+    println!("cargo:rustc-link-arg=-Tlinkall.x");
     //IF option("defmt")
+    // defmt.x can't be the last linker script, or you'll likely get this error:
+    // `failed to demangle defmt symbol `__global_pointer$`: expected value at line 1 column 1`
     println!("cargo:rustc-link-arg=-Tdefmt.x");
     //ENDIF
-    // make sure linkall.x is the last linker script (otherwise might cause problems with flip-link)
-    println!("cargo:rustc-link-arg=-Tlinkall.x");
 }
 
 fn linker_be_nice() {

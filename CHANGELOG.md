@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Fixed cases where padding overflow caused panic if terminal size changed (#228)
 
 ### Removed
 

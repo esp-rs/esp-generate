@@ -114,7 +114,8 @@ impl<'app> Repository<'app> {
                     } else {
                         style.unselected
                     };
-                let padding = width as usize - v.title().len() - 4; // 2 spaces + the indicator
+                // reserve indicator spacing; saturating_sub keeps padding non-negative so narrow widths don't overflow
+                let padding = (width as usize).saturating_sub(v.title().len() + 4);
                 (
                     level_active && self.config.is_active(v),
                     format!(

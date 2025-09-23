@@ -362,6 +362,7 @@ fn process_file(
     });
 
     let mut include_file = true;
+    let mut file_source: Option<String> = None;
 
     for (line_no, line) in contents.lines().enumerate() {
         let line_no = line_no + 1;
@@ -382,10 +383,31 @@ fn process_file(
             {
                 *file_path = include_as.trim().to_string();
                 continue;
+            } else if let Some(include_from) = trimmed
+                .strip_prefix("//INCLUDE_FROM ")
+                .or_else(|| trimmed.strip_prefix("#INCLUDE_FROM "))
+            {
+                file_source = Some(include_from.trim().to_string());
             }
         }
         if !include_file {
             return None;
+        }
+
+        if let Some(url) = file_source {
+            // if let Ok(output) = Command::new("curl").arg("-s").arg(&url).output() {
+            // if output.status.success() {
+            // if let Ok(data) = String::from_utf8(output.stdout) {
+            // res = data;
+            // }
+            // }
+            // }
+            // return Some(res);
+            let output = Command::new("curl").arg("-s").arg(&url).output().ok()?;
+            if !output.status.success() {
+                return None;
+            }
+            return String::from_utf8(output.stdout).ok();
         }
 
         file_directives = false;

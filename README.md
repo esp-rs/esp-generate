@@ -62,6 +62,7 @@ You can also directly download pre-compiled [release binaries] or use [`cargo-bi
 - `optional`: Enables the following set of options:
   - `wokwi`: Adds support for Wokwi simulation using [VS Code Wokwi extension].
   - `dev-container`: Adds support for [VS Code Dev Containers] and [GitHub Codespaces].
+  - `nix`: Adds support for Nix using the [esp-rs-nix] repo.
   - `ci` Adds GitHub Actions support with some basics checks.
 - `editors`: Select the editor integrations:
    - `helix`: The Helix editor
@@ -71,6 +72,7 @@ You can also directly download pre-compiled [release binaries] or use [`cargo-bi
 [VS Code Wokwi extension]: https://marketplace.visualstudio.com/items?itemName=wokwi.wokwi-vscode
 [VS Code Dev Containers]: https://code.visualstudio.com/docs/remote/containers#_quick-start-open-an-existing-folder-in-a-container
 [GitHub Codespaces]: https://docs.github.com/en/codespaces/developing-in-codespaces/creating-a-codespace
+[esp-rs-nix]: https://github.com/leighleighleigh/esp-rs-nix
 
 ## License
 

@@ -164,6 +164,10 @@ options:
         display_name: Add support for VS Code Dev Containers and GitHub Codespaces.
 
       - !Option
+        name: nix
+        display_name: Add support for Nix Flake/Shell developement environement.
+
+      - !Option
         name: ci
         display_name: Add GitHub Actions support with some basic checks.
 

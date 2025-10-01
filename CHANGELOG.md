@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- Updated bt-hci and trouble-host dependencies
 
 ### Fixed
 - Fixed cases where padding overflow caused panic if terminal size changed (#228)

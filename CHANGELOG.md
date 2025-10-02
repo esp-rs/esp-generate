@@ -24,12 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `rust-version` to the generated Cargo.toml (#192)
 - Generate settings for Zed (#200)
 - Updated dependencies for new esp-hal 1.0.0-rc.0 release (#215)
-- Added Wi-Fi/BLE setup code to the blocking template (#232)
+- Added Wi-Fi/BLE setup code to the blocking template (#233)
 
 ### Changed
 
 - The generated project no longer enables `static_cell/nightly` (#199)
 - Use `anyhow::bail` instead of log + exit (#204)
+- The generated project now uses Rust 2024 (#233)
 
 ### Fixed
 

@@ -473,7 +473,7 @@ Checking installed versions
 ❌ Rust (stable) (not found - use `rustup` to install)
 ❌ espflash (not found - see https://crates.io/crates/espflash for installation instructions)
 ❌ probe-rs (not found - see https://probe.rs/docs/getting-started/installation/ for how to install (required))
-❌ esp-config (not found - use `cargo install esp-config --features=tui --locked` to install (installation is optional))
+💡 esp-config (not found - use `cargo install esp-config --features=tui --locked` to install (installation is optional))
 
 For more details see https://docs.espressif.com/projects/rust/book/
 "

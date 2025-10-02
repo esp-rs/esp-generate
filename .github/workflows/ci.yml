@@ -122,6 +122,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Run clippy
         run: cargo clippy -- -D warnings
@@ -139,5 +141,3 @@ jobs:
         with:
           toolchain: ${{ env.MSRV }}
       - run: cargo check -p esp-generate
-
-

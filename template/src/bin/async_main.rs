@@ -82,11 +82,11 @@ async fn main(spawner: Spawner) {
     //ENDIF alloc
 
     //IF !option("esp32")
-    let timer0 = SystemTimer::new(peripherals.SYSTIMER);
-    esp_hal_embassy::init(timer0.alarm0);
+    let systimer = SystemTimer::new(peripherals.SYSTIMER);
+    esp_hal_embassy::init(systimer.alarm0);
     //ELSE
-    let timer0 = TimerGroup::new(peripherals.TIMG1);
-    esp_hal_embassy::init(timer0.timer0);
+    let timer1 = TimerGroup::new(peripherals.TIMG1);
+    esp_hal_embassy::init(timer1.timer0);
     //ENDIF
 
     //IF option("defmt") || option("log")
@@ -96,9 +96,9 @@ async fn main(spawner: Spawner) {
     //ENDIF
 
     //IF option("ble-trouble") || option("ble-bleps") || option("wifi")
-    let timer1 = TimerGroup::new(peripherals.TIMG0);
+    let timer0 = TimerGroup::new(peripherals.TIMG0);
     let wifi_init = esp_wifi::init(
-        timer1.timer0,
+        timer0.timer0,
         esp_hal::rng::Rng::new(peripherals.RNG)
     )
     .expect("Failed to initialize Wi-Fi/BLE controller");

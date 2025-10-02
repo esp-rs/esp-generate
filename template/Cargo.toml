@@ -164,8 +164,8 @@ esp-wifi = { version = "0.15.0", features = [
 #+bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
 #ENDIF
 #IF option("ble-trouble")
-#+trouble-host = { version = "0.1.0", features = ["gatt"] }
-#+bt-hci = { version = "0.2.1", features = [] }
+#+trouble-host = { version = "0.2.4", features = ["gatt"] }
+#+bt-hci = { version = "0.3.2", features = [] }
 #ENDIF
 #ENDIF wifi || ble || ble-trouble
 #IF option("embassy")

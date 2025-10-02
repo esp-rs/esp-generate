@@ -9,10 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added Wi-Fi/BLE setup code to the blocking template (#233)
+
 ### Changed
+
 - Updated bt-hci and trouble-host dependencies
+- The generated project now uses Rust 2024 (#233)
+- The generated project now uses all of `.dram2_uninit` for its heap (#234)
 
 ### Fixed
+
 - Fixed cases where padding overflow caused panic if terminal size changed (#228)
 
 ### Removed
@@ -25,13 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `rust-version` to the generated Cargo.toml (#192)
 - Generate settings for Zed (#200)
 - Updated dependencies for new esp-hal 1.0.0-rc.0 release (#215)
-- Added Wi-Fi/BLE setup code to the blocking template (#233)
 
 ### Changed
 
 - The generated project no longer enables `static_cell/nightly` (#199)
 - Use `anyhow::bail` instead of log + exit (#204)
-- The generated project now uses Rust 2024 (#233)
 
 ### Fixed
 

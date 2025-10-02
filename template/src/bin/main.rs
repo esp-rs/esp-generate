@@ -15,6 +15,9 @@ use esp_hal::{
 //IF option("wifi") || option("ble-bleps")
 use esp_hal::timer::timg::TimerGroup;
 //ENDIF
+//IF option("ble-bleps")
+use esp_wifi::ble::controller::BleConnector;
+//ENDIF
 
 //IF option("defmt")
 //IF !option("probe-rs")
@@ -70,15 +73,26 @@ fn main() -> ! {
 
     //IF option("alloc")
     esp_alloc::heap_allocator!(size: 64 * 1024);
+    //IF option("wifi") && (option("ble-bleps") || option("ble-trouble"))
+    // COEX needs more RAM - so we've added some more
+    esp_alloc::heap_allocator!(#[unsafe(link_section = ".dram2_uninit")] size: 64 * 1024);
     //ENDIF
+    //ENDIF alloc
 
     //IF option("wifi") || option("ble-bleps")
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    let _init = esp_wifi::init(
+    let wifi_init = esp_wifi::init(
         timg0.timer0,
         esp_hal::rng::Rng::new(peripherals.RNG),
     )
-    .unwrap();
+    .expect("Failed to initialize Wi-Fi/BLE controller");
+    //ENDIF
+    //IF option("wifi")
+    let (mut _wifi_controller, _interfaces) = esp_wifi::wifi::new(&wifi_init, peripherals.WIFI)
+        .expect("Failed to initialize Wi-Fi controller");
+    //ENDIF
+    //IF option("ble-bleps")
+    let _connector = BleConnector::new(&wifi_init, peripherals.BT);
     //ENDIF
 
     loop {

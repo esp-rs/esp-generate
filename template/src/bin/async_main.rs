@@ -80,10 +80,11 @@ async fn main(spawner: Spawner) {
     let peripherals = esp_hal::init(config);
 
     //IF option("alloc")
-    esp_alloc::heap_allocator!(size: 64 * 1024);
+    //REPLACE 65536 max-dram2-uninit
+    esp_alloc::heap_allocator!(#[unsafe(link_section = ".dram2_uninit")] size: 65536);
     //IF option("wifi") && (option("ble-bleps") || option("ble-trouble"))
     // COEX needs more RAM - so we've added some more
-    esp_alloc::heap_allocator!(#[unsafe(link_section = ".dram2_uninit")] size: 64 * 1024);
+    esp_alloc::heap_allocator!(size: 64 * 1024);
     //ENDIF
     //ENDIF alloc
 

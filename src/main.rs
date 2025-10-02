@@ -228,6 +228,18 @@ fn main() -> Result<()> {
     let esp_hal_version = versions.dependency_version("esp-hal");
     let msrv = versions.msrv().parse().unwrap();
 
+    // based on esp32 linker scripts
+    // TODO: add this to esp-metadata
+    let max_dram2 = match chip {
+        Chip::Esp32 => 98767,
+        Chip::Esp32c2 => 66416, // 0x3fcdeb70 -0x3fcce800
+        Chip::Esp32c3 => 66320, // 0x3fcde710 - 3fcce400
+        Chip::Esp32c6 => 65536, // 0x4087e610 - 0x4086e610
+        Chip::Esp32h2 => 69392, // 0x4084fee0 - 0x4083efd0
+        Chip::Esp32s2 => 139264,
+        Chip::Esp32s3 => 73744, // 0x3FCED710 - 0x3FCDB700
+    };
+
     let mut variables = vec![
         ("project-name".to_string(), name.clone()),
         ("mcu".to_string(), chip.to_string()),
@@ -237,6 +249,7 @@ fn main() -> Result<()> {
             env!("CARGO_PKG_VERSION").to_string(),
         ),
         ("esp-hal-version".to_string(), esp_hal_version),
+        ("max-dram2-uninit".to_string(), format!("{max_dram2}")),
     ];
 
     variables.push(("rust_target".to_string(), chip.target().to_string()));

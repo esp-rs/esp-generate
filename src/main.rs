@@ -302,6 +302,7 @@ fn main() -> Result<()> {
     }
 
     check::check(
+        &project_dir,
         chip,
         selected.contains(&"probe-rs".to_string()),
         msrv,

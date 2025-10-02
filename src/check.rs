@@ -1,5 +1,9 @@
 use core::str;
-use std::{fmt::Display, str::FromStr};
+use std::{
+    fmt::Display,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use esp_metadata::Chip;
 
@@ -45,7 +49,13 @@ enum CheckResult {
     NotFound,
 }
 
-pub fn check(chip: Chip, probe_rs_required: bool, msrv: Version, requires_nightly: bool) {
+pub fn check(
+    project_path: &Path,
+    chip: Chip,
+    probe_rs_required: bool,
+    msrv: Version,
+    requires_nightly: bool,
+) {
     let rust_toolchain = if chip.is_xtensa() {
         "esp"
     } else if requires_nightly {
@@ -62,7 +72,7 @@ pub fn check(chip: Chip, probe_rs_required: bool, msrv: Version, requires_nightl
 
     let probers_version = get_version("probe-rs", &[]);
 
-    let esp_config_version = get_version("esp-config", &[]);
+    let esp_config_version = get_version("xesp-config", &[]);
 
     let probers_suggestion_kind = if probe_rs_required {
         "required"
@@ -84,6 +94,10 @@ pub fn check(chip: Chip, probe_rs_required: bool, msrv: Version, requires_nightl
             probers_suggestion_kind,
         )
     );
+
+    if offensive_cargo_config_check(project_path) {
+        println!("⚠️ `.config/cargo.toml` files found in upper directories - this can cause undesired behavior. See https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure");
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -104,6 +118,7 @@ fn create_check_results(
 
     let mut requirements_unsatisfied = false;
     requirements_unsatisfied |= format_result(
+        false,
         &format!("Rust ({rust_toolchain})"),
         check_version(rust_version, msrv.major, msrv.minor, msrv.patch),
         format!("minimum required version is 1.86 - use `{rust_toolchain_tool}` to upgrade"),
@@ -112,6 +127,7 @@ fn create_check_results(
         &mut result,
     );
     requirements_unsatisfied |= format_result(
+        false,
         "espflash",
         check_version(espflash_version, 3, 3, 0),
         "minimum required version is 3.3.0 - see https://crates.io/crates/espflash",
@@ -120,6 +136,7 @@ fn create_check_results(
         &mut result,
     );
     requirements_unsatisfied |= format_result(
+        false,
         "probe-rs",
         check_version(probers_version, 0, 25, 0),
         format!("minimum {probers_suggestion_kind} version is 0.25.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"),
@@ -128,6 +145,7 @@ fn create_check_results(
         &mut result,
     );
     requirements_unsatisfied |= format_result(
+        true,
         "esp-config",
         check_version(esp_config_version, 0, 5, 0),
         "minimum suggested version is 0.5.0",
@@ -144,6 +162,7 @@ fn create_check_results(
 }
 
 fn format_result(
+    friendly: bool,
     name: &str,
     check_result: CheckResult,
     wrong_version_help: impl AsRef<str>,
@@ -151,20 +170,34 @@ fn format_result(
     required: bool,
     message: &mut String,
 ) -> bool {
+    let emojis = if friendly {
+        "🆗💡💡"
+    } else {
+        "🆗🛑❌"
+    };
     let wrong_version_help = wrong_version_help.as_ref();
     let not_found_help = not_found_help.as_ref();
 
     match check_result {
         CheckResult::Ok(found) => {
-            message.push_str(&format!("🆗 {name}: {found}\n"));
+            message.push_str(&format!(
+                "{} {name}: {found}\n",
+                emojis.chars().nth(0).unwrap()
+            ));
             false
         }
         CheckResult::WrongVersion => {
-            message.push_str(&format!("🛑 {name} ({wrong_version_help})\n"));
+            message.push_str(&format!(
+                "{} {name} ({wrong_version_help})\n",
+                emojis.chars().nth(1).unwrap()
+            ));
             required
         }
         CheckResult::NotFound => {
-            message.push_str(&format!("❌ {name} ({not_found_help})\n"));
+            message.push_str(&format!(
+                "{} {name} ({not_found_help})\n",
+                emojis.chars().nth(2).unwrap()
+            ));
             required
         }
     }
@@ -226,6 +259,32 @@ fn try_extract_version(cmd: &str, line: &str) -> Option<Version> {
         minor,
         patch,
     })
+}
+
+fn offensive_cargo_config_check(path: &Path) -> bool {
+    let mut current = if let Some(parent) = path.parent() {
+        PathBuf::from(parent)
+    } else {
+        return false;
+    };
+
+    loop {
+        if current.join(".cargo/config.toml").exists() {
+            println!("{:?}", current);
+            return true;
+        }
+
+        current = if let Some(parent) = current.parent() {
+            if parent == current {
+                break;
+            }
+            parent.to_path_buf()
+        } else {
+            return false;
+        };
+    }
+
+    false
 }
 
 #[cfg(test)]

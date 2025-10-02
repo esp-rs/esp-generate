@@ -73,7 +73,11 @@ fn main() -> ! {
 
     //IF option("alloc")
     esp_alloc::heap_allocator!(size: 64 * 1024);
+    //IF option("wifi") && (option("ble-bleps") || option("ble-trouble"))
+    // COEX needs more RAM - so we've added some more
+    esp_alloc::heap_allocator!(#[unsafe(link_section = ".dram2_uninit")] size: 64 * 1024);
     //ENDIF
+    //ENDIF alloc
 
     //IF option("wifi") || option("ble-bleps")
     let timg0 = TimerGroup::new(peripherals.TIMG0);

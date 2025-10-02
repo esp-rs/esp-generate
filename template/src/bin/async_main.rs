@@ -20,6 +20,7 @@ use esp_wifi::ble::controller::BleConnector;
 //ENDIF
 //IF option("ble-trouble")
 use bt_hci::controller::ExternalController;
+use trouble_host::prelude::*;
 //ENDIF
 
 //IF option("defmt")
@@ -49,6 +50,11 @@ use esp_backtrace as _;
 
 //IF option("alloc")
 extern crate alloc;
+//ENDIF
+
+//IF option("ble-trouble")
+const CONNECTIONS_MAX: usize = 1;
+const L2CAP_CHANNELS_MAX: usize = 1;
 //ENDIF
 
 // This creates a default app-descriptor required by the esp-idf bootloader.
@@ -108,7 +114,10 @@ async fn main(spawner: Spawner) {
     //IF option("ble-trouble")
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
     let transport = BleConnector::new(&wifi_init, peripherals.BT);
-    let _ble_controller = ExternalController::<_, 20>::new(transport);
+    let ble_controller = ExternalController::<_, 20>::new(transport);
+    let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
+        HostResources::new();
+    let _stack = trouble_host::new(ble_controller, &mut resources);
     //ELIF option("ble-bleps")
     let _connector = BleConnector::new(&wifi_init, peripherals.BT);
     //ENDIF

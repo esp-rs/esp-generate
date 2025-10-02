@@ -97,7 +97,7 @@ pub fn check(
 
     if offensive_cargo_config_check(project_path) {
         println!(
-            "⚠️ `.config/cargo.toml` files found in upper directories - this can cause undesired behavior. See https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure"
+            "⚠️ `.config/cargo.toml` files found in parent directories - this can cause undesired behavior. See https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure"
         );
     }
 }

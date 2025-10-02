@@ -101,11 +101,11 @@ async fn main(spawner: Spawner) {
         timer1.timer0,
         esp_hal::rng::Rng::new(peripherals.RNG)
     )
-    .expect("Failed to initialize WIFI/BLE controller");
+    .expect("Failed to initialize Wi-Fi/BLE controller");
     //ENDIF
     //IF option("wifi")
     let (mut _wifi_controller, _interfaces) = esp_wifi::wifi::new(&wifi_init, peripherals.WIFI)
-        .expect("Failed to initialize WIFI controller");
+        .expect("Failed to initialize Wi-Fi controller");
     //ENDIF
     //IF option("ble-trouble")
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32

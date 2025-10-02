@@ -96,7 +96,9 @@ pub fn check(
     );
 
     if offensive_cargo_config_check(project_path) {
-        println!("⚠️ `.config/cargo.toml` files found in upper directories - this can cause undesired behavior. See https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure");
+        println!(
+            "⚠️ `.config/cargo.toml` files found in upper directories - this can cause undesired behavior. See https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure"
+        );
     }
 }
 
@@ -139,8 +141,12 @@ fn create_check_results(
         false,
         "probe-rs",
         check_version(probers_version, 0, 25, 0),
-        format!("minimum {probers_suggestion_kind} version is 0.25.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"),
-        format!("not found - see https://probe.rs/docs/getting-started/installation/ for how to install ({probers_suggestion_kind})"),
+        format!(
+            "minimum {probers_suggestion_kind} version is 0.25.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"
+        ),
+        format!(
+            "not found - see https://probe.rs/docs/getting-started/installation/ for how to install ({probers_suggestion_kind})"
+        ),
         probe_rs_required,
         &mut result,
     );
@@ -182,7 +188,7 @@ fn format_result(
         CheckResult::Ok(found) => {
             message.push_str(&format!(
                 "{} {name}: {found}\n",
-                emojis.chars().nth(0).unwrap()
+                emojis.chars().next().unwrap()
             ));
             false
         }
@@ -270,7 +276,6 @@ fn offensive_cargo_config_check(path: &Path) -> bool {
 
     loop {
         if current.join(".cargo/config.toml").exists() {
-            println!("{:?}", current);
             return true;
         }
 

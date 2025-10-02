@@ -1,5 +1,9 @@
 use core::str;
-use std::{fmt::Display, str::FromStr};
+use std::{
+    fmt::Display,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use esp_metadata::Chip;
 
@@ -45,80 +49,161 @@ enum CheckResult {
     NotFound,
 }
 
-pub fn check(chip: Chip, probe_rs_required: bool, msrv: Version) {
-    // TODO: check +nightly if needed
-    let rust_version = get_version(
-        "rustc",
-        if chip.is_xtensa() {
-            &["+esp"]
-        } else {
-            &["+stable"]
-        },
-    );
+pub fn check(
+    project_path: &Path,
+    chip: Chip,
+    probe_rs_required: bool,
+    msrv: Version,
+    requires_nightly: bool,
+) {
+    let rust_toolchain = if chip.is_xtensa() {
+        "esp"
+    } else if requires_nightly {
+        "nightly"
+    } else {
+        "stable"
+    };
 
-    let rust_toolchain = if chip.is_xtensa() { "esp" } else { "stable" };
+    let rust_version = get_version("rustc", &[format!("+{rust_toolchain}").as_str()]);
+
     let rust_toolchain_tool = if chip.is_xtensa() { "espup" } else { "rustup" };
 
     let espflash_version = get_version("espflash", &[]);
 
     let probers_version = get_version("probe-rs", &[]);
+
+    let esp_config_version = get_version("xesp-config", &[]);
+
     let probers_suggestion_kind = if probe_rs_required {
         "required"
     } else {
         "suggested"
     };
 
-    println!("\nChecking installed versions");
+    println!(
+        "{}",
+        create_check_results(
+            probe_rs_required,
+            msrv,
+            rust_toolchain,
+            rust_version,
+            rust_toolchain_tool,
+            espflash_version,
+            probers_version,
+            esp_config_version,
+            probers_suggestion_kind,
+        )
+    );
+
+    if offensive_cargo_config_check(project_path) {
+        println!(
+            "⚠️ `.config/cargo.toml` files found in parent directories - this can cause undesired behavior. See https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure"
+        );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn create_check_results(
+    probe_rs_required: bool,
+    msrv: Version,
+    rust_toolchain: &'static str,
+    rust_version: Option<Version>,
+    rust_toolchain_tool: &'static str,
+    espflash_version: Option<Version>,
+    probers_version: Option<Version>,
+    esp_config_version: Option<Version>,
+    probers_suggestion_kind: &'static str,
+) -> String {
+    let mut result = String::new();
+
+    result.push_str("\nChecking installed versions\n");
 
     let mut requirements_unsatisfied = false;
-    requirements_unsatisfied |= print_result(
+    requirements_unsatisfied |= format_result(
+        false,
         &format!("Rust ({rust_toolchain})"),
         check_version(rust_version, msrv.major, msrv.minor, msrv.patch),
         format!("minimum required version is 1.86 - use `{rust_toolchain_tool}` to upgrade"),
         format!("not found - use `{rust_toolchain_tool}` to install"),
         true,
+        &mut result,
     );
-    requirements_unsatisfied |= print_result(
+    requirements_unsatisfied |= format_result(
+        false,
         "espflash",
         check_version(espflash_version, 3, 3, 0),
         "minimum required version is 3.3.0 - see https://crates.io/crates/espflash",
         "not found - see https://crates.io/crates/espflash for installation instructions",
         true,
+        &mut result,
     );
-    requirements_unsatisfied |= print_result(
+    requirements_unsatisfied |= format_result(
+        false,
         "probe-rs",
         check_version(probers_version, 0, 25, 0),
-        format!("minimum {probers_suggestion_kind} version is 0.25.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"),
-        "not found - see https://probe.rs/docs/getting-started/installation/ for how to install",
+        format!(
+            "minimum {probers_suggestion_kind} version is 0.25.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"
+        ),
+        format!(
+            "not found - see https://probe.rs/docs/getting-started/installation/ for how to install ({probers_suggestion_kind})"
+        ),
         probe_rs_required,
+        &mut result,
+    );
+    requirements_unsatisfied |= format_result(
+        true,
+        "esp-config",
+        check_version(esp_config_version, 0, 5, 0),
+        "minimum suggested version is 0.5.0",
+        "not found - use `cargo install esp-config --features=tui --locked` to install (installation is optional)",
+        probe_rs_required,
+        &mut result,
     );
 
     if requirements_unsatisfied {
-        println!("\nFor more details see https://docs.espressif.com/projects/rust/book/")
+        result.push_str("\nFor more details see https://docs.espressif.com/projects/rust/book/\n")
     }
+
+    result
 }
 
-fn print_result(
+fn format_result(
+    friendly: bool,
     name: &str,
     check_result: CheckResult,
     wrong_version_help: impl AsRef<str>,
     not_found_help: impl AsRef<str>,
     required: bool,
+    message: &mut String,
 ) -> bool {
+    let emojis = if friendly {
+        "🆗💡💡"
+    } else {
+        "🆗🛑❌"
+    };
     let wrong_version_help = wrong_version_help.as_ref();
     let not_found_help = not_found_help.as_ref();
 
     match check_result {
         CheckResult::Ok(found) => {
-            println!("🆗 {name}: {found}");
+            message.push_str(&format!(
+                "{} {name}: {found}\n",
+                emojis.chars().next().unwrap()
+            ));
             false
         }
         CheckResult::WrongVersion => {
-            println!("🛑 {name} ({wrong_version_help})");
+            message.push_str(&format!(
+                "{} {name} ({wrong_version_help})\n",
+                emojis.chars().nth(1).unwrap()
+            ));
             required
         }
         CheckResult::NotFound => {
-            println!("❌ {name} ({not_found_help})");
+            message.push_str(&format!(
+                "{} {name} ({not_found_help})\n",
+                emojis.chars().nth(2).unwrap()
+            ));
             required
         }
     }
@@ -182,6 +267,31 @@ fn try_extract_version(cmd: &str, line: &str) -> Option<Version> {
     })
 }
 
+fn offensive_cargo_config_check(path: &Path) -> bool {
+    let mut current = if let Some(parent) = path.parent() {
+        PathBuf::from(parent)
+    } else {
+        return false;
+    };
+
+    loop {
+        if current.join(".cargo/config.toml").exists() {
+            return true;
+        }
+
+        current = if let Some(parent) = current.parent() {
+            if parent == current {
+                break;
+            }
+            parent.to_path_buf()
+        } else {
+            return false;
+        };
+    }
+
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -241,6 +351,133 @@ espflash 1.7.0"#;
                 minor: 7,
                 patch: 0
             })
+        );
+    }
+
+    #[test]
+    fn test_ui_all_good() {
+        assert_eq!(
+            create_check_results(
+                /*probe_rs_required*/ true,
+                /*msrv*/
+                Version {
+                    major: 1,
+                    minor: 85,
+                    patch: 0
+                },
+                /*rust_toolchain*/ "nightly",
+                /*rust_version*/
+                Some(Version {
+                    major: 1,
+                    minor: 85,
+                    patch: 0
+                }),
+                /*rust_toolchain_tool*/ "rustup",
+                /*espflash_version*/
+                Some(Version {
+                    major: 3,
+                    minor: 3,
+                    patch: 0
+                }),
+                /*probers_version*/
+                Some(Version {
+                    major: 0,
+                    minor: 25,
+                    patch: 0
+                }),
+                /*esp_config_version*/
+                Some(Version {
+                    major: 0,
+                    minor: 5,
+                    patch: 0
+                }),
+                /*probers_suggestion_kind*/ "required",
+            ),
+            "
+Checking installed versions
+🆗 Rust (nightly): 1.85.0
+🆗 espflash: 3.3.0
+🆗 probe-rs: 0.25.0
+🆗 esp-config: 0.5.0
+"
+            .to_string()
+        );
+    }
+
+    #[test]
+    fn test_ui_all_good_probe_rs_optional_not_installed() {
+        assert_eq!(
+            create_check_results(
+                /*probe_rs_required*/ false,
+                /*msrv*/
+                Version {
+                    major: 1,
+                    minor: 85,
+                    patch: 0
+                },
+                /*rust_toolchain*/ "nightly",
+                /*rust_version*/
+                Some(Version {
+                    major: 1,
+                    minor: 85,
+                    patch: 0
+                }),
+                /*rust_toolchain_tool*/ "rustup",
+                /*espflash_version*/
+                Some(Version {
+                    major: 3,
+                    minor: 3,
+                    patch: 0
+                }),
+                /*probers_version*/ None,
+                /*esp_config_version*/
+                Some(Version {
+                    major: 0,
+                    minor: 5,
+                    patch: 0
+                }),
+                /*probers_suggestion_kind*/ "suggested",
+            ),
+            "
+Checking installed versions
+🆗 Rust (nightly): 1.85.0
+🆗 espflash: 3.3.0
+❌ probe-rs (not found - see https://probe.rs/docs/getting-started/installation/ for how to install (suggested))
+🆗 esp-config: 0.5.0
+"
+            .to_string()
+        );
+    }
+
+    #[test]
+    fn test_ui_nothing_installed() {
+        assert_eq!(
+            create_check_results(
+                /*probe_rs_required*/ true,
+                /*msrv*/
+                Version {
+                    major: 1,
+                    minor: 85,
+                    patch: 0
+                },
+                /*rust_toolchain*/ "stable",
+                /*rust_version*/ None,
+                /*rust_toolchain_tool*/ "rustup",
+                /*espflash_version*/ None,
+                /*probers_version*/ None,
+                /*esp_config_version*/ None,
+                /*probers_suggestion_kind*/ "required",
+            ),
+            "
+Checking installed versions
+❌ Rust (stable) (not found - use `rustup` to install)
+❌ espflash (not found - see https://crates.io/crates/espflash for installation instructions)
+❌ probe-rs (not found - see https://probe.rs/docs/getting-started/installation/ for how to install (required))
+💡 esp-config (not found - use `cargo install esp-config --features=tui --locked` to install (installation is optional))
+
+For more details see https://docs.espressif.com/projects/rust/book/
+"
+            .to_string()
         );
     }
 }

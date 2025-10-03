@@ -160,10 +160,6 @@ options:
           - esp32s3
 
       - !Option
-        name: dev-container
-        display_name: Add support for VS Code Dev Containers and GitHub Codespaces.
-
-      - !Option
         name: ci
         display_name: Add GitHub Actions support with some basic checks.
 

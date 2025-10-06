@@ -5,19 +5,28 @@ options:
     display_name: Enable unstable HAL features.
     help: "This configuration enables unstable esp-hal features.
       These come with no stability guarantees, and could be changed or removed at any time."
+  
+  - !Option
+    name: unstable-radio
+    display_name: Enable unstable esp-radio features.
+    help: "This configuration enables unstable esp-radio features.
+      These come with no stability guarantees, and could be changed or removed at any time."
 
   - !Option
     name: alloc
     display_name: Enable allocations via the esp-alloc crate.
     help: esp-alloc comes with no stability guarantees at this time.
+    requires:
+      - unstable-hal
 
   - !Option
     name: wifi
-    display_name: Enable Wi-Fi via the esp-wifi crate.
-    help: esp-wifi comes with no stability guarantees at this time.
+    display_name: Enable Wi-Fi via the esp-radio crate.
+    help: esp-radio comes with no stability guarantees at this time.
     requires:
       - alloc
       - unstable-hal
+      - unstable-radio
     chips:
       - esp32
       - esp32c2
@@ -28,11 +37,12 @@ options:
 
   - !Option
     name: ble-bleps
-    display_name: Enable BLE via the esp-wifi crate (bleps).
-    help: esp-wifi comes with no stability guarantees at this time.
+    display_name: Enable BLE via the esp-radio crate (bleps).
+    help: esp-radio comes with no stability guarantees at this time.
     selection_group: ble-lib
     requires:
       - alloc
+      - unstable-radio
       - unstable-hal
     chips:
       - esp32
@@ -44,11 +54,12 @@ options:
 
   - !Option
     name: ble-trouble
-    display_name: Enable BLE via the esp-wifi crate (embassy-trouble).
-    help: esp-wifi comes with no stability guarantees at this time.
+    display_name: Enable BLE via the esp-radio crate (embassy-trouble).
+    help: esp-radio comes with no stability guarantees at this time.
     selection_group: ble-lib
     requires:
       - alloc
+      - unstable-radio
       - unstable-hal
       - embassy
     chips:
@@ -66,6 +77,7 @@ options:
     selection_group: base-template
     requires:
       - unstable-hal
+      - unstable-radio
 
   - !Option
     name: stack-smashing-protection

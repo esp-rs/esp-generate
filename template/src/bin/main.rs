@@ -16,7 +16,7 @@ use esp_hal::{
 use esp_hal::timer::timg::TimerGroup;
 //ENDIF
 //IF option("ble-bleps")
-use esp_wifi::ble::controller::BleConnector;
+use esp_radio::ble::controller::BleConnector;
 //ENDIF
 
 //IF option("defmt")
@@ -43,6 +43,7 @@ use esp_backtrace as _;
 
 //IF option("alloc")
 extern crate alloc;
+use esp_hal::ram;
 //ENDIF
 
 // This creates a default app-descriptor required by the esp-idf bootloader.
@@ -73,7 +74,7 @@ fn main() -> ! {
 
     //IF option("alloc")
     //REPLACE 65536 max-dram2-uninit
-    esp_alloc::heap_allocator!(#[unsafe(link_section = ".dram2_uninit")] size: 65536);
+    esp_alloc::heap_allocator!(#[ram(reclaimed)] size: 65536);
     //IF option("wifi") && (option("ble-bleps") || option("ble-trouble"))
     // COEX needs more RAM - so we've added some more
     esp_alloc::heap_allocator!(size: 64 * 1024);
@@ -82,18 +83,21 @@ fn main() -> ! {
 
     //IF option("wifi") || option("ble-bleps")
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    let wifi_init = esp_wifi::init(
-        timg0.timer0,
-        esp_hal::rng::Rng::new(peripherals.RNG),
-    )
-    .expect("Failed to initialize Wi-Fi/BLE controller");
+    //IF option("esp32") || option("esp32s2") || option("esp32s3")
+    esp_rtos::start(timg0.timer0);
+    //ELSE
+    let sw_interrupt = esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
+    esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
+    //ENDIF 
+    let radio_init = esp_radio::init()
+        .expect("Failed to initialize Wi-Fi/BLE controller");
     //ENDIF
     //IF option("wifi")
-    let (mut _wifi_controller, _interfaces) = esp_wifi::wifi::new(&wifi_init, peripherals.WIFI)
+    let (mut _wifi_controller, _interfaces) = esp_radio::wifi::new(&radio_init, peripherals.WIFI, Default::default())
         .expect("Failed to initialize Wi-Fi controller");
     //ENDIF
     //IF option("ble-bleps")
-    let _connector = BleConnector::new(&wifi_init, peripherals.BT);
+    let _connector = BleConnector::new(&radio_init, peripherals.BT, Default::default());
     //ENDIF
 
     loop {

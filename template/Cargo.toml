@@ -3,7 +3,7 @@
 name = "project-name"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.86"
+rust-version = "1.88"
 
 [[bin]]
 #REPLACE project-name project-name
@@ -21,7 +21,7 @@ test = false
 #ENDIF
 
 [dependencies]
-esp-hal = { version = "=1.0.0-rc.0", features = [
+esp-hal = { git = "https://github.com/esp-rs/esp-hal.git", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("unstable-hal")
@@ -34,7 +34,24 @@ esp-hal = { version = "=1.0.0-rc.0", features = [
     "log-04",
     #ENDIF
 ] }
-esp-bootloader-esp-idf = { version = "0.2.0", features = [
+
+#IF option("embassy") || option("wifi") || option("ble-bleps") || option("ble-trouble")
+esp-rtos = { git = "https://github.com/esp-rs/esp-hal.git", features = [
+    #IF option("embassy")
+    "embassy",
+    #ENDIF
+    #REPLACE esp32c6 mcu
+    "esp32c6",
+    #IF option("defmt")
+    #+"defmt",
+    #ENDIF
+    #IF option("log")
+    "log-04",
+    #ENDIF
+]}
+#ENDIF
+
+esp-bootloader-esp-idf = { git = "https://github.com/esp-rs/esp-hal.git", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
 ] }
@@ -52,7 +69,7 @@ rtt-target = { version = "0.6.1", features = ["defmt"] }
 #+rtt-target = "0.6.1"
 #ENDIF defmt
 #ELSE probe-rs
-esp-println = { version = "0.15.0", features = [
+esp-println = { git = "https://github.com/esp-rs/esp-hal.git", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("defmt")
@@ -65,10 +82,9 @@ esp-println = { version = "0.15.0", features = [
 #ENDIF probe-rs
 #ENDIF log-frontend || panic-handler || probe-rs
 #IF option("esp-backtrace")
-esp-backtrace = { version = "0.17.0", features = [
+esp-backtrace = { git = "https://github.com/esp-rs/esp-hal.git", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
-    "exception-handler",
     "panic-handler",
     #IF option("defmt")
     #+"defmt",
@@ -85,9 +101,9 @@ panic-rtt-target = "0.2.0"
 #ENDIF esp-backtrace
 #IF option("alloc")
 #IF option("defmt")
-#+esp-alloc = { version = "0.8.0", features = ["defmt"] }
+#+esp-alloc = { { git = "https://github.com/esp-rs/esp-hal.git", features = ["defmt"] }
 #ELSE
-esp-alloc = "0.8.0"
+esp-alloc = { git = "https://github.com/esp-rs/esp-hal.git"}
 #ENDIF defmt
 #ENDIF alloc
 #IF option("wifi") || option("ble-bleps") || option("ble-trouble")
@@ -138,8 +154,7 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
     #ENDIF
 ] }
 #ENDIF wifi
-esp-wifi = { version = "0.15.0", features = [
-    "builtin-scheduler",
+esp-radio = { git = "https://github.com/esp-rs/esp-hal.git", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("wifi")
@@ -153,6 +168,9 @@ esp-wifi = { version = "0.15.0", features = [
     "coex",
     #ENDIF
     "esp-alloc",
+    #IF option("unstable-radio")
+    "unstable",
+    #ENDIF
     #IF option("defmt")
     #+"defmt",
     #ENDIF
@@ -164,13 +182,12 @@ esp-wifi = { version = "0.15.0", features = [
 #+bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
 #ENDIF
 #IF option("ble-trouble")
-#+trouble-host = { version = "0.2.4", features = ["gatt"] }
-#+bt-hci = { version = "0.3.2", features = [] }
+#+trouble-host = { version = "0.4.0", features = ["gatt"] }
+#+bt-hci = "0.6.0"
 #ENDIF
 #ENDIF wifi || ble || ble-trouble
 #IF option("embassy")
-embassy-executor = { version = "0.7.0", features = [
-    "task-arena-size-20480",
+embassy-executor = { version = "0.9.0", features = [
     #IF option("defmt")
     #+"defmt",
     #ENDIF
@@ -179,31 +196,22 @@ embassy-executor = { version = "0.7.0", features = [
     #ENDIF
 ] }
 #IF option("defmt")
-#+embassy-time     = { version = "0.4.0", features = ["defmt"] }
+#+embassy-time     = { version = "0.5.0", features = ["defmt"] }
 #ENDIF
 #IF option("log")
-embassy-time = { version = "0.4.0", features = ["log"] }
+embassy-time = { version = "0.5.0", features = ["log"] }
 #ENDIF
 #IF !option("defmt") && !option("log")
-#+embassy-time     = "0.4.0"
+#+embassy-time     = "0.5.0"
 #ENDIF
-esp-hal-embassy = { version = "0.9.0", features = [
-    #REPLACE esp32c6 mcu
-    "esp32c6",
-    #IF option("defmt")
-    #+"defmt",
-    #ENDIF
-    #IF option("log")
-    "log-04",
-    #ENDIF
-] }
+
 static_cell = "2.1.1"
 #ENDIF
 critical-section = "1.2.0"
 
 #IF option("embedded-test")
 [dev-dependencies]
-embedded-test = { version = "0.6.0", features = [
+embedded-test = { version = "0.7.0-alpha.3", git = "https://github.com/probe-rs/embedded-test", branch = "next", features = [
     #IF option("xtensa")
     "xtensa-semihosting",
     #ENDIF

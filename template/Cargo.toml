@@ -36,7 +36,13 @@ esp-hal = { git = "https://github.com/esp-rs/esp-hal.git", features = [
 ] }
 
 #IF option("embassy") || option("wifi") || option("ble-bleps") || option("ble-trouble")
-esp-rtos = { git = "https://github.com/esp-rs/esp-hal.git", features = [
+esp-rtos = { git = "https://github.com/esp-rs/esp-hal.git", default-features = false, features = [
+    #IF option("wifi") || option("ble-bleps") || option("ble-trouble")
+    "esp-radio",
+    #ENDIF
+    #IF option("alloc")
+    "esp-alloc",
+    #ENDIF
     #IF option("embassy")
     "embassy",
     #ENDIF
@@ -49,7 +55,6 @@ esp-rtos = { git = "https://github.com/esp-rs/esp-hal.git", features = [
     "log-04",
     #ENDIF
 ]}
-esp-radio-rtos-driver = { git = "https://github.com/esp-rs/esp-hal.git" }
 #ENDIF
 
 esp-bootloader-esp-idf = { git = "https://github.com/esp-rs/esp-hal.git", features = [
@@ -105,7 +110,6 @@ panic-rtt-target = "0.2.0"
 #+esp-alloc = { { git = "https://github.com/esp-rs/esp-hal.git", features = ["defmt"] }
 #ELSE
 esp-alloc = { git = "https://github.com/esp-rs/esp-hal.git"}
-allocator-api2        = { version = "0.3.0", default-features = false }
 #ENDIF defmt
 #ENDIF alloc
 #IF option("wifi") || option("ble-bleps") || option("ble-trouble")
@@ -169,7 +173,9 @@ esp-radio = { git = "https://github.com/esp-rs/esp-hal.git", features = [
     #IF option("wifi") && (option("ble-bleps") || option("ble-trouble"))
     "coex",
     #ENDIF
+    #IF option("alloc")
     "esp-alloc",
+    #ENDIF
     "unstable",
     #IF option("defmt")
     #+"defmt",

@@ -85,12 +85,12 @@ async fn main(spawner: Spawner) -> ! {
     //ENDIF
     //ENDIF alloc
 
-    let timg1 = TimerGroup::new(peripherals.TIMG1);
+    let timg0 = TimerGroup::new(peripherals.TIMG0);
     //IF option("esp32") || option("esp32s2") || option("esp32s3")
-    esp_rtos::start(timg1.timer0);
+    esp_rtos::start(timg0.timer0);
     //ELSE
     let sw_interrupt = esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
-    esp_rtos::start(timg1.timer0, sw_interrupt.software_interrupt0);
+    esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
     //ENDIF 
 
     //IF option("defmt") || option("log")
@@ -109,7 +109,7 @@ async fn main(spawner: Spawner) -> ! {
     //ENDIF
     //IF option("ble-trouble")
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
-    let transport = BleConnector::new(&radio_init, peripherals.BT, Default::default());
+    let transport = BleConnector::new(&radio_init, peripherals.BT, Default::default()).unwrap();
     let ble_controller = ExternalController::<_, 20>::new(transport);
     let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
         HostResources::new();

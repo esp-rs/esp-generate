@@ -21,9 +21,9 @@ use trouble_host::prelude::*;
 
 //IF option("defmt")
 //IF !option("probe-rs")
-//+ use esp_println as _;
+//+use esp_println as _;
 //ENDIF
-//+ use defmt::info;
+//+use defmt::info;
 //ELIF option("log")
 use log::info;
 //ELIF option("probe-rs") // without defmt

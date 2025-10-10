@@ -10,8 +10,6 @@ options:
     name: alloc
     display_name: Enable allocations via the esp-alloc crate.
     help: esp-alloc comes with no stability guarantees at this time.
-    requires:
-      - unstable-hal
 
   - !Option
     name: wifi

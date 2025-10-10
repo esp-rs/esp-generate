@@ -21,7 +21,7 @@ test = false
 #ENDIF
 
 [dependencies]
-esp-hal = { git = "https://github.com/esp-rs/esp-hal.git", features = [
+esp-hal = { path = "/Users/playfulfence/esp/esp-hal/esp-hal", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("unstable-hal")
@@ -107,7 +107,7 @@ panic-rtt-target = "0.2.0"
 #ENDIF esp-backtrace
 #IF option("alloc")
 #IF option("defmt")
-#+esp-alloc = { { git = "https://github.com/esp-rs/esp-hal.git", features = ["defmt"] }
+#+esp-alloc = { git = "https://github.com/esp-rs/esp-hal.git", features = ["defmt"] }
 #ELSE
 esp-alloc = { git = "https://github.com/esp-rs/esp-hal.git"}
 #ENDIF defmt

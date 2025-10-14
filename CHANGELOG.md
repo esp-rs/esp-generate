@@ -9,27 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added Wi-Fi/BLE setup code to the blocking template (#233)
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.6.0] - 2025-10-14
+
+### Added
+
+- Add Wi-Fi/BLE setup code to the blocking template (#233)
 
 - Check for the `esp-config` tool (#221)
 
 ### Changed
 
-- Updated bt-hci and trouble-host dependencies
+- Update bt-hci and trouble-host dependencies
 - The generated project now uses Rust 2024 (#233)
 - The generated project now uses all of `.dram2_uninit` for its heap (#234)
-- Updated templates and their dependenies to meet `rc1` of `esp-hal` (#237)
-- Bumped Rust version in templates to 1.88 (#237)
+- Update templates and their dependenies to meet `rc1` of `esp-hal` (#237)
+- Bump MSRV in templates to 1.88 (#237)
 
 ### Fixed
 
-- Fixed cases where padding overflow caused panic if terminal size changed (#228)
+- Fix cases where padding overflow caused panic if terminal size changed (#228)
 
 ### Removed
 
 - Remove devcontainer support (#425)
 
-## [0.5.0]
+## [0.5.0] - 2025-07-16
 
 ### Added
 
@@ -166,7 +176,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/esp-rs/esp-generate/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/esp-rs/esp-generate/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/esp-rs/esp-generate/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/esp-rs/esp-generate/compare/v0.3.0...v0.3.1

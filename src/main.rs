@@ -6,7 +6,7 @@ use std::{
     sync::LazyLock,
 };
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::Parser;
 use env_logger::{Builder, Env};
 use esp_generate::template::{GeneratorOptionItem, Template};
@@ -80,7 +80,7 @@ struct Args {
 #[cfg(feature = "update-informer")]
 fn check_for_update(name: &str, version: &str) {
     use std::time::Duration;
-    use update_informer::{registry, Check};
+    use update_informer::{Check, registry};
     // By setting the interval to 0 seconds we invalidate the cache with each
     // invocation and ensure we're getting up-to-date results
     let informer =
@@ -156,7 +156,7 @@ fn main() -> Result<()> {
     // the user which options are not supported for the selected chip.
     process_options(&TEMPLATE, &args)?;
 
-    // Now we filterout the incompatible options, so that they are not shown and they also don't
+    // Now we filter out the incompatible options, so that they are not shown and they also don't
     // screw with our position-based data model.
     let mut template = TEMPLATE.clone();
     remove_incompatible_chip_options(chip, &mut template.options);

@@ -1,6 +1,6 @@
 [package]
 name         = "esp-generate"
-version      = "0.5.0"
+version      = "0.6.0"
 edition      = "2024"
 rust-version = "1.86"
 description  = "Template generation tool to create no_std applications targeting Espressif's chips"
@@ -23,21 +23,21 @@ default = ["update-informer"]
 update-informer = ["dep:update-informer"]
 
 [dependencies]
-anyhow          = "1.0.98"
-strum           = "0.27.1"
-inquire         = "0.7.5"
-clap            = { version = "4.5.39", features = ["derive"] }
+anyhow          = "1.0.100"
+strum           = "0.27.2"
+inquire         = "0.9.1"
+clap            = { version = "4.5.49", features = ["derive"] }
 env_logger      = "0.11.8"
-esp-metadata    = { version = "0.7.0", features = ["clap"] }
-log             = "0.4.27"
+esp-metadata    = { version = "0.9.0", features = ["clap"] }
+log             = "0.4.28"
 ratatui         = { version = "0.29.0", features = ["crossterm", "unstable"] }
-somni-expr      = "0.1.0"
+somni-expr      = "0.2.0"
 taplo           = "0.14.0"
-update-informer = { version = "1.2.0", optional = true }
-serde           = { version = "1.0.219", features = ["derive"] }
-serde_yaml      = "0.9.34+deprecated"
-toml_edit       = "0.22.26"
+update-informer = { version = "1.3.0", optional = true }
+serde           = { version = "1.0.228", features = ["derive"] }
+serde_yaml      = "0.9.33"
+toml_edit       = "0.23.7"
 
 [build-dependencies]
-quote   = "1.0.40"
+quote   = "1.0.41"
 walkdir = "2.5.0"

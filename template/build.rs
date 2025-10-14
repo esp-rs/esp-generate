@@ -32,7 +32,7 @@ fn linker_be_nice() {
                 | "esp_rtos_yield_task"
                 | "esp_rtos_task_create" => {
                     eprintln!();
-                    eprintln!("💡 `esp-radio` has no scheduler enabled. Make sure you have the `builtin-scheduler` feature enabled, or that you provide an external scheduler.");
+                    eprintln!("💡 `esp-radio` has no scheduler enabled. Make sure you have initialized `esp-rtos` or provided an external scheduler.");
                     eprintln!();
                 }
                 "embedded_test_linker_file_not_added_to_rustflags" => {

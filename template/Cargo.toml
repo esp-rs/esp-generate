@@ -21,7 +21,7 @@ test = false
 #ENDIF
 
 [dependencies]
-esp-hal = { version = "1.0.0-rc.1", features = [
+esp-hal = { version = "=1.0.0-rc.1", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("unstable-hal")
@@ -109,7 +109,7 @@ panic-rtt-target = "0.2.0"
 #IF option("defmt")
 #+esp-alloc = { version = "0.9.0", features = ["defmt"] }
 #ELSE
-esp-alloc = { version = "0.9.0"}
+esp-alloc = "0.9.0"
 #ENDIF defmt
 #ENDIF alloc
 #IF option("wifi") || option("ble-bleps") || option("ble-trouble")

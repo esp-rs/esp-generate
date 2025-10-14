@@ -45,9 +45,9 @@ You can also directly download pre-compiled [release binaries] or use [`cargo-bi
 
 - `unstable-hal`: Enables esp-hal features that may not be ready for general use yet.
 - `alloc`: Enables allocations via the `esp-alloc` crate.
-- `wifi`: Enables Wi-Fi via the `esp-wifi` crate; requires `alloc`.
-- `ble-bleps`: Enables BLE via the `esp-wifi` crate using `bleps`; requires `alloc`, mutually exclusive with `ble-trouble`.
-- `ble-trouble`: Enables BLE via the `esp-wifi`crate using `embassy-trouble`; requires `alloc`, mutually exclusive with `ble-bleps`.
+- `wifi`: Enables Wi-Fi via the `esp-radio` crate; requires `alloc`.
+- `ble-bleps`: Enables BLE via the `esp-radio` crate using `bleps`; requires `alloc`, mutually exclusive with `ble-trouble`.
+- `ble-trouble`: Enables BLE via the `esp-radio`crate using `embassy-trouble`; requires `alloc`, mutually exclusive with `ble-bleps`.
 - `embassy`: Adds `embassy` framework support.
 - `stack-smashing-protection`: Enables [stack smashing protection](https://doc.rust-lang.org/rustc/exploit-mitigations.html#stack-smashing-protection). Requires nightly Rust.
 - `probe-rs`: Replaces `espflash` with `probe-rs` and enables RTT-based options.

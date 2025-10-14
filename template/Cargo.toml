@@ -36,7 +36,7 @@ esp-hal = { version = "=1.0.0-rc.1", features = [
 ] }
 
 #IF option("embassy") || option("wifi") || option("ble-bleps") || option("ble-trouble")
-esp-rtos = { version = "0.1.0", default-features = false, features = [
+esp-rtos = { version = "0.1.0", features = [
     #IF option("wifi") || option("ble-bleps") || option("ble-trouble")
     "esp-radio",
     #ENDIF
@@ -188,7 +188,7 @@ esp-radio = { version = "0.16.0", features = [
 #+bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
 #ENDIF
 #IF option("ble-trouble")
-#+trouble-host = { version = "0.4.0", features = ["gatt"] }
+#+trouble-host = { version = "0.5.0", features = ["gatt"] }
 #+bt-hci = "0.6.0"
 #ENDIF
 #ENDIF wifi || ble || ble-trouble

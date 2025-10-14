@@ -36,7 +36,7 @@ esp-hal = { version = "=1.0.0-rc.1", features = [
 ] }
 
 #IF option("embassy") || option("wifi") || option("ble-bleps") || option("ble-trouble")
-esp-rtos = { version = "0.1.0", features = [
+esp-rtos = { version = "0.1.1", features = [
     #IF option("wifi") || option("ble-bleps") || option("ble-trouble")
     "esp-radio",
     #ENDIF

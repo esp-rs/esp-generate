@@ -72,7 +72,7 @@ pub fn check(
 
     let probers_version = get_version("probe-rs", &[]);
 
-    let esp_config_version = get_version("xesp-config", &[]);
+    let esp_config_version = get_version("esp-config", &[]);
 
     let probers_suggestion_kind = if probe_rs_required {
         "required"

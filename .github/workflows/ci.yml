@@ -82,7 +82,7 @@ jobs:
         run: cargo ${{ env.TOOLCHAIN }} xtask check ${{ matrix.chip }} ${{ fromJSON('["", "--all-combinations"]')[inputs.all_combinations || github.event_name == 'schedule'] }} ${{ fromJSON('["", "--build"]')[inputs.build || github.event_name == 'schedule'] }}
 
       - if: github.event_name == 'schedule'
-        name: Run cargo-pacakge
+        name: Run cargo-package
         run: cargo package --allow-dirty
 
       - if: ${{ github.event_name == 'schedule' && failure() }}

@@ -28,7 +28,7 @@ impl ActiveConfiguration<'_> {
         self.selected.iter().position(|s| s == option)
     }
 
-    /// Tries to deselect all options in a selection gropu. Returns false if it's prevented by some
+    /// Tries to deselect all options in a selection group. Returns false if it's prevented by some
     /// requirement.
     fn deselect_group(
         selected: &mut Vec<String>,
@@ -264,7 +264,7 @@ mod test {
     use esp_metadata::Chip;
 
     use crate::{
-        config::{find_option, ActiveConfiguration},
+        config::{ActiveConfiguration, find_option},
         template::{GeneratorOption, GeneratorOptionCategory, GeneratorOptionItem},
     };
 

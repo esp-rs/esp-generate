@@ -9,14 +9,10 @@
 )]
 
 use esp_hal::clock::CpuClock;
-//IF !option("esp32")
-use esp_hal::timer::systimer::SystemTimer;
-//ENDIF
-//IF option("wifi") || option("ble-bleps") || option("esp32") || option("ble-trouble")
 use esp_hal::timer::timg::TimerGroup;
-//ENDIF
+
 //IF option("ble-trouble") || option("ble-bleps")
-use esp_wifi::ble::controller::BleConnector;
+use esp_radio::ble::controller::BleConnector;
 //ENDIF
 //IF option("ble-trouble")
 use bt_hci::controller::ExternalController;
@@ -25,9 +21,9 @@ use trouble_host::prelude::*;
 
 //IF option("defmt")
 //IF !option("probe-rs")
-//+ use esp_println as _;
+//+use esp_println as _;
 //ENDIF
-//+ use defmt::info;
+//+use defmt::info;
 //ELIF option("log")
 use log::info;
 //ELIF option("probe-rs") // without defmt
@@ -61,8 +57,8 @@ const L2CAP_CHANNELS_MAX: usize = 1;
 // For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
 esp_bootloader_esp_idf::esp_app_desc!();
 
-#[esp_hal_embassy::main]
-async fn main(spawner: Spawner) {
+#[esp_rtos::main]
+async fn main(spawner: Spawner) -> ! {
     //REPLACE generate-version generate-version
     // generator version: generate-version
 
@@ -88,13 +84,13 @@ async fn main(spawner: Spawner) {
     //ENDIF
     //ENDIF alloc
 
-    //IF !option("esp32")
-    let systimer = SystemTimer::new(peripherals.SYSTIMER);
-    esp_hal_embassy::init(systimer.alarm0);
+    let timg0 = TimerGroup::new(peripherals.TIMG0);
+    //IF option("esp32") || option("esp32s2") || option("esp32s3")
+    esp_rtos::start(timg0.timer0);
     //ELSE
-    let timer1 = TimerGroup::new(peripherals.TIMG1);
-    esp_hal_embassy::init(timer1.timer0);
-    //ENDIF
+    let sw_interrupt = esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
+    esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
+    //ENDIF 
 
     //IF option("defmt") || option("log")
     info!("Embassy initialized!");
@@ -103,26 +99,22 @@ async fn main(spawner: Spawner) {
     //ENDIF
 
     //IF option("ble-trouble") || option("ble-bleps") || option("wifi")
-    let timer0 = TimerGroup::new(peripherals.TIMG0);
-    let wifi_init = esp_wifi::init(
-        timer0.timer0,
-        esp_hal::rng::Rng::new(peripherals.RNG)
-    )
+    let radio_init = esp_radio::init()
     .expect("Failed to initialize Wi-Fi/BLE controller");
     //ENDIF
     //IF option("wifi")
-    let (mut _wifi_controller, _interfaces) = esp_wifi::wifi::new(&wifi_init, peripherals.WIFI)
+    let (mut _wifi_controller, _interfaces) = esp_radio::wifi::new(&radio_init, peripherals.WIFI, Default::default())
         .expect("Failed to initialize Wi-Fi controller");
     //ENDIF
     //IF option("ble-trouble")
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
-    let transport = BleConnector::new(&wifi_init, peripherals.BT);
+    let transport = BleConnector::new(&radio_init, peripherals.BT, Default::default()).unwrap();
     let ble_controller = ExternalController::<_, 20>::new(transport);
     let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
         HostResources::new();
     let _stack = trouble_host::new(ble_controller, &mut resources);
     //ELIF option("ble-bleps")
-    let _connector = BleConnector::new(&wifi_init, peripherals.BT);
+    let _connector = BleConnector::new(&radio_init, peripherals.BT, Default::default());
     //ENDIF
 
     // TODO: Spawn some tasks

@@ -13,8 +13,8 @@ options:
 
   - !Option
     name: wifi
-    display_name: Enable Wi-Fi via the esp-wifi crate.
-    help: esp-wifi comes with no stability guarantees at this time.
+    display_name: Enable Wi-Fi via the esp-radio crate.
+    help: esp-radio comes with no stability guarantees at this time.
     requires:
       - alloc
       - unstable-hal
@@ -28,8 +28,8 @@ options:
 
   - !Option
     name: ble-bleps
-    display_name: Enable BLE via the esp-wifi crate (bleps).
-    help: esp-wifi comes with no stability guarantees at this time.
+    display_name: Enable BLE via the esp-radio crate (bleps).
+    help: esp-radio comes with no stability guarantees at this time.
     selection_group: ble-lib
     requires:
       - alloc
@@ -44,8 +44,8 @@ options:
 
   - !Option
     name: ble-trouble
-    display_name: Enable BLE via the esp-wifi crate (embassy-trouble).
-    help: esp-wifi comes with no stability guarantees at this time.
+    display_name: Enable BLE via the esp-radio crate (embassy-trouble).
+    help: esp-radio comes with no stability guarantees at this time.
     selection_group: ble-lib
     requires:
       - alloc
@@ -62,7 +62,7 @@ options:
   - !Option
     name: embassy
     display_name: Add embassy framework support.
-    help: esp-hal-embassy comes with no stability guarantees at this time.
+    help: esp-rtos module responsible for embassy support comes with no stability guarantees at this time.
     selection_group: base-template
     requires:
       - unstable-hal

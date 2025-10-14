@@ -21,7 +21,7 @@ test = false
 #ENDIF
 
 [dependencies]
-esp-hal = { path = "/Users/playfulfence/esp/esp-hal/esp-hal", features = [
+esp-hal = { version = "1.0.0-rc.1", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("unstable-hal")
@@ -36,7 +36,7 @@ esp-hal = { path = "/Users/playfulfence/esp/esp-hal/esp-hal", features = [
 ] }
 
 #IF option("embassy") || option("wifi") || option("ble-bleps") || option("ble-trouble")
-esp-rtos = { git = "https://github.com/esp-rs/esp-hal.git", default-features = false, features = [
+esp-rtos = { version = "0.1.0", default-features = false, features = [
     #IF option("wifi") || option("ble-bleps") || option("ble-trouble")
     "esp-radio",
     #ENDIF
@@ -57,7 +57,7 @@ esp-rtos = { git = "https://github.com/esp-rs/esp-hal.git", default-features = f
 ]}
 #ENDIF
 
-esp-bootloader-esp-idf = { git = "https://github.com/esp-rs/esp-hal.git", features = [
+esp-bootloader-esp-idf = { version = "0.3.0", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
 ] }
@@ -75,7 +75,7 @@ rtt-target = { version = "0.6.1", features = ["defmt"] }
 #+rtt-target = "0.6.1"
 #ENDIF defmt
 #ELSE probe-rs
-esp-println = { git = "https://github.com/esp-rs/esp-hal.git", features = [
+esp-println = { version = "0.16.0", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("defmt")
@@ -88,7 +88,7 @@ esp-println = { git = "https://github.com/esp-rs/esp-hal.git", features = [
 #ENDIF probe-rs
 #ENDIF log-frontend || panic-handler || probe-rs
 #IF option("esp-backtrace")
-esp-backtrace = { git = "https://github.com/esp-rs/esp-hal.git", features = [
+esp-backtrace = { version = "0.18.0", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     "panic-handler",
@@ -107,22 +107,22 @@ panic-rtt-target = "0.2.0"
 #ENDIF esp-backtrace
 #IF option("alloc")
 #IF option("defmt")
-#+esp-alloc = { git = "https://github.com/esp-rs/esp-hal.git", features = ["defmt"] }
+#+esp-alloc = { version = "0.9.0", features = ["defmt"] }
 #ELSE
-esp-alloc = { git = "https://github.com/esp-rs/esp-hal.git"}
+esp-alloc = { version = "0.9.0"}
 #ENDIF defmt
 #ENDIF alloc
 #IF option("wifi") || option("ble-bleps") || option("ble-trouble")
 #IF option("defmt")
-#+embedded-io = { version = "0.6.1", features = ["defmt-03"] }
+#+embedded-io = { version = "0.7.1", features = ["defmt-03"] }
 #ELSE
-embedded-io = "0.6.1"
+embedded-io = "0.7.1"
 #ENDIF defmt
 #IF option("embassy")
 #IF option("defmt")
-#+embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
+#+embedded-io-async = { version = "0.7.0", features = ["defmt-03"] }
 #ELSE
-embedded-io-async = "0.6.1"
+embedded-io-async = "0.7.0"
 #ENDIF defmt
 #IF option("wifi")
 embassy-net = { version = "0.7.0", features = [
@@ -160,7 +160,7 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
     #ENDIF
 ] }
 #ENDIF wifi
-esp-radio = { git = "https://github.com/esp-rs/esp-hal.git", features = [
+esp-radio = { version = "0.16.0", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("wifi")

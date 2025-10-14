@@ -46,7 +46,6 @@ use esp_backtrace as _;
 
 //IF option("alloc")
 extern crate alloc;
-use esp_hal::ram;
 //ENDIF
 
 //IF option("ble-trouble")
@@ -78,7 +77,7 @@ async fn main(spawner: Spawner) -> ! {
 
     //IF option("alloc")
     //REPLACE 65536 max-dram2-uninit
-    esp_alloc::heap_allocator!(#[ram(reclaimed)] size: 65536);
+    esp_alloc::heap_allocator!(#[unsafe(link_section = ".dram2_uninit")] size: 65536);
     //IF option("wifi") && (option("ble-bleps") || option("ble-trouble"))
     // COEX needs more RAM - so we've added some more
     esp_alloc::heap_allocator!(size: 64 * 1024);

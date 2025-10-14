@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update bt-hci and trouble-host dependencies
 - The generated project now uses Rust 2024 (#233)
 - The generated project now uses all of `.dram2_uninit` for its heap (#234)
-- Updat templates and their dependenies to meet `rc1` of `esp-hal` (#237)
+- Update templates and their dependenies to meet `rc1` of `esp-hal` (#237)
 - Bump MSRV in templates to 1.88 (#237)
 
 ### Fixed

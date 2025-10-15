@@ -1,5 +1,1 @@
-#IF option("ble-trouble")
-stack-size-threshold = 2096
-#ELSE
-#+stack-size-threshold = 1024
-#ENDIF
+stack-size-threshold = 1024

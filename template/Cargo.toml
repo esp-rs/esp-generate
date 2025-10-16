@@ -58,6 +58,12 @@ esp-rtos = { version = "0.1.1", features = [
 #ENDIF
 
 esp-bootloader-esp-idf = { version = "0.3.0", features = [
+    #IF option("defmt")
+    #+"defmt",
+    #ENDIF
+    #IF option("log")
+    "log-04",
+    #ENDIF
     #REPLACE esp32c6 mcu
     "esp32c6",
 ] }

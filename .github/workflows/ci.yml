@@ -40,7 +40,7 @@ jobs:
 
   verify:
     name: "Check ${{ matrix.chip }}"
-    runs-on: macos-m1-self-hosted
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false

@@ -78,10 +78,10 @@ fn check(
         log::info!("CHECK: {chip}");
     }
 
-    info!("Collecting configurations to check...");
+    info!("Going to check");
     let to_check = options_for_chip(chip, all_combinations)?;
     for check in &to_check {
-        info!("→ Combination: [{}]", check.join(", "));
+        info!("\"{}\"", check.join(", "));
     }
 
     if dry_run {
@@ -92,27 +92,33 @@ fn check(
     const PROJECT_NAME: &str = "test";
 
     for options in to_check {
-        log::info!("=== Checking configuration: {options:?}");
+        log::info!("WITH OPTIONS: {options:?}");
 
-        // Temporary directory for generated project
+        // We will generate the project in a temporary directory, to avoid
+        // making a mess when this subcommand is executed locally:
         let project_dir = tempfile::tempdir()?;
         let project_path = project_dir.path();
         log::info!("PROJECT PATH: {project_path:?}");
 
-        // Generate project
+        // Generate a project targeting the specified chip and using the
+        // specified generation options:
         generate(workspace, &project_path, PROJECT_NAME, chip, &options)?;
 
         let project_root = project_path.join(PROJECT_NAME);
         let mut batch = CargoBatch::new(&project_root, dry_run);
 
         // Add commands to the batch
+        // Ensure that the generated project builds without errors:
         batch.check_or_build(build);
 
+        // Ensure that the generated test project builds also:
         if options.iter().any(|o| o == "embedded-test") {
             batch.test();
         }
 
+        // Run clippy against the generated project to check for lint errors:
         batch.clippy();
+        // Ensure that the generated project is correctly formatted:
         batch.fmt_check();
 
         // Run all cargo commands in sequence

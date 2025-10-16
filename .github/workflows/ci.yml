@@ -40,7 +40,7 @@ jobs:
 
   verify:
     name: "Check ${{ matrix.chip }}"
-    runs-on: ubuntu-latest
+    runs-on: macos-m1-self-hosted
 
     strategy:
       fail-fast: false
@@ -71,6 +71,13 @@ jobs:
         with:
           target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
           components: clippy,rustfmt,rust-src
+
+      # Prepare cargo-batch
+      - name: Setup cargo-batch
+        run: |
+          if ! command -v cargo-batch &> /dev/null; then
+              cargo install --git https://github.com/embassy-rs/cargo-batch cargo --bin cargo-batch --locked --force
+          fi
 
       # //Define a new environment variable called toolchain
       - if: ${{ contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.chip) }}

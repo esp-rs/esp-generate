@@ -11,7 +11,7 @@ use esp_generate::{
     template::{GeneratorOptionCategory, GeneratorOptionItem, Template},
 };
 use esp_metadata::Chip;
-use log::info;
+use log::{info, warn};
 
 // Unfortunate hard-coded list of non-codegen options
 const IGNORED_CATEGORIES: &[&str] = &["editor", "optional"];
@@ -78,78 +78,47 @@ fn check(
         log::info!("CHECK: {chip}");
     }
 
-    info!("Going to check");
+    info!("Collecting configurations to check...");
     let to_check = options_for_chip(chip, all_combinations)?;
     for check in &to_check {
-        info!("\"{}\"", check.join(", "));
+        info!("→ Combination: [{}]", check.join(", "));
     }
 
     if dry_run {
+        info!("Dry run — no commands executed.");
         return Ok(());
     }
 
     const PROJECT_NAME: &str = "test";
-    for options in to_check {
-        log::info!("WITH OPTIONS: {options:?}");
 
-        // We will generate the project in a temporary directory, to avoid
-        // making a mess when this subcommand is executed locally:
+    for options in to_check {
+        log::info!("=== Checking configuration: {options:?}");
+
+        // Temporary directory for generated project
         let project_dir = tempfile::tempdir()?;
         let project_path = project_dir.path();
         log::info!("PROJECT PATH: {project_path:?}");
 
-        // Generate a project targeting the specified chip and using the
-        // specified generation options:
+        // Generate project
         generate(workspace, &project_path, PROJECT_NAME, chip, &options)?;
 
-        // Ensure that the generated project builds without errors:
-        let output = Command::new("cargo")
-            .args([if build { "build" } else { "check" }])
-            .env_remove("RUSTUP_TOOLCHAIN")
-            .current_dir(project_path.join(PROJECT_NAME))
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .output()?;
-        if !output.status.success() {
-            bail!("Failed to execute cargo check subcommand")
-        }
+        let project_root = project_path.join(PROJECT_NAME);
+        let mut batch = CargoBatch::new(&project_root, dry_run);
 
-        // Ensure that the generated test project builds also:
+        // Add commands to the batch
+        batch.check_or_build(build);
+
         if options.iter().any(|o| o == "embedded-test") {
-            let output = Command::new("cargo")
-                .args(["test", "--no-run"])
-                .env_remove("RUSTUP_TOOLCHAIN")
-                .current_dir(project_path.join(PROJECT_NAME))
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .output()?;
-            if !output.status.success() {
-                bail!("Failed to execute cargo test subcommand")
-            }
+            batch.test();
         }
 
-        // Run clippy against the generated project to check for lint errors:
-        let output = Command::new("cargo")
-            .args(["clippy", "--no-deps", "--", "-Dwarnings"])
-            .env_remove("RUSTUP_TOOLCHAIN")
-            .current_dir(project_path.join(PROJECT_NAME))
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .output()?;
-        if !output.status.success() {
-            bail!("Failed to execute cargo clippy subcommand")
-        }
+        batch.clippy();
+        batch.fmt_check();
 
-        // Ensure that the generated project is correctly formatted:
-        let output = Command::new("cargo")
-            .args(["fmt", "--", "--check"])
-            .env_remove("RUSTUP_TOOLCHAIN")
-            .current_dir(project_path.join(PROJECT_NAME))
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .output()?;
-        if !output.status.success() {
-            bail!("Failed to execute cargo fmt subcommand")
+        // Run all cargo commands in sequence
+        if let Err(e) = batch.run() {
+            warn!("Build failed for options {options:?}: {e}");
+            return Err(e);
         }
     }
 
@@ -337,4 +306,87 @@ fn generate(
         .output()?;
 
     Ok(())
+}
+
+/// Represents a single cargo command to be executed.
+pub struct CargoCommand {
+    pub args: Vec<String>,
+    pub description: String,
+}
+
+impl CargoCommand {
+    pub fn new(description: impl Into<String>, args: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        Self {
+            description: description.into(),
+            args: args.into_iter().map(|a| a.into()).collect(),
+        }
+    }
+}
+
+/// Helper to batch multiple cargo commands for a project directory.
+pub struct CargoBatch<'a> {
+    project_dir: &'a Path,
+    commands: Vec<CargoCommand>,
+    dry_run: bool,
+}
+
+impl<'a> CargoBatch<'a> {
+    pub fn new(project_dir: &'a Path, dry_run: bool) -> Self {
+        Self {
+            project_dir,
+            commands: vec![],
+            dry_run,
+        }
+    }
+
+    /// Add a cargo command to the batch.
+    pub fn add(&mut self, cmd: CargoCommand) {
+        self.commands.push(cmd);
+    }
+
+    /// Convenience: cargo check or build.
+    pub fn check_or_build(&mut self, build: bool) {
+        let verb = if build { "build" } else { "check" };
+        self.add(CargoCommand::new(format!("cargo {verb}"), [verb]));
+    }
+
+    /// Convenience: cargo test --no-run
+    pub fn test(&mut self) {
+        self.add(CargoCommand::new("cargo test", ["test", "--no-run"]));
+    }
+
+    /// Convenience: cargo clippy -- -D warnings
+    pub fn clippy(&mut self) {
+        self.add(CargoCommand::new("cargo clippy", ["clippy", "--no-deps", "--", "-Dwarnings"]));
+    }
+
+    /// Convenience: cargo fmt --check
+    pub fn fmt_check(&mut self) {
+        self.add(CargoCommand::new("cargo fmt", ["fmt", "--", "--check"]));
+    }
+
+    /// Executes all queued commands in sequence.
+    pub fn run(&self) -> Result<()> {
+        for cmd in &self.commands {
+            info!("→ Running: {}", cmd.description);
+
+            if self.dry_run {
+                continue;
+            }
+
+            let output = Command::new("cargo")
+                .args(&cmd.args)
+                .env_remove("RUSTUP_TOOLCHAIN")
+                .current_dir(self.project_dir)
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .output()?;
+
+            if !output.status.success() {
+                bail!("Failed to execute {}", cmd.description);
+            }
+        }
+
+        Ok(())
+    }
 }

@@ -36,4 +36,4 @@ rustflags = [
 target = "riscv32imac-unknown-none-elf"
 
 [unstable]
-build-std = ["alloc", "core"] # TODO: experimental for `cargo-batch`
+build-std = ["alloc", "core"]

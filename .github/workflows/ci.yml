@@ -94,14 +94,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Generate and check project
-        run: | 
-          cargo +esp xtask check esp32 --all-combinations --build
-          cargo +esp xtask check esp32s2 --all-combinations --build
-          cargo +esp xtask check esp32s3 --all-combinations --build
-          cargo +stable xtask check esp32c2 --all-combinations --build
-          cargo +stable xtask check esp32c3 --all-combinations --build
-          cargo +stable xtask check esp32c6 --all-combinations --build
-          cargo +stable xtask check esp32h2 --all-combinations --build
+        run: cargo xtask check-all
         # run: cargo ${{ env.TOOLCHAIN }} xtask check ${{ matrix.chip }} --all-combinations --build
 
       - if: github.event_name == 'schedule'

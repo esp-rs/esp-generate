@@ -13,7 +13,9 @@ use esp_generate::{
     template::{GeneratorOptionCategory, GeneratorOptionItem, Template},
 };
 use esp_metadata::Chip;
-use log::{info, warn};
+use log::info;
+
+use strum::IntoEnumIterator as _;
 
 // Unfortunate hard-coded list of non-codegen options
 const IGNORED_CATEGORIES: &[&str] = &["editor", "optional"];
@@ -42,6 +44,13 @@ enum Commands {
         #[arg(short, long)]
         dry_run: bool,
     },
+    /// Technically equal to `Check` command executed with `--all-combinations --build` options for every chip.
+    /// Intented to be used for global testing using `cargo-batch`
+    CheckAll {
+        /// Just print what would be tested
+        #[arg(short, long)]
+        dry_run: bool,
+    },
 }
 
 /// A builder for constructing cargo command line arguments.
@@ -57,7 +66,7 @@ pub struct CargoArgsBuilder {
     pub(crate) args: Vec<String>,
     pub(crate) configs: Vec<String>,
     pub(crate) env_vars: HashMap<String, String>,
-
+    pub(crate) current_dir: Option<PathBuf>,
 }
 
 impl CargoArgsBuilder {
@@ -73,6 +82,12 @@ impl CargoArgsBuilder {
     #[must_use]
     pub fn manifest_path(mut self, path: PathBuf) -> Self {
         self.manifest_path = Some(path);
+        self
+    }
+
+    #[must_use]
+    pub fn current_dir<P: Into<PathBuf>>(mut self, dir: P) -> Self {
+        self.current_dir = Some(dir.into());
         self
     }
 
@@ -239,6 +254,10 @@ fn main() -> Result<()> {
             build,
             dry_run,
         } => check(&workspace, chip, all_combinations, build, dry_run),
+
+        Commands::CheckAll {
+            dry_run,
+        } => check_all(&workspace, dry_run),
     }
 }
 
@@ -287,6 +306,7 @@ fn check(
         // Ensure that the generated project builds without errors:
         commands.push(
             CargoArgsBuilder::new(if build { "build".to_string() } else { "check".to_string() })
+                .current_dir(&current_dir)
                 .target(chip.target()),
         );
 
@@ -295,6 +315,7 @@ fn check(
             commands.push(
                 CargoArgsBuilder::new("test".to_string())
                     .args(&["--no-run".to_string()])
+                    .current_dir(&current_dir)
                     .target(chip.target()),
             );
         }
@@ -303,6 +324,7 @@ fn check(
         commands.push(
             CargoArgsBuilder::new("clippy".to_string())
                 .args(&["--no-deps".to_string(), "--".to_string(), "-Dwarnings".to_string()])
+                .current_dir(&current_dir)
                 .target(chip.target()),
         );
 
@@ -312,8 +334,98 @@ fn check(
 
         for c in commands.build(false) {
             println!("Command: cargo {}", c.command.join(" ").replace("---", "\n    ---"));
-            c.run(false, &current_dir)?;
+            c.run()?;
         }
+    }
+
+    Ok(())
+}
+
+
+// Run a full check over every chip in one cargo-batch.
+fn check_all(
+    workspace: &Path,
+    dry_run: bool,
+) -> Result<()> {
+    if dry_run {
+        info!("Dry run — no commands executed.");
+        return Ok(());
+    }
+
+    let mut batch = CargoCommandBatcher::new();
+    // Keep tempdirs alive until after the batch executes
+    let mut _tempdirs: Vec<tempfile::TempDir> = Vec::new();
+
+    const PROJECT_NAME: &str = "test";
+
+    // let chip = Chip::Esp32;
+
+    for chip in Chip::iter().collect::<Vec<_>>() {
+        log::info!("BUILD: {chip}");
+
+        info!("Going to check");
+        let to_check = options_for_chip(chip, true)?;
+        for check in &to_check {
+            info!("\"{}\"", check.join(", "));
+        }
+
+        for options in to_check {
+            log::info!("WITH OPTIONS: {options:?}");
+
+            // We will generate the project in a temporary directory, to avoid
+            // making a mess when this subcommand is executed locally:
+            let project_dir = tempfile::tempdir()?;
+            let project_path = project_dir.path().to_path_buf();
+            log::info!("PROJECT PATH: {project_path:?}");
+
+            // Generate a project targeting the specified chip and using the
+            // specified generation options:
+            generate(workspace, &project_path, PROJECT_NAME, chip, &options)?;
+
+            // Hold the tempdir so it isn’t deleted before we run the batch
+            _tempdirs.push(project_dir);
+
+            let current_dir = project_path.join(PROJECT_NAME);
+
+            // let manifest_path = project_path.join(PROJECT_NAME).join("Cargo.toml");
+
+            // Ensure that the generated project builds without errors:
+            batch.push(
+                CargoArgsBuilder::new("build".to_string())
+                    .current_dir(&current_dir)
+                    .target(chip.target()),
+            );
+
+            // Ensure that the generated test project builds also:
+            if options.iter().any(|o| o == "embedded-test") {
+                batch.push(
+                    CargoArgsBuilder::new("test".to_string())
+                        .args(&["--no-run".to_string()])
+                        .current_dir(&current_dir)
+                        .target(chip.target()),
+                );
+            }
+
+            // Run clippy against the generated project to check for lint errors:
+            batch.push(
+                CargoArgsBuilder::new("clippy".to_string())
+                    .args(&["--no-deps".to_string(), "--".to_string(), "-Dwarnings".to_string()])
+                    .current_dir(&current_dir)
+                    .target(chip.target()),
+            );
+
+            // Ensure that the generated project is correctly formatted:
+            // batch.push(
+            //     CargoArgsBuilder::new("fmt".to_string())
+            //         .args(&["--".to_string(), "--check".to_string()])
+            //         .manifest_path(manifest_path.clone())
+            // );
+        }
+    }
+
+    for c in batch.build(false) {
+        println!("Command: cargo {}", c.command.join(" ").replace("---", "\n    ---"));
+        c.run()?;
     }
 
     Ok(())
@@ -547,15 +659,16 @@ pub struct BuiltCommand {
     pub artifact_name: String,
     pub command: Vec<String>,
     pub env_vars: Vec<(String, String)>,
+    pub cwd: PathBuf,
 }
 
 impl BuiltCommand {
-    pub fn run(&self, capture: bool, dir: &PathBuf) -> Result<String> {
-        run_with_env(&self.command, &dir, self.env_vars.clone(), capture)
+    pub fn run(&self) -> Result<String> {
+        run_with_env(&self.command, &self.cwd, self.env_vars.clone())
     }
 }
 
-fn run_with_env<I, K, V>(args: &[String], cwd: &Path, envs: I, capture: bool) -> Result<String>
+fn run_with_env<I, K, V>(args: &[String], cwd: &Path, envs: I) -> Result<String>
 where
     I: IntoIterator<Item = (K, V)> + core::fmt::Debug,
     K: AsRef<OsStr>,
@@ -635,6 +748,11 @@ impl CargoCommandBatcher {
                 continue;
             }
 
+            let batch_cwd = group[0]
+                .current_dir
+                .clone()
+                .expect("current_dir must be set for batched commands");
+
             let mut command = Vec::new();
             let mut batch_len = 0;
             let mut commands_in_batch = 0;
@@ -658,13 +776,11 @@ impl CargoCommandBatcher {
                 }
 
                 let mut c = item.clone();
-
                 c.toolchain = None;
                 c.configs = Vec::new();
                 c.config_path = None;
 
                 let args = c.build();
-
                 let command_chars = 4 + args.iter().map(|arg| arg.len() + 1).sum::<usize>();
 
                 if !command.is_empty()
@@ -675,6 +791,7 @@ impl CargoCommandBatcher {
                         artifact_name: String::from("batch"),
                         command: std::mem::take(&mut command),
                         env_vars: key.env_vars.clone(),
+                        cwd: batch_cwd.clone(),
                     });
                 }
 
@@ -682,8 +799,7 @@ impl CargoCommandBatcher {
                     if let Some(tc) = key.toolchain.as_ref() {
                         command.push(format!("+{tc}"));
                     }
-
-                    command.push("batch".to_string());
+                    command.push(String::from("batch"));
                     if !key.config_file.is_empty()
                         && let Some(config_path) = &group[0].config_path
                     {
@@ -708,12 +824,14 @@ impl CargoCommandBatcher {
                     artifact_name: String::from("batch"),
                     command,
                     env_vars: key.env_vars.clone(),
+                    cwd: batch_cwd,
                 });
             }
         }
 
         all
     }
+
 
     fn build_for_cargo(&self) -> Vec<BuiltCommand> {
         let mut all = Vec::new();
@@ -744,6 +862,7 @@ impl CargoCommandBatcher {
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
+            cwd: item.current_dir.clone().expect("current_dir must be set"),
         }
     }
 

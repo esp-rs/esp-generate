@@ -68,6 +68,18 @@ jobs:
       #     target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
       #     components: clippy,rustfmt,rust-src
 
+      # Install the Rust toolchain for Xtensa devices:
+      - uses: esp-rs/xtensa-toolchain@v1.6
+        with:
+          version: 1.90.0.0
+
+      # Install the Rust stable toolchain for RISC-V devices:
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
+          toolchain: stable
+          components: rust-src
+
       # Prepare cargo-batch
       - name: Setup cargo-batch
         run: |

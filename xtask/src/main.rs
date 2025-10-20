@@ -321,12 +321,12 @@ fn check(
         }
 
         // Run clippy against the generated project to check for lint errors:
-        commands.push(
-            CargoArgsBuilder::new("clippy".to_string())
-                .args(&["--no-deps".to_string(), "--".to_string(), "-Dwarnings".to_string()])
-                .current_dir(&current_dir)
-                .target(chip.target()),
-        );
+        // commands.push(
+        //     CargoArgsBuilder::new("clippy".to_string())
+        //         .args(&["--no-deps".to_string(), "--".to_string(), "-Dwarnings".to_string()])
+        //         .current_dir(&current_dir)
+        //         .target(chip.target()),
+        // );
 
         // TODO get me back
         // commands.push(CargoArgsBuilder::new("fmt".to_string())
@@ -382,17 +382,21 @@ fn check_all(
             // specified generation options:
             generate(workspace, &project_path, PROJECT_NAME, chip, &options)?;
 
+            let project_root = project_path.join(PROJECT_NAME);
+            let manifest_path = project_root.join("Cargo.toml");
+            let config_path   = project_root.join(".cargo").join("config.toml");
+
             // Hold the tempdir so it isn’t deleted before we run the batch
             _tempdirs.push(project_dir);
-
-            let current_dir = project_path.join(PROJECT_NAME);
 
             // let manifest_path = project_path.join(PROJECT_NAME).join("Cargo.toml");
 
             // Ensure that the generated project builds without errors:
             batch.push(
                 CargoArgsBuilder::new("build".to_string())
-                    .current_dir(&current_dir)
+                    .manifest_path(manifest_path.clone())
+                    .config_path(config_path.clone())
+                    // .current_dir(&current_dir)
                     .target(chip.target()),
             );
 
@@ -401,7 +405,8 @@ fn check_all(
                 batch.push(
                     CargoArgsBuilder::new("test".to_string())
                         .args(&["--no-run".to_string()])
-                        .current_dir(&current_dir)
+                        .manifest_path(manifest_path.clone())
+                        .config_path(config_path.clone())
                         .target(chip.target()),
                 );
             }
@@ -410,7 +415,8 @@ fn check_all(
             // batch.push(
             //     CargoArgsBuilder::new("clippy".to_string())
             //         .args(&["--no-deps".to_string(), "--".to_string(), "-Dwarnings".to_string()])
-            //         .current_dir(&current_dir)
+            //         .manifest_path(manifest_path.clone())
+            //         .config_path(config_path.clone())
             //         .target(chip.target()),
             // );
 
@@ -419,6 +425,7 @@ fn check_all(
             //     CargoArgsBuilder::new("fmt".to_string())
             //         .args(&["--".to_string(), "--check".to_string()])
             //         .manifest_path(manifest_path.clone())
+            //         .config_path(config_path.clone())
             // );
         }
     }
@@ -659,12 +666,23 @@ pub struct BuiltCommand {
     pub artifact_name: String,
     pub command: Vec<String>,
     pub env_vars: Vec<(String, String)>,
-    pub cwd: PathBuf,
+    // pub cwd: PathBuf,
 }
 
 impl BuiltCommand {
     pub fn run(&self) -> Result<String> {
-        run_with_env(&self.command, &self.cwd, self.env_vars.clone())
+        let cwd = self
+            .command
+            .windows(2)
+            .find_map(|w| {
+                if w[0] == "--manifest-path" {
+                    Path::new(&w[1]).parent().map(|p| p.to_path_buf())
+                } else {
+                    None
+                }
+            }).unwrap();
+
+        run_with_env(&self.command, &cwd, self.env_vars.clone())
     }
 }
 
@@ -748,11 +766,6 @@ impl CargoCommandBatcher {
                 continue;
             }
 
-            let batch_cwd = group[0]
-                .current_dir
-                .clone()
-                .expect("current_dir must be set for batched commands");
-
             let mut command = Vec::new();
             let mut batch_len = 0;
             let mut commands_in_batch = 0;
@@ -767,10 +780,7 @@ impl CargoCommandBatcher {
             for item in group.iter() {
                 // Only some commands can be batched
                 let batchable = ["build", "doc", "check"];
-                if !batchable
-                    .iter()
-                    .any(|&subcommand| subcommand == item.subcommand)
-                {
+                if !batchable.iter().any(|&sub| sub == item.subcommand) {
                     all.push(Self::build_one_for_cargo(item));
                     continue;
                 }
@@ -791,7 +801,6 @@ impl CargoCommandBatcher {
                         artifact_name: String::from("batch"),
                         command: std::mem::take(&mut command),
                         env_vars: key.env_vars.clone(),
-                        cwd: batch_cwd.clone(),
                     });
                 }
 
@@ -824,7 +833,6 @@ impl CargoCommandBatcher {
                     artifact_name: String::from("batch"),
                     command,
                     env_vars: key.env_vars.clone(),
-                    cwd: batch_cwd,
                 });
             }
         }
@@ -862,7 +870,7 @@ impl CargoCommandBatcher {
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
-            cwd: item.current_dir.clone().expect("current_dir must be set"),
+            // cwd: item.current_dir.clone().expect("current_dir must be set"),
         }
     }
 

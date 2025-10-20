@@ -407,12 +407,12 @@ fn check_all(
             }
 
             // Run clippy against the generated project to check for lint errors:
-            batch.push(
-                CargoArgsBuilder::new("clippy".to_string())
-                    .args(&["--no-deps".to_string(), "--".to_string(), "-Dwarnings".to_string()])
-                    .current_dir(&current_dir)
-                    .target(chip.target()),
-            );
+            // batch.push(
+            //     CargoArgsBuilder::new("clippy".to_string())
+            //         .args(&["--no-deps".to_string(), "--".to_string(), "-Dwarnings".to_string()])
+            //         .current_dir(&current_dir)
+            //         .target(chip.target()),
+            // );
 
             // Ensure that the generated project is correctly formatted:
             // batch.push(

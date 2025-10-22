@@ -393,12 +393,14 @@ fn process_file(
             if let Some(cond) = trimmed
                 .strip_prefix("//INCLUDEFILE ")
                 .or_else(|| trimmed.strip_prefix("#INCLUDEFILE "))
+                .or_else(|| trimmed.strip_prefix("--INCLUDEFILE "))
             {
                 include_file = engine.evaluate::<bool>(cond).unwrap();
                 continue;
             } else if let Some(include_as) = trimmed
                 .strip_prefix("//INCLUDE_AS ")
                 .or_else(|| trimmed.strip_prefix("#INCLUDE_AS "))
+                .or_else(|| trimmed.strip_prefix("--INCLUDE_AS "))
             {
                 *file_path = include_as.trim().to_string();
                 continue;
@@ -420,6 +422,7 @@ fn process_file(
         if let Some(what) = trimmed
             .strip_prefix("#REPLACE ")
             .or_else(|| trimmed.strip_prefix("//REPLACE "))
+            .or_else(|| trimmed.strip_prefix("--REPLACE "))
         {
             let replacements = what
                 .split(" && ")
@@ -442,12 +445,15 @@ fn process_file(
                 replace = Some(replacements);
             }
         // Check if we should include the next line(s)
-        } else if trimmed.starts_with("#IF ") || trimmed.starts_with("//IF ") {
-            let cond = if trimmed.starts_with("#IF ") {
-                trimmed.strip_prefix("#IF ").unwrap()
-            } else {
-                trimmed.strip_prefix("//IF ").unwrap()
-            };
+        } else if trimmed.starts_with("#IF ")
+            || trimmed.starts_with("//IF ")
+            || trimmed.starts_with("--IF ")
+        {
+            let cond = trimmed
+                .strip_prefix("#IF ")
+                .or_else(|| trimmed.strip_prefix("//IF "))
+                .or_else(|| trimmed.strip_prefix("--IF "))
+                .unwrap();
             let last = *include.last().unwrap();
 
             // Only evaluate condition if this IF is in a branch that should be included
@@ -458,12 +464,15 @@ fn process_file(
             };
 
             include.push(BlockKind::new_if(current));
-        } else if trimmed.starts_with("#ELIF ") || trimmed.starts_with("//ELIF ") {
-            let cond = if trimmed.starts_with("#ELIF ") {
-                trimmed.strip_prefix("#ELIF ").unwrap()
-            } else {
-                trimmed.strip_prefix("//ELIF ").unwrap()
-            };
+        } else if trimmed.starts_with("#ELIF ")
+            || trimmed.starts_with("//ELIF ")
+            || trimmed.starts_with("--ELIF ")
+        {
+            let cond = trimmed
+                .strip_prefix("#ELIF ")
+                .or_else(|| trimmed.strip_prefix("//ELIF "))
+                .or_else(|| trimmed.strip_prefix("--ELIF "))
+                .unwrap();
             let last = include.pop().unwrap();
 
             // Only evaluate condition if no other branches evaluated to true
@@ -474,10 +483,16 @@ fn process_file(
             };
 
             include.push(last.into_else_if(current));
-        } else if trimmed.starts_with("#ELSE") || trimmed.starts_with("//ELSE") {
+        } else if trimmed.starts_with("#ELSE")
+            || trimmed.starts_with("//ELSE")
+            || trimmed.starts_with("--ELSE")
+        {
             let last = include.pop().unwrap();
             include.push(last.into_else());
-        } else if trimmed.starts_with("#ENDIF") || trimmed.starts_with("//ENDIF") {
+        } else if trimmed.starts_with("#ENDIF")
+            || trimmed.starts_with("//ENDIF")
+            || trimmed.starts_with("--ENDIF")
+        {
             let prev = include.pop();
             assert!(
                 matches!(prev, Some(BlockKind::IfElse(_, _))),
@@ -493,6 +508,10 @@ fn process_file(
 
             if trimmed.starts_with("//+") {
                 line = line.replace("//+", "");
+            }
+
+            if trimmed.starts_with("--+") {
+                line = line.replace("--+", "");
             }
 
             if let Some(replacements) = &replace {

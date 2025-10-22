@@ -64,6 +64,7 @@ You can also directly download pre-compiled [release binaries] or use [`cargo-bi
   - `ci` Adds GitHub Actions support with some basics checks.
 - `editors`: Select the editor integrations:
    - `helix`: The Helix editor
+   - `neovim`: Neovim
    - `vscode`: Visual Studio Code
    - `zed`: The Zed editor
 

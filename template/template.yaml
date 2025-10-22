@@ -172,6 +172,10 @@ options:
         display_name: Add settings for Helix Editor
 
       - !Option
+        name: neovim
+        display_name: Add settings for Neovim
+
+      - !Option
         name: vscode
         display_name: Add settings for Visual Studio Code
 

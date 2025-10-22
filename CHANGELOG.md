@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Helix config: set cargo.allTargets to false
+
 ### Fixed
 
 ### Removed

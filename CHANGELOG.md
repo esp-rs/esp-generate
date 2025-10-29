@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Helix config: set cargo.allTargets to false
+- Helix config: set cargo.allTargets to false (#247)
+- Updated dependencies for esp-hal@1.0.0 releases (#248)
+
 
 ### Fixed
 

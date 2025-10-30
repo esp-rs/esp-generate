@@ -1,6 +1,6 @@
 [package]
 name         = "esp-generate"
-version      = "0.6.0"
+version      = "1.0.0"
 edition      = "2024"
 rust-version = "1.86"
 description  = "Template generation tool to create no_std applications targeting Espressif's chips"

@@ -9,15 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Generate settings for Neovim (#246)
-
 ### Changed
-
-- Helix config: set cargo.allTargets to false
 
 ### Fixed
 
 ### Removed
+
+## [1.0.0] - 2025-10-30
+
+### Added
+
+- Generate settings for Neovim (#246)
+
+### Changed
+
+- Helix config: set cargo.allTargets to false (#247)
+- Updated dependencies for esp-hal@1.0.0 releases (#248)
 
 ## [0.6.0] - 2025-10-14
 

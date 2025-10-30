@@ -21,7 +21,7 @@ test = false
 #ENDIF
 
 [dependencies]
-esp-hal = { version = "=1.0.0-rc.1", features = [
+esp-hal = { version = "1.0.0", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("unstable-hal")
@@ -36,7 +36,7 @@ esp-hal = { version = "=1.0.0-rc.1", features = [
 ] }
 
 #IF option("embassy") || option("wifi") || option("ble-bleps") || option("ble-trouble")
-esp-rtos = { version = "0.1.1", features = [
+esp-rtos = { version = "0.2.0", features = [
     #IF option("wifi") || option("ble-bleps") || option("ble-trouble")
     "esp-radio",
     #ENDIF
@@ -57,7 +57,7 @@ esp-rtos = { version = "0.1.1", features = [
 ]}
 #ENDIF
 
-esp-bootloader-esp-idf = { version = "0.3.0", features = [
+esp-bootloader-esp-idf = { version = "0.4.0", features = [
     #IF option("defmt")
     #+"defmt",
     #ENDIF
@@ -76,12 +76,12 @@ log = "0.4.27"
 #IF option("log-frontend") || option("panic-handler") || option("probe-rs")
 #IF option("probe-rs")
 #IF option("defmt")
-rtt-target = { version = "0.6.1", features = ["defmt"] }
+rtt-target = { version = "0.6.2", features = ["defmt"] }
 #ELSE
-#+rtt-target = "0.6.1"
+#+rtt-target = "0.6.2"
 #ENDIF defmt
 #ELSE probe-rs
-esp-println = { version = "0.16.0", features = [
+esp-println = { version = "0.16.1", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("defmt")
@@ -94,7 +94,7 @@ esp-println = { version = "0.16.0", features = [
 #ENDIF probe-rs
 #ENDIF log-frontend || panic-handler || probe-rs
 #IF option("esp-backtrace")
-esp-backtrace = { version = "0.18.0", features = [
+esp-backtrace = { version = "0.18.1", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     "panic-handler",
@@ -131,7 +131,7 @@ embedded-io = "0.7.1"
 embedded-io-async = "0.7.0"
 #ENDIF defmt
 #IF option("wifi")
-embassy-net = { version = "0.7.0", features = [
+embassy-net = { version = "0.7.1", features = [
     "tcp",
     "udp",
     "dhcpv4",
@@ -166,7 +166,7 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
     #ENDIF
 ] }
 #ENDIF wifi
-esp-radio = { version = "0.16.0", features = [
+esp-radio = { version = "0.17.0", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("wifi")
@@ -199,7 +199,7 @@ esp-radio = { version = "0.16.0", features = [
 #ENDIF
 #ENDIF wifi || ble || ble-trouble
 #IF option("embassy")
-embassy-executor = { version = "0.9.0", features = [
+embassy-executor = { version = "0.9.1", features = [
     #IF option("defmt")
     #+"defmt",
     #ENDIF

@@ -74,6 +74,9 @@ struct Args {
     #[arg(short, long, global = true, action)]
     #[cfg(feature = "update-informer")]
     skip_update_check: bool,
+
+    #[arg(short, long)]
+    toolchain_name: String,
 }
 
 /// Check crates.io for a new version of the application
@@ -250,6 +253,7 @@ fn main() -> Result<()> {
         ),
         ("esp-hal-version".to_string(), esp_hal_version),
         ("max-dram2-uninit".to_string(), format!("{max_dram2}")),
+        ("toolchain-name".to_string(), args.toolchain_name.clone()),
     ];
 
     variables.push(("rust_target".to_string(), chip.target().to_string()));

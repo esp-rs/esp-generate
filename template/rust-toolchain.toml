@@ -9,5 +9,6 @@ components = ["rust-src"]
 #REPLACE riscv32imac-unknown-none-elf rust_target
 targets = ["riscv32imac-unknown-none-elf"]
 #ELIF option("xtensa")
+#REPLACE esp toolchain-name
 #+channel = "esp"
 #ENDIF

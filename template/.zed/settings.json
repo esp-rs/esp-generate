@@ -9,6 +9,7 @@
                     "target": "riscv32imac-unknown-none-elf",
                     //IF option("xtensa")
                     "extraEnv": {
+                        //REPLACE esp toolchain-name
                         "RUSTUP_TOOLCHAIN": "esp"
                     }
                     //ENDIF
@@ -21,6 +22,7 @@
                 },
                 "check": {
                     "extraEnv": {
+                        //REPLACE esp toolchain-name
                         "RUSTUP_TOOLCHAIN": "esp"
                     }
                 },

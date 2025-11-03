@@ -358,8 +358,6 @@ fn check_all(
 
     const PROJECT_NAME: &str = "test";
 
-    // let chip = Chip::Esp32;
-
     for chip in Chip::iter().collect::<Vec<_>>() {
         log::info!("BUILD: {chip}");
 

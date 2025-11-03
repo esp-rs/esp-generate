@@ -30,13 +30,6 @@ rustflags = [
 #IF option("stack-smashing-protection")
   "-Z", "stack-protector=all",
 #ENDIF
-#IF option("defmt")
-  "-C", "link-arg=-Tdefmt.x",
-#ENDIF
-#IF option("embedded-test")
-  "-C", "link-arg=-Tembedded-test.x",
-#ENDIF
-  "-C", "link-arg=-Tlinkall.x",
 ]
 
 #REPLACE riscv32imac-unknown-none-elf rust_target

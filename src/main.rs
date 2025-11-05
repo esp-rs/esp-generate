@@ -74,6 +74,9 @@ struct Args {
     #[arg(short, long, global = true, action)]
     #[cfg(feature = "update-informer")]
     skip_update_check: bool,
+
+    #[arg(short, long)]
+    toolchain_name: Option<String>,
 }
 
 /// Check crates.io for a new version of the application
@@ -240,6 +243,11 @@ fn main() -> Result<()> {
         Chip::Esp32s3 => 73744, // 0x3FCED710 - 0x3FCDB700
     };
 
+    let toolchain_name = args
+        .toolchain_name
+        .clone()
+        .unwrap_or_else(|| "esp".to_string());
+
     let mut variables = vec![
         ("project-name".to_string(), name.clone()),
         ("mcu".to_string(), chip.to_string()),
@@ -250,6 +258,7 @@ fn main() -> Result<()> {
         ),
         ("esp-hal-version".to_string(), esp_hal_version),
         ("max-dram2-uninit".to_string(), format!("{max_dram2}")),
+        ("toolchain-name".to_string(), toolchain_name),
     ];
 
     variables.push(("rust_target".to_string(), chip.target().to_string()));

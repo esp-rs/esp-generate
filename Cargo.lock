@@ -176,9 +176,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.43"
+version = "1.2.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "739eb0f94557554b3ca9a86d2d37bebd49c5e6d0c1d2bda35ba5bdac830befc2"
+checksum = "37521ac7aabe3d13122dc382493e20c9416f299d2ccd5b3a5340a2570cdeb0f3"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -261,6 +261,15 @@ name = "convert_case"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb402b8d4c85569410425650ce3eddc7d698ed96d39a73f941b08fb63082f1e7"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "convert_case"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baaaa0ecca5b51987b9423ccdc971514dd8b0bb7b4060b983d3664dad3f1f89f"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -411,7 +420,7 @@ version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
 dependencies = [
- "convert_case",
+ "convert_case 0.7.1",
  "proc-macro2",
  "quote",
  "syn 2.0.108",
@@ -490,7 +499,7 @@ dependencies = [
 
 [[package]]
 name = "esp-generate"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -512,13 +521,14 @@ dependencies = [
 
 [[package]]
 name = "esp-metadata"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae786e826c5bb95238633794b07292c167d59524cedd4f3dfcee34a3819f7c7e"
+checksum = "ba70a3a35f004aca7fd0783fbd55a41ca24dfd4be722639fc6038d32c55662a6"
 dependencies = [
  "anyhow",
  "basic-toml",
  "clap",
+ "convert_case 0.8.0",
  "indexmap",
  "proc-macro2",
  "quote",
@@ -977,9 +987,9 @@ checksum = "469fb0b9cefa57e3ef31275ee7cacb78f2fdca44e4765491884a2b119d4eb130"
 
 [[package]]
 name = "iri-string"
-version = "0.7.8"
+version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbc5ebe9c3a1a7a5127f920a418f7585e9e758e911d0466ed004f393b0e380b2"
+checksum = "4f867b9d1d896b67beb18518eda36fdb77a32ea590de864f1325b294a6d14397"
 dependencies = [
  "memchr",
  "serde",
@@ -1553,9 +1563,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.34"
+version = "0.23.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a9586e9ee2b4f8fab52a0048ca7334d7024eef48e2cb9407e3497bb7cab7fa7"
+checksum = "533f54bc6a7d4f647e46ad909549eda97bf5afc1585190ef692b4286b198bd8f"
 dependencies = [
  "log",
  "once_cell",
@@ -2404,9 +2414,9 @@ dependencies = [
 
 [[package]]
 name = "webpki-roots"
-version = "1.0.3"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32b130c0d2d49f8b6889abc456e795e82525204f27c42cf767cf0d7734e089b8"
+checksum = "b2878ef029c47c6e8cf779119f20fcf52bde7ad42a731b2a304bc221df17571e"
 dependencies = [
  "rustls-pki-types",
 ]

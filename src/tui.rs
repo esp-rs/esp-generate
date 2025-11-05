@@ -8,9 +8,9 @@ use esp_generate::{
 };
 use esp_metadata::Chip;
 use ratatui::crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
+    event::{self, Event, KeyCode, KeyEventKind},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 
@@ -290,7 +290,7 @@ impl App<'_> {
                     match key.code {
                         Char('q') => self.confirm_quit = true,
                         Char('s') | Char('S') => {
-                            return Ok(Some(self.repository.config.selected.clone()))
+                            return Ok(Some(self.repository.config.selected.clone()));
                         }
                         Esc => {
                             if self.state.len() == 1 {

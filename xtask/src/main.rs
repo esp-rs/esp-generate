@@ -4,10 +4,10 @@ use std::{
     process::{Command, Stdio},
 };
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use esp_generate::{
-    config::{find_option, ActiveConfiguration},
+    config::{ActiveConfiguration, find_option},
     template::{GeneratorOptionCategory, GeneratorOptionItem, Template},
 };
 use esp_metadata::Chip;

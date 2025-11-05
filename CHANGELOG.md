@@ -11,15 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Updated `embedded-test` dependency to 0.7.0 (#251)
+### Fixed
+
+### Removed
+
+## [1.0.1] - 2025-11-05
+
+### Changed
+
+- Update `embedded-test` dependency to 0.7.0 (#251)
 - Use `esp_hal::ram(reclaimed)` attribute for heap allocator (#252)
 
 ### Fixed
 
 - Add App Descriptor macro to tests (#251)
 - ESP32 `dram2` size (#252)
-
-### Removed
 
 ## [1.0.0] - 2025-10-30
 
@@ -193,7 +199,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/esp-rs/esp-generate/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/esp-rs/esp-generate/compare/v0.6.0...v1.0.0
 [0.6.0]: https://github.com/esp-rs/esp-generate/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/esp-rs/esp-generate/compare/v0.4.0...v0.5.0

@@ -12,10 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Updated `embedded-test` dependency to 0.7.0 (#251)
+- Use `esp_hal::ram(reclaimed)` attribute for heap allocator (#252)
 
 ### Fixed
 
 - Add App Descriptor macro to tests (#251)
+- ESP32 `dram2` size (#252)
 
 ### Removed
 

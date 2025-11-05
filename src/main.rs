@@ -231,7 +231,7 @@ fn main() -> Result<()> {
     // based on esp32 linker scripts
     // TODO: add this to esp-metadata
     let max_dram2 = match chip {
-        Chip::Esp32 => 98767,
+        Chip::Esp32 => 98768,
         Chip::Esp32c2 => 66416, // 0x3fcdeb70 -0x3fcce800
         Chip::Esp32c3 => 66320, // 0x3fcde710 - 3fcce400
         Chip::Esp32c6 => 65536, // 0x4087e610 - 0x4086e610

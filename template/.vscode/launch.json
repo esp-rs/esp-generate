@@ -23,8 +23,8 @@
                     "coreIndex": 0,
                     //REPLACE riscv32imc-unknown-none-elf rust_target
                     "programBinary": "target/riscv32imc-unknown-none-elf/debug/${workspaceFolderBasename}",
-                    //IF option("defmt")
                     "rttEnabled": true,
+                    //IF option("defmt")
                     "rttChannelFormats": [
                         {
                             "channelNumber": 0,
@@ -47,8 +47,8 @@
                     "coreIndex": 0,
                     //REPLACE riscv32imc-unknown-none-elf rust_target
                     "programBinary": "target/riscv32imc-unknown-none-elf/debug/${workspaceFolderBasename}",
-                    //IF option("defmt")
                     "rttEnabled": true,
+                    //IF option("defmt")
                     "rttChannelFormats": [
                         {
                             "channelNumber": 0,

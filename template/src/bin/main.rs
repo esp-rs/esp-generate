@@ -116,5 +116,5 @@ fn main() -> ! {
     }
 
     //REPLACE {current-version} esp-hal-version
-    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v{current-version}/examples/src/bin
+    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v{current-version}/examples
 }

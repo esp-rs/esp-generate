@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `"rttEnabled": true` is now set even if `defmt` is not enabled (#255)
+- Fix examples link in `main.rs` (#258)
 
 ### Removed
 

@@ -138,7 +138,7 @@ fn create_check_results(
         &mut result,
     );
     requirements_unsatisfied |= format_result(
-        false,
+        !probe_rs_required,
         "probe-rs",
         check_version(probers_version, 0, 25, 0),
         format!(

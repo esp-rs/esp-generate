@@ -18,9 +18,11 @@ fn linker_be_nice() {
 
         match kind.as_str() {
             "undefined-symbol" => match what.as_str() {
-                "_defmt_timestamp" => {
+                "_defmt_timestamp" | "_defmt_write" | "_defmt_acquire" | "_defmt_release" => {
                     eprintln!();
-                    eprintln!("💡 `defmt` not found - make sure `defmt.x` is added as a linker script and you have included `use defmt_rtt as _;`");
+                    eprintln!(
+                        "💡 `defmt` not found - make sure `defmt.x` is added as a linker script and you have included `use defmt_rtt as _;`"
+                    );
                     eprintln!();
                 }
                 "_stack_start" => {
@@ -50,12 +52,16 @@ fn linker_be_nice() {
                 | "esp_rtos_timer_create"
                 | "esp_rtos_now" => {
                     eprintln!();
-                    eprintln!("💡 `esp-radio` has no scheduler enabled. Make sure you have initialized `esp-rtos` or provided an external scheduler.");
+                    eprintln!(
+                        "💡 `esp-radio` has no scheduler enabled. Make sure you have initialized `esp-rtos` or provided an external scheduler."
+                    );
                     eprintln!();
                 }
                 "embedded_test_linker_file_not_added_to_rustflags" => {
                     eprintln!();
-                    eprintln!("💡 `embedded-test` not found - make sure `embedded-test.x` is added as a linker script for tests");
+                    eprintln!(
+                        "💡 `embedded-test` not found - make sure `embedded-test.x` is added as a linker script for tests"
+                    );
                     eprintln!();
                 }
                 "free"
@@ -67,13 +73,8 @@ fn linker_be_nice() {
                 | "calloc_internal"
                 | "free_internal" => {
                     eprintln!();
-                    eprintln!("💡 Did you forget the `esp-alloc` dependency or didn't enable the `compat` feature on it?");
-                    eprintln!();
-                }
-                "_defmt_write" | "_defmt_acquire" | "_defmt_release" => {
-                    eprintln!();
                     eprintln!(
-                        "💡 Did you forget the `rtt-target` dependency?"
+                        "💡 Did you forget the `esp-alloc` dependency or didn't enable the `compat` feature on it?"
                     );
                     eprintln!();
                 }

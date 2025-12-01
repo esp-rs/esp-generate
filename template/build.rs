@@ -29,8 +29,26 @@ fn linker_be_nice() {
                     eprintln!();
                 }
                 "esp_rtos_initialized"
+                | "esp_rtos_semaphore_take"
+                | "esp_rtos_semaphore_give␍"
                 | "esp_rtos_yield_task"
-                | "esp_rtos_task_create" => {
+                | "esp_rtos_semaphore_create"
+                | "esp_rtos_yield_task_from_isr"
+                | "esp_rtos_current_task_thread_semaphore"
+                | "esp_rtos_semaphore_delete"
+                | "esp_rtos_queue_create"
+                | "esp_rtos_queue_try_send_to_back_from_isr"
+                | "esp_rtos_queue_send_to_front"
+                | "esp_rtos_queue_receive"
+                | "esp_rtos_queue_messages_waiting"
+                | "esp_rtos_task_create"
+                | "esp_rtos_schedule_task_deletion"
+                | "esp_rtos_current_task"
+                | "esp_rtos_max_task_priority"
+                | "esp_rtos_timer_disarm"
+                | "esp_rtos_timer_delete"
+                | "esp_rtos_timer_create"
+                | "esp_rtos_now" => {
                     eprintln!();
                     eprintln!("💡 `esp-radio` has no scheduler enabled. Make sure you have initialized `esp-rtos` or provided an external scheduler.");
                     eprintln!();
@@ -38,6 +56,25 @@ fn linker_be_nice() {
                 "embedded_test_linker_file_not_added_to_rustflags" => {
                     eprintln!();
                     eprintln!("💡 `embedded-test` not found - make sure `embedded-test.x` is added as a linker script for tests");
+                    eprintln!();
+                }
+                "free"
+                | "malloc"
+                | "calloc"
+                | "get_free_internal_heap_size"
+                | "malloc_internal"
+                | "realloc_internal"
+                | "calloc_internal"
+                | "free_internal" => {
+                    eprintln!();
+                    eprintln!("💡 Did you forget the `esp-alloc` dependency or didn't enable the `compat` feature on it?");
+                    eprintln!();
+                }
+                "_defmt_write" | "_defmt_acquire" | "_defmt_release" => {
+                    eprintln!();
+                    eprintln!(
+                        "💡 Did you forget the `rtt-target` dependency?"
+                    );
                     eprintln!();
                 }
                 _ => (),

@@ -442,7 +442,7 @@ Checking installed versions
 Checking installed versions
 🆗 Rust (nightly): 1.85.0
 🆗 espflash: 3.3.0
-❌ probe-rs (not found - see https://probe.rs/docs/getting-started/installation/ for how to install (suggested))
+💡 probe-rs (not found - see https://probe.rs/docs/getting-started/installation/ for how to install (suggested))
 🆗 esp-config: 0.5.0
 "
             .to_string()

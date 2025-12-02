@@ -18,7 +18,7 @@ fn linker_be_nice() {
 
         match kind.as_str() {
             "undefined-symbol" => match what.as_str() {
-                "_defmt_timestamp" | "_defmt_write" | "_defmt_acquire" | "_defmt_release" => {
+                kind if kind.starts_with("_defmt_") => {
                     eprintln!();
                     eprintln!(
                         "💡 `defmt` not found - make sure `defmt.x` is added as a linker script and you have included `use defmt_rtt as _;`"
@@ -30,27 +30,7 @@ fn linker_be_nice() {
                     eprintln!("💡 Is the linker script `linkall.x` missing?");
                     eprintln!();
                 }
-                "esp_rtos_initialized"
-                | "esp_rtos_semaphore_take"
-                | "esp_rtos_semaphore_give␍"
-                | "esp_rtos_yield_task"
-                | "esp_rtos_semaphore_create"
-                | "esp_rtos_yield_task_from_isr"
-                | "esp_rtos_current_task_thread_semaphore"
-                | "esp_rtos_semaphore_delete"
-                | "esp_rtos_queue_create"
-                | "esp_rtos_queue_try_send_to_back_from_isr"
-                | "esp_rtos_queue_send_to_front"
-                | "esp_rtos_queue_receive"
-                | "esp_rtos_queue_messages_waiting"
-                | "esp_rtos_task_create"
-                | "esp_rtos_schedule_task_deletion"
-                | "esp_rtos_current_task"
-                | "esp_rtos_max_task_priority"
-                | "esp_rtos_timer_disarm"
-                | "esp_rtos_timer_delete"
-                | "esp_rtos_timer_create"
-                | "esp_rtos_now" => {
+                kind if kind.starts_with("esp_rtos_") => {
                     eprintln!();
                     eprintln!(
                         "💡 `esp-radio` has no scheduler enabled. Make sure you have initialized `esp-rtos` or provided an external scheduler."

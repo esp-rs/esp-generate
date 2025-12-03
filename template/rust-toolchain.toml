@@ -3,6 +3,7 @@
 #IF option("stack-smashing-protection")
 #+channel    = "nightly"
 #ELSE
+#REPLACE stable toolchain-name
 channel    = "stable"
 #ENDIF
 components = ["rust-src"]

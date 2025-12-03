@@ -787,7 +787,7 @@ fn toolchains_for_target(target: &str) -> Result<Vec<String>> {
         }
 
         // Use rustc with an explicit +toolchain spec, which works for custom
-        // toolchains like `esp` and `esp-alt`.
+        // toolchains like `esp`.
         let spec = format!("+{}", toolchain);
 
         let targets_list = Command::new("rustc")

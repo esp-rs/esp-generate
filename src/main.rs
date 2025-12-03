@@ -101,7 +101,9 @@ fn setup_args_interactive(args: &mut Args) -> Result<()> {
 
     if args.chip.is_none() {
         let chip_variants = Chip::iter().collect::<Vec<_>>();
+
         let chip = Select::new("Select your target chip:", chip_variants).prompt()?;
+
         args.chip = Some(chip);
     }
 
@@ -119,34 +121,85 @@ fn setup_args_interactive(args: &mut Args) -> Result<()> {
             .expect("chip must be set by now in setup_args_interactive");
         let target = chip.target().to_string();
 
-        let toolchains = toolchains_for_target(&target)?;
+        let mut used_default = false;
 
-        if toolchains.is_empty() {
-            log::warn!(
-                "No rustup toolchains with target `{}` found. \
-                 Using default toolchain name `esp`. \
-                 Install an appropriate toolchain or pass --toolchain-name explicitly.",
-                target
-            );
-            args.toolchain_name = Some("esp".to_string());
-        } else if toolchains.len() == 1 {
-            let only = toolchains[0].clone();
-            println!(
-                "Using toolchain `{}` for target `{}`",
-                only, target
-            );
-            args.toolchain_name = Some(only);
-        } else {
-            let selected = Select::new(
-                &format!(
-                    "Multiple Rust toolchains with target `{}` found.\nSelect the toolchain to use:",
+        // First, try if default rustup toolchain has needed target
+        if let Ok(output) = Command::new("rustup").args(["toolchain", "list"]).output() {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+
+                if let Some(default_tc) = stdout.lines().find_map(|line| {
+                    if line.contains("default") {
+                        line.split_whitespace().next().map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                }) {
+                    let is_xtensa = target.starts_with("xtensa-");
+                    let is_generic = default_tc.starts_with("stable-")
+                        || default_tc.starts_with("beta-")
+                        || default_tc.starts_with("nightly-");
+
+                    // For Xtensa we ignore generic stable/beta/nightly defaults (for now)
+                    if !is_xtensa || !is_generic {
+                        let spec = format!("+{}", default_tc);
+                        if let Ok(targets_list) = Command::new("rustc")
+                            .arg(&spec)
+                            .args(["--print", "target-list"])
+                            .output()
+                        {
+                            if targets_list.status.success() {
+                                let targets_stdout =
+                                    String::from_utf8_lossy(&targets_list.stdout);
+                                let has_target =
+                                    targets_stdout.lines().any(|t| t.trim() == target);
+
+                                if has_target {
+                                    println!(
+                                        "Using default rustup toolchain `{}` for target `{}`",
+                                        default_tc, target
+                                    );
+                                    args.toolchain_name = Some(default_tc);
+                                    used_default = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // If default toolchain is not suitable, fall back to scanning all toolchains.
+        if !used_default {
+            let toolchains = toolchains_for_target(&target)?;
+
+            if toolchains.is_empty() {
+                log::warn!(
+                    "No rustup toolchains with target `{}` found. \
+                     Using default toolchain name `esp`. \
+                     Install an appropriate toolchain or pass --toolchain-name explicitly.",
                     target
-                ),
-                toolchains,
-            )
-            .prompt()?;
+                );
+                args.toolchain_name = Some("esp".to_string());
+            } else if toolchains.len() == 1 {
+                let only = toolchains[0].clone();
+                println!(
+                    "Using toolchain `{}` for target `{}`",
+                    only, target
+                );
+                args.toolchain_name = Some(only);
+            } else {
+                let selected = Select::new(
+                    &format!(
+                        "Multiple Rust toolchains with target `{}` found.\nSelect the toolchain to use:",
+                        target
+                    ),
+                    toolchains,
+                )
+                .prompt()?;
 
-            args.toolchain_name = Some(selected);
+                args.toolchain_name = Some(selected);
+            }
         }
     }
 
@@ -737,12 +790,12 @@ fn toolchains_for_target(target: &str) -> Result<Vec<String>> {
         // toolchains like `esp` and `esp-alt`.
         let spec = format!("+{}", toolchain);
 
-        let targets_output = Command::new("rustc")
+        let targets_list = Command::new("rustc")
             .arg(&spec)
             .args(["--print", "target-list"])
             .output();
 
-        let targets_output = match targets_output {
+        let targets_list = match targets_list {
             Ok(o) => o,
             Err(err) => {
                 log::warn!("Failed to run `rustc {spec} --print target-list`: {err}");
@@ -750,15 +803,15 @@ fn toolchains_for_target(target: &str) -> Result<Vec<String>> {
             }
         };
 
-        if !targets_output.status.success() {
+        if !targets_list.status.success() {
             log::warn!(
                 "`rustc {spec} --print target-list` failed with status: {:?}",
-                targets_output.status.code()
+                targets_list.status.code()
             );
             continue;
         }
 
-        let targets_stdout = String::from_utf8_lossy(&targets_output.stdout);
+        let targets_stdout = String::from_utf8_lossy(&targets_list.stdout);
 
         let has_target = targets_stdout.lines().any(|t| t.trim() == target);
 

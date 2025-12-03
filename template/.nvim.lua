@@ -8,7 +8,9 @@ local rust_analyzer = {
     },
 }
 --IF option("xtensa")
+--REPLACE esp toolchain-name
 rust_analyzer.cargo.extraEnv = { RUST_TOOLCHAIN = "esp" }
+--REPLACE esp toolchain-name
 rust_analyzer.check = { extraEnv = { RUST_TOOLCHAIN = "esp" } }
 rust_analyzer.server = { extraEnv = { RUST_TOOLCHAIN = "stable" } }
 --ENDIF

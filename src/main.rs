@@ -74,6 +74,9 @@ struct Args {
     #[arg(short, long, global = true, action)]
     #[cfg(feature = "update-informer")]
     skip_update_check: bool,
+
+    #[arg(short, long)]
+    toolchain_name: Option<String>,
 }
 
 /// Check crates.io for a new version of the application
@@ -98,9 +101,7 @@ fn setup_args_interactive(args: &mut Args) -> Result<()> {
 
     if args.chip.is_none() {
         let chip_variants = Chip::iter().collect::<Vec<_>>();
-
         let chip = Select::new("Select your target chip:", chip_variants).prompt()?;
-
         args.chip = Some(chip);
     }
 
@@ -112,8 +113,46 @@ fn setup_args_interactive(args: &mut Args) -> Result<()> {
         args.name = Some(project_name);
     }
 
+    if args.toolchain_name.is_none() {
+        let chip = args
+            .chip
+            .expect("chip must be set by now in setup_args_interactive");
+        let target = chip.target().to_string();
+
+        let toolchains = toolchains_for_target(&target)?;
+
+        if toolchains.is_empty() {
+            log::warn!(
+                "No rustup toolchains with target `{}` found. \
+                 Using default toolchain name `esp`. \
+                 Install an appropriate toolchain or pass --toolchain-name explicitly.",
+                target
+            );
+            args.toolchain_name = Some("esp".to_string());
+        } else if toolchains.len() == 1 {
+            let only = toolchains[0].clone();
+            println!(
+                "Using toolchain `{}` for target `{}`",
+                only, target
+            );
+            args.toolchain_name = Some(only);
+        } else {
+            let selected = Select::new(
+                &format!(
+                    "Multiple Rust toolchains with target `{}` found.\nSelect the toolchain to use:",
+                    target
+                ),
+                toolchains,
+            )
+            .prompt()?;
+
+            args.toolchain_name = Some(selected);
+        }
+    }
+
     Ok(())
 }
+
 
 fn main() -> Result<()> {
     Builder::from_env(Env::default().default_filter_or(log::LevelFilter::Info.as_str()))
@@ -131,13 +170,15 @@ fn main() -> Result<()> {
     }
 
     // Run the interactive TUI only if chip or name is missing
-    if args.chip.is_none() || args.name.is_none() {
+    if args.chip.is_none() || args.name.is_none() || args.toolchain_name.is_none() {
         setup_args_interactive(&mut args)?;
     }
 
     let chip = args.chip.unwrap();
 
     let name = args.name.clone().unwrap();
+
+    let toolchain_name = args.toolchain_name.clone().unwrap();
 
     let path = &args
         .output_path
@@ -250,6 +291,7 @@ fn main() -> Result<()> {
         ),
         ("esp-hal-version".to_string(), esp_hal_version),
         ("max-dram2-uninit".to_string(), format!("{max_dram2}")),
+        ("toolchain-name".to_string(), toolchain_name),
     ];
 
     variables.push(("rust_target".to_string(), chip.target().to_string()));
@@ -650,6 +692,84 @@ fn should_initialize_git_repo(mut path: &Path) -> bool {
 
     true
 }
+
+fn toolchains_for_target(target: &str) -> Result<Vec<String>> {
+    let output = Command::new("rustup").args(["toolchain", "list"]).output();
+
+    let output = match output {
+        Ok(o) => o,
+        Err(err) => {
+            log::warn!("Failed to run `rustup toolchain list`: {err}");
+            return Ok(Vec::new());
+        }
+    };
+
+    if !output.status.success() {
+        log::warn!(
+            "`rustup toolchain list` failed with status: {:?}",
+            output.status.code()
+        );
+        return Ok(Vec::new());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let mut applicable = Vec::new();
+
+    for line in stdout.lines() {
+        // Line there are like: "stable-aarch64-apple-darwin (active, default)"
+        let Some(name) = line.split_whitespace().next() else {
+            continue;
+        };
+
+        let toolchain = name.to_string();
+
+        // For Xtensa targets, hide "stable-*", "beta-*", "nightly-*"
+        if target.starts_with("xtensa-")
+            && (toolchain.starts_with("stable-")
+                || toolchain.starts_with("beta-")
+                || toolchain.starts_with("nightly-"))
+        {
+            continue;
+        }
+
+        // Use rustc with an explicit +toolchain spec, which works for custom
+        // toolchains like `esp` and `esp-alt`.
+        let spec = format!("+{}", toolchain);
+
+        let targets_output = Command::new("rustc")
+            .arg(&spec)
+            .args(["--print", "target-list"])
+            .output();
+
+        let targets_output = match targets_output {
+            Ok(o) => o,
+            Err(err) => {
+                log::warn!("Failed to run `rustc {spec} --print target-list`: {err}");
+                continue;
+            }
+        };
+
+        if !targets_output.status.success() {
+            log::warn!(
+                "`rustc {spec} --print target-list` failed with status: {:?}",
+                targets_output.status.code()
+            );
+            continue;
+        }
+
+        let targets_stdout = String::from_utf8_lossy(&targets_output.stdout);
+
+        let has_target = targets_stdout.lines().any(|t| t.trim() == target);
+
+        if has_target {
+            applicable.push(toolchain);
+        }
+    }
+
+    Ok(applicable)
+}
+
 
 #[cfg(test)]
 mod test {

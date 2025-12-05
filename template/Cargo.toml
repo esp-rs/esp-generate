@@ -21,7 +21,7 @@ test = false
 #ENDIF
 
 [dependencies]
-esp-hal = { version = "1.0.0", features = [
+esp-hal = { version = "~1.0", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("unstable-hal")

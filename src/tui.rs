@@ -357,6 +357,7 @@ impl App<'_> {
         Paragraph::new("esp-generate")
             .bold()
             .centered()
+            .fg(self.colors.text_color)
             .bg(self.colors.app_background)
             .render(area, buf);
     }
@@ -486,6 +487,7 @@ impl App<'_> {
 
         Paragraph::new(text)
             .centered()
+            .fg(self.colors.text_color) 
             .bg(self.colors.app_background)
             .wrap(Wrap { trim: false })
     }

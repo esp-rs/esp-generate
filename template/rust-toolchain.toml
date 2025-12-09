@@ -1,4 +1,5 @@
 [toolchain]
+#REPLACE stable rust_toolchain && esp rust_toolchain
 #IF option("riscv")
 #IF option("stack-smashing-protection")
 #+channel    = "nightly"

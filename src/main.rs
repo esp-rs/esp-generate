@@ -74,6 +74,10 @@ struct Args {
     #[arg(short, long, global = true, action)]
     #[cfg(feature = "update-informer")]
     skip_update_check: bool,
+
+    /// Rust toolchain to use (rustup toolchain name; must support the selected chip target)
+    #[arg(long)]
+    toolchain: Option<String>,
 }
 
 /// Check crates.io for a new version of the application
@@ -161,8 +165,16 @@ fn main() -> Result<()> {
     let mut template = TEMPLATE.clone();
     remove_incompatible_chip_options(chip, &mut template.options);
 
+    populate_toolchain_category(chip, &mut template.options, args.toolchain.as_deref())?;
+
+    // Initial selection for TUI/headless, including toolchain if provided.
+    let mut initial_selected = args.option.clone();
+    if let Some(ref tc) = args.toolchain {
+        initial_selected.push(tc.clone());
+    }
+
     let mut selected = if !args.headless {
-        let repository = tui::Repository::new(chip, &template.options, &args.option);
+        let repository = tui::Repository::new(chip, &template.options, &initial_selected);
 
         // TUI stuff ahead
         let terminal = tui::init_terminal()?;
@@ -178,19 +190,33 @@ fn main() -> Result<()> {
         };
 
         println!(
-            "Selected options: --chip {}{}",
+            "Selected options: --chip {}{}{}",
             chip,
             selected.iter().fold(String::new(), |mut acc, s| {
                 use std::fmt::Write;
                 write!(&mut acc, " -o {s}").unwrap();
                 acc
-            })
+            }),
+            if let Some(tc) = &args.toolchain {
+                format!(" --toolchain {tc}")
+            } else {
+                String::new()
+            }
         );
 
         selected
     } else {
-        args.option.clone()
+        initial_selected
     };
+
+    let selected_toolchain = selected.iter().find_map(|name| {
+        let opt = find_option(name, &template.options)?;
+        if opt.selection_group == "toolchain" {
+            Some(name.clone())
+        } else {
+            None
+        }
+    });
 
     // Also add the active selection groups
     for idx in 0..selected.len() {
@@ -205,6 +231,11 @@ fn main() -> Result<()> {
     } else {
         "xtensa".to_string()
     });
+
+    // mark that a toolchain was explicitly selected for template replacements
+    if selected_toolchain.is_some() {
+        selected.push("toolchain-selected".to_string());
+    }
 
     let wokwi_devkit = match chip {
         Chip::Esp32 => "board-esp32-devkit-c-v4",
@@ -253,6 +284,10 @@ fn main() -> Result<()> {
     ];
 
     variables.push(("rust_target".to_string(), chip.target().to_string()));
+
+    if let Some(tc) = selected_toolchain {
+        variables.push(("rust_toolchain".to_string(), tc));
+    }
 
     let project_dir = path.join(&name);
     fs::create_dir(&project_dir)?;
@@ -649,6 +684,208 @@ fn should_initialize_git_repo(mut path: &Path) -> bool {
     }
 
     true
+}
+
+/// Return all installed rustup toolchains that support the given `target`.
+fn toolchains_with_target(target: &str) -> Result<Vec<String>> {
+    let output = match Command::new("rustup").args(["toolchain", "list"]).output() {
+        Ok(res) => res,
+        Err(err) => {
+            // unlikely to happen, how did user even get to this point if ended up here?
+            log::warn!("Failed to run `rustup toolchain list`: {err}");
+            return Ok(Vec::new());
+        }
+    };
+
+    if !output.status.success() {
+        log::warn!(
+            "`rustup toolchain list` exited with status {:?}",
+            output.status.code()
+        );
+        return Ok(Vec::new());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let mut available = Vec::new();
+
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        // rustup prints things like: "stable-x86_64-unknown-linux-gnu (active, default)"
+        let Some(name) = line.split_whitespace().next() else {
+            continue;
+        };
+
+        // check whether this toolchain's rustc knows the desired target (rustup doesn't recognize some custom toolchains, e.g. `esp`)
+        let output = match Command::new("rustc")
+            .args([
+                format!("+{name}"),
+                "--print".to_string(),
+                "target-list".to_string(),
+            ])
+            .output()
+        {
+            Ok(res) => res,
+            Err(err) => {
+                log::warn!("Failed to run `rustc +{name} --print target-list`: {err}");
+                continue;
+            }
+        };
+
+        if !output.status.success() {
+            log::warn!(
+                "`rustc +{name} --print target-list` exited with status {:?}",
+                output.status.code()
+            );
+            continue;
+        }
+
+        if String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .any(|l| l.trim() == target)
+        {
+            available.push(name.to_string());
+        }
+    }
+
+    Ok(available)
+}
+
+/// This functiomn will find the `toolchain` category in `template.yaml` and replace its placeholder option with one
+/// option per installed rustup toolchain that supports required target.
+fn populate_toolchain_category(
+    chip: Chip,
+    options: &mut [GeneratorOptionItem],
+    cli_toolchain: Option<&str>,
+) -> Result<()> {
+    let target = chip.target().to_string();
+
+    let mut available = toolchains_with_target(&target)?;
+
+    // for now, we should hide the generic toolchains for Xtensa (stable-*, beta-*, nightly-*).
+    if chip.is_xtensa() {
+        available.retain(|name| {
+            !(name.starts_with("stable") || name.starts_with("beta") || name.starts_with("nightly"))
+        });
+    }
+
+    // sanity check
+    if available.is_empty() {
+        if let Some(cli) = cli_toolchain {
+            if chip.is_xtensa()
+                && (cli.starts_with("stable")
+                    || cli.starts_with("beta")
+                    || cli.starts_with("nightly"))
+            {
+                bail!(
+                    "Toolchain `{cli}` is not supported for Xtensa targets; \
+                     please use different toolchain (e.g. `esp`)"
+                );
+            }
+
+            bail!(
+                "Toolchain `{cli}` does not have target `{target}` installed (or no toolchain does)"
+            );
+        }
+        log::warn!(
+            "No rustc toolchains found that have `{target}` installed; toolchain category will stay as placeholder"
+        );
+        return Ok(());
+    }
+
+    if let Some(cli) = cli_toolchain {
+        if !available.iter().any(|t| t == cli) {
+            if chip.is_xtensa()
+                && (cli.starts_with("stable")
+                    || cli.starts_with("beta")
+                    || cli.starts_with("nightly"))
+            {
+                bail!(
+                    "Toolchain `{cli}` is not supported for Xtensa targets; \
+                     please use an ESP toolchain (e.g. `esp`)"
+                );
+            }
+
+            bail!("Toolchain `{cli}` does not have target `{target}` installed");
+        }
+        // put CLI toolchain first in toolchain search case it was provided.
+        available.sort();
+        available.sort_by_key(|t| if t == cli { 0 } else { 1 });
+    }
+
+    // get default toolchain to mark it properly
+    let default: Option<String> = {
+        if let Some(output) = Command::new("rustup")
+            .args(["show", "active-toolchain"])
+            .output()
+            .ok()
+        {
+            if output.status.success() {
+                if let Some(line) = String::from_utf8_lossy(&output.stdout).lines().next() {
+                    if let Some(name) = line.split_whitespace().next() {
+                        Some(name.to_string())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
+
+    // rewrite the `toolchain` category using the placeholder option as template
+    for item in options.iter_mut() {
+        let GeneratorOptionItem::Category(category) = item else {
+            continue;
+        };
+        if category.name != "toolchain" {
+            continue;
+        }
+
+        // we know exactly the template/placeholder structure, so we can just take `first` one
+        let template_opt = match category.options.first() {
+            Some(GeneratorOptionItem::Option(opt)) => opt.clone(),
+            _ => {
+                // If `template.yaml` is broken, fail loudly
+                panic!("toolchain category must contain a placeholder !Option");
+            }
+        };
+
+        // remove the placeholder, we've "scanned" it already
+        category.options.clear();
+
+        for toolchain in &available {
+            // copy our placeholder option (again) to populate another toolchain instead of it
+            let mut opt = template_opt.clone();
+
+            let is_default = default
+                .as_deref()
+                .map_or(false, |d| d == toolchain.as_str());
+
+            opt.name = toolchain.clone();
+            opt.display_name = if is_default {
+                format!("Use `{toolchain}` toolchain [default]")
+            } else {
+                format!("Use `{toolchain}` toolchain")
+            };
+            opt.selection_group = "toolchain".to_string();
+
+            category.options.push(GeneratorOptionItem::Option(opt));
+        }
+
+        break;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

@@ -182,3 +182,12 @@ options:
       - !Option
         name: zed
         display_name: Add settings for Zed
+
+  - !Category
+    name: toolchain
+    display_name: Rust toolchain
+    options:
+      - !Option
+        name: PLACEHOLDER
+        display_name: "<dynamic - will be replaced at runtime>"
+        selection_group: toolchain

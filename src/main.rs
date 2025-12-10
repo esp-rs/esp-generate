@@ -819,18 +819,13 @@ fn populate_toolchain_category(
 
     // get default toolchain to mark it properly
     let default: Option<String> = {
-        if let Some(output) = Command::new("rustup")
+        if let Ok(output) = Command::new("rustup")
             .args(["show", "active-toolchain"])
             .output()
-            .ok()
         {
             if output.status.success() {
                 if let Some(line) = String::from_utf8_lossy(&output.stdout).lines().next() {
-                    if let Some(name) = line.split_whitespace().next() {
-                        Some(name.to_string())
-                    } else {
-                        None
-                    }
+                    line.split_whitespace().next().map(|name| name.to_string())
                 } else {
                     None
                 }
@@ -867,9 +862,7 @@ fn populate_toolchain_category(
             // copy our placeholder option (again) to populate another toolchain instead of it
             let mut opt = template_opt.clone();
 
-            let is_default = default
-                .as_deref()
-                .map_or(false, |d| d == toolchain.as_str());
+            let is_default = default.as_deref() == Some(toolchain.as_str());
 
             opt.name = toolchain.clone();
             opt.display_name = if is_default {

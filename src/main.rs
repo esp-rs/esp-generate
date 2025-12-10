@@ -165,7 +165,24 @@ fn main() -> Result<()> {
     let mut template = TEMPLATE.clone();
     remove_incompatible_chip_options(chip, &mut template.options);
 
-    populate_toolchain_category(chip, &mut template.options, args.toolchain.as_deref())?;
+    let versions = cargo::CargoToml::load(
+        TEMPLATE_FILES
+            .iter()
+            .find(|(k, _)| *k == "Cargo.toml")
+            .expect("Cargo.toml not found in template")
+            .1,
+    )
+    .expect("Failed to read Cargo.toml");
+
+    let esp_hal_version = versions.dependency_version("esp-hal");
+    let msrv = versions.msrv().parse().unwrap();
+
+    populate_toolchain_category(
+        chip,
+        &mut template.options,
+        args.toolchain.as_deref(),
+        &msrv,
+    )?;
 
     // Initial selection for TUI/headless, including toolchain if provided.
     let mut initial_selected = args.option.clone();
@@ -246,18 +263,6 @@ fn main() -> Result<()> {
         Chip::Esp32s2 => "board-esp32-s2-devkitm-1",
         Chip::Esp32s3 => "board-esp32-s3-devkitc-1",
     };
-
-    let versions = cargo::CargoToml::load(
-        TEMPLATE_FILES
-            .iter()
-            .find(|(k, _)| *k == "Cargo.toml")
-            .expect("Cargo.toml not found in template")
-            .1,
-    )
-    .expect("Failed to read Cargo.toml");
-
-    let esp_hal_version = versions.dependency_version("esp-hal");
-    let msrv = versions.msrv().parse().unwrap();
 
     // based on esp32 linker scripts
     // TODO: add this to esp-metadata
@@ -686,8 +691,9 @@ fn should_initialize_git_repo(mut path: &Path) -> bool {
     true
 }
 
-/// Return all installed rustup toolchains that support the given `target`.
-fn toolchains_with_target(target: &str) -> Result<Vec<String>> {
+/// Return all installed rustup toolchains that support the given `target`
+/// and meet the given MSRV.
+fn filter_toolchains_for(target: &str, msrv: &check::Version) -> Result<Vec<String>> {
     let output = match Command::new("rustup").args(["toolchain", "list"]).output() {
         Ok(res) => res,
         Err(err) => {
@@ -720,7 +726,8 @@ fn toolchains_with_target(target: &str) -> Result<Vec<String>> {
             continue;
         };
 
-        // check whether this toolchain's rustc knows the desired target (rustup doesn't recognize some custom toolchains, e.g. `esp`)
+        // check whether this toolchain's rustc knows the desired target
+        // (rustup doesn't recognize some custom toolchains, e.g. `esp`)
         let output = match Command::new("rustc")
             .args([
                 format!("+{name}"),
@@ -744,12 +751,27 @@ fn toolchains_with_target(target: &str) -> Result<Vec<String>> {
             continue;
         }
 
-        if String::from_utf8_lossy(&output.stdout)
+        if !String::from_utf8_lossy(&output.stdout)
             .lines()
             .any(|l| l.trim() == target)
         {
-            available.push(name.to_string());
+            // target not found - skip
+            continue;
         }
+
+        // call `rustc +<toolchain> --version` and compare to `msrv`
+        if let Some(ver) = check::get_version("rustc", &[&format!("+{name}")]) {
+            if !ver.is_at_least(&msrv) {
+                // toolchain version is below MSRV - skip
+                continue;
+            }
+        } else {
+            log::warn!(
+                "Failed to detect rustc version for toolchain `{name}`; skipping MSRV check"
+            );
+        }
+
+        available.push(name.to_string());
     }
 
     Ok(available)
@@ -761,10 +783,11 @@ fn populate_toolchain_category(
     chip: Chip,
     options: &mut [GeneratorOptionItem],
     cli_toolchain: Option<&str>,
+    msrv: &check::Version,
 ) -> Result<()> {
     let target = chip.target().to_string();
 
-    let mut available = toolchains_with_target(&target)?;
+    let mut available = filter_toolchains_for(&target, msrv)?;
 
     // for now, we should hide the generic toolchains for Xtensa (stable-*, beta-*, nightly-*).
     if chip.is_xtensa() {

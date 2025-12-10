@@ -761,7 +761,7 @@ fn filter_toolchains_for(target: &str, msrv: &check::Version) -> Result<Vec<Stri
 
         // call `rustc +<toolchain> --version` and compare to `msrv`
         if let Some(ver) = check::get_version("rustc", &[&format!("+{name}")]) {
-            if !ver.is_at_least(&msrv) {
+            if !ver.is_at_least(msrv) {
                 // toolchain version is below MSRV - skip
                 continue;
             }

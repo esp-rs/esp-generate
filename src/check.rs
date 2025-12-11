@@ -5,9 +5,14 @@ use std::{
     str::FromStr,
 };
 
+use ratatui::crossterm::{
+    event::{self, Event, KeyCode},
+    terminal::{disable_raw_mode, enable_raw_mode},
+};
+
 use esp_metadata::Chip;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Version {
     major: u8,
     minor: u8,
@@ -70,15 +75,55 @@ pub fn check(
         "stable"
     };
 
-    let rust_version = get_version("rustc", &[format!("+{rust_toolchain}").as_str()]);
-
     let rust_toolchain_tool = if chip.is_xtensa() { "espup" } else { "rustup" };
 
-    let espflash_version = get_version("espflash", &[]);
+    let rust_install_cmd: &[&str] = if rust_toolchain_tool == "espup" {
+        &["espup", "install"]
+    } else {
+        &["rustup", "toolchain", "install", rust_toolchain]
+    };
 
-    let probers_version = get_version("probe-rs", &[]);
+    let rust_version = get_version_or_install(
+        "rustc",
+        &[format!("+{rust_toolchain}").as_str()],
+        Some(rust_install_cmd),
+        Some((msrv.major, msrv.minor, msrv.patch)),
+    );
 
-    let esp_config_version = get_version("esp-config", &[]);
+    let espflash_version = get_version_or_install(
+        "espflash",
+        &[],
+        Some(&["cargo", "install", "espflash", "--locked"]),
+        Some((3, 3, 0)),
+    );
+
+    let probers_version = get_version_or_install(
+        "probe-rs",
+        &[],
+        Some(&[
+            "cargo",
+            "install",
+            "probe-rs-tools",
+            "--git",
+            "https://github.com/probe-rs/probe-rs",
+            "--force",
+            "--locked",
+        ]),
+        Some((0, 25, 0)),
+    );
+
+    let esp_config_version = get_version_or_install(
+        "esp-config",
+        &[],
+        Some(&[
+            "cargo",
+            "install",
+            "esp-config",
+            "--features=tui",
+            "--locked",
+        ]),
+        Some((0, 5, 0)),
+    );
 
     let probers_suggestion_kind = if probe_rs_required {
         "required"
@@ -129,7 +174,7 @@ fn create_check_results(
         false,
         &format!("Rust ({rust_toolchain})"),
         check_version(rust_version, msrv.major, msrv.minor, msrv.patch),
-        format!("minimum required version is 1.86 - use `{rust_toolchain_tool}` to upgrade"),
+        format!("minimum required version is 1.88 - use `{rust_toolchain_tool}` to upgrade"),
         format!("not found - use `{rust_toolchain_tool}` to install"),
         true,
         &mut result,
@@ -296,6 +341,87 @@ fn offensive_cargo_config_check(path: &Path) -> bool {
     }
 
     false
+}
+
+/// A combination of `get_version` and `prompt_install`: if the tool is not found
+/// or does not meet the minimum version (when provided) and an install command
+/// is provided, it will prompt the user to install/upgrade it and then re-check.
+fn get_version_or_install(
+    cmd: &str,
+    args: &[&str],
+    install_cmd: Option<&[&str]>,
+    min_version: Option<(u8, u8, u8)>,
+) -> Option<Version> {
+    let version = get_version(cmd, args);
+
+    if let Some((min_major, min_minor, min_patch)) = min_version {
+        match check_version(version.clone(), min_major, min_minor, min_patch) {
+            CheckResult::Ok(_) => {
+                // Installed and new enough – nothing to do
+                return version;
+            }
+            CheckResult::WrongVersion | CheckResult::NotFound => {
+                let Some(install_cmd) = install_cmd else {
+                    // no way to offer an automatic install/upgrade
+                    return version;
+                };
+                prompt_install(cmd, install_cmd);
+            }
+        }
+    } else if version.is_some() {
+        // We don't know minimum version and the tool exists – nothing to do
+        return version;
+    }
+
+    get_version(cmd, args)
+}
+
+fn prompt_install(name: &str, cmd: &[&str]) {
+    let command_str = cmd.join(" ");
+    println!("🛑 {name} is not installed or is below the required version.");
+    println!("Do you want to run to run `{command_str}` now? [y/N]");
+
+    enable_raw_mode().unwrap();
+
+    loop {
+        match event::read() {
+            Ok(Event::Key(key)) => {
+                match key.code {
+                    KeyCode::Char('y') | KeyCode::Char('Y') => {
+                        disable_raw_mode().unwrap();
+                        match std::process::Command::new(cmd[0]).args(&cmd[1..]).status() {
+                            Ok(status) if status.success() => {
+                                println!("✅ `{command_str}` finished successfully");
+                            }
+                            Ok(status) => {
+                                println!("❌ `{command_str}` failed with status {status}");
+                            }
+                            Err(err) => {
+                                println!("❌ Failed to run `{command_str}`: {err}");
+                            }
+                        }
+
+                        break;
+                    }
+
+                    KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                        disable_raw_mode().unwrap();
+                        break;
+                    }
+                    _ => {
+                        // ignore other keys
+                    }
+                }
+            }
+            Ok(_) => {
+                // ignore other events
+            }
+            Err(_) => {
+                disable_raw_mode().unwrap();
+                break;
+            }
+        }
+    }
 }
 
 #[cfg(test)]

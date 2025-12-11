@@ -52,7 +52,7 @@ jobs:
 
       # Rust toolchain for Xtensa:
       - if: ${{ contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.chip) }}
-        uses: esp-rs/xtensa-toolchain@v1.5
+        uses: esp-rs/xtensa-toolchain@v1.6
         with:
           default: true
           buildtargets: ${{ matrix.chip }}

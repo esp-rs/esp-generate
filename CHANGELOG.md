@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Enable https://rust-lang.github.io/rust-clippy/master/index.html#large_stack_frames with a threshold of 1024 (#241)
+- An option for custom toolchain and interactive toolchain selection (#268)
 
 ### Changed
 

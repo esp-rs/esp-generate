@@ -14,6 +14,12 @@ pub struct Version {
     patch: u8,
 }
 
+impl Version {
+    pub fn is_at_least(&self, other: &Version) -> bool {
+        (self.major, self.minor, self.patch) >= (other.major, other.minor, other.patch)
+    }
+}
+
 impl Display for Version {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
@@ -217,7 +223,7 @@ fn check_version(version: Option<Version>, major: u8, minor: u8, patch: u8) -> C
     }
 }
 
-fn get_version(cmd: &str, args: &[&str]) -> Option<Version> {
+pub(crate) fn get_version(cmd: &str, args: &[&str]) -> Option<Version> {
     let output = std::process::Command::new(cmd)
         .args(args)
         .arg("--version")

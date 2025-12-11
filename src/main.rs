@@ -25,6 +25,7 @@ use crate::template_files::TEMPLATE_FILES;
 mod check;
 mod template_files;
 mod tui;
+mod toolchain;
 
 static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
     serde_yaml::from_str(
@@ -74,6 +75,10 @@ struct Args {
     #[arg(short, long, global = true, action)]
     #[cfg(feature = "update-informer")]
     skip_update_check: bool,
+
+    /// Rust toolchain to use (rustup toolchain name; must support the selected chip target)
+    #[arg(long)]
+    toolchain: Option<String>,
 }
 
 /// Check crates.io for a new version of the application
@@ -161,8 +166,33 @@ fn main() -> Result<()> {
     let mut template = TEMPLATE.clone();
     remove_incompatible_chip_options(chip, &mut template.options);
 
+    let versions = cargo::CargoToml::load(
+        TEMPLATE_FILES
+            .iter()
+            .find(|(k, _)| *k == "Cargo.toml")
+            .expect("Cargo.toml not found in template")
+            .1,
+    )
+    .expect("Failed to read Cargo.toml");
+
+    let esp_hal_version = versions.dependency_version("esp-hal");
+    let msrv = versions.msrv().parse().unwrap();
+
+    toolchain::populate_toolchain_category(
+        chip,
+        &mut template.options,
+        args.toolchain.as_deref(),
+        &msrv,
+    )?;
+
+    // Initial selection for TUI/headless, including toolchain if provided.
+    let mut initial_selected = args.option.clone();
+    if let Some(ref tc) = args.toolchain {
+        initial_selected.push(tc.clone());
+    }
+
     let mut selected = if !args.headless {
-        let repository = tui::Repository::new(chip, &template.options, &args.option);
+        let repository = tui::Repository::new(chip, &template.options, &initial_selected);
 
         // TUI stuff ahead
         let terminal = tui::init_terminal()?;
@@ -178,19 +208,33 @@ fn main() -> Result<()> {
         };
 
         println!(
-            "Selected options: --chip {}{}",
+            "Selected options: --chip {}{}{}",
             chip,
             selected.iter().fold(String::new(), |mut acc, s| {
                 use std::fmt::Write;
                 write!(&mut acc, " -o {s}").unwrap();
                 acc
-            })
+            }),
+            if let Some(tc) = &args.toolchain {
+                format!(" --toolchain {tc}")
+            } else {
+                String::new()
+            }
         );
 
         selected
     } else {
-        args.option.clone()
+        initial_selected
     };
+
+    let selected_toolchain = selected.iter().find_map(|name| {
+        let opt = find_option(name, &template.options)?;
+        if opt.selection_group == "toolchain" {
+            Some(name.clone())
+        } else {
+            None
+        }
+    });
 
     // Also add the active selection groups
     for idx in 0..selected.len() {
@@ -206,6 +250,11 @@ fn main() -> Result<()> {
         "xtensa".to_string()
     });
 
+    // mark that a toolchain was explicitly selected for template replacements
+    if selected_toolchain.is_some() {
+        selected.push("toolchain-selected".to_string());
+    }
+
     let wokwi_devkit = match chip {
         Chip::Esp32 => "board-esp32-devkit-c-v4",
         Chip::Esp32c2 => "",
@@ -215,18 +264,6 @@ fn main() -> Result<()> {
         Chip::Esp32s2 => "board-esp32-s2-devkitm-1",
         Chip::Esp32s3 => "board-esp32-s3-devkitc-1",
     };
-
-    let versions = cargo::CargoToml::load(
-        TEMPLATE_FILES
-            .iter()
-            .find(|(k, _)| *k == "Cargo.toml")
-            .expect("Cargo.toml not found in template")
-            .1,
-    )
-    .expect("Failed to read Cargo.toml");
-
-    let esp_hal_version = versions.dependency_version("esp-hal");
-    let msrv = versions.msrv().parse().unwrap();
 
     // based on esp32 linker scripts
     // TODO: add this to esp-metadata
@@ -253,6 +290,10 @@ fn main() -> Result<()> {
     ];
 
     variables.push(("rust_target".to_string(), chip.target().to_string()));
+
+    if let Some(tc) = selected_toolchain {
+        variables.push(("rust_toolchain".to_string(), tc));
+    }
 
     let project_dir = path.join(&name);
     fs::create_dir(&project_dir)?;

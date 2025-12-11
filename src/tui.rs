@@ -31,6 +31,19 @@ impl<'app> Repository<'app> {
         }
     }
 
+    /// Returns the *explicitly* selected toolchain, if there is any
+    fn selected_toolchain(&self) -> Option<String> {
+        self.config
+            .selected
+            .iter()
+            .find(|name| {
+                esp_generate::config::find_option(name, self.config.options)
+                    .map(|opt| opt.selection_group == "toolchain")
+                    .unwrap_or(false)
+            })
+            .cloned()
+    }
+
     fn current_level(&self) -> &[GeneratorOptionItem] {
         let mut current = self.config.options;
 
@@ -354,7 +367,17 @@ impl Widget for &mut App<'_> {
 
 impl App<'_> {
     fn render_title(&self, area: Rect, buf: &mut Buffer) {
-        Paragraph::new("esp-generate")
+        let mut title = String::from("esp-generate");
+
+        if let Some(tc) = self.repository.selected_toolchain() {
+            use std::fmt::Write;
+            let _ = write!(&mut title, " | Toolchain: {tc}");
+        } else {
+            use std::fmt::Write;
+            let _ = write!(&mut title, " | Toolchain: template defaults");
+        }
+
+        Paragraph::new(title)
             .bold()
             .centered()
             .fg(self.colors.text_color)
@@ -487,7 +510,7 @@ impl App<'_> {
 
         Paragraph::new(text)
             .centered()
-            .fg(self.colors.text_color) 
+            .fg(self.colors.text_color)
             .bg(self.colors.app_background)
             .wrap(Wrap { trim: false })
     }

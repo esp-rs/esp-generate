@@ -90,27 +90,35 @@ pub fn check(
         Some((msrv.major, msrv.minor, msrv.patch)),
     );
 
-    let espflash_version = get_version_or_install(
-        "espflash",
-        &[],
-        Some(&["cargo", "install", "espflash", "--locked"]),
-        Some((3, 3, 0)),
-    );
+    let espflash_version = if !probe_rs_required {
+        get_version_or_install(
+            "espflash",
+            &[],
+            Some(&["cargo", "install", "espflash", "--locked"]),
+            Some((3, 3, 0)),
+        )
+    } else {
+        get_version("espflash", &[])
+    };
 
-    let probers_version = get_version_or_install(
-        "probe-rs",
-        &[],
-        Some(&[
-            "cargo",
-            "install",
-            "probe-rs-tools",
-            "--git",
-            "https://github.com/probe-rs/probe-rs",
-            "--force",
-            "--locked",
-        ]),
-        Some((0, 25, 0)),
-    );
+    let probers_version = if probe_rs_required {
+        get_version_or_install(
+            "probe-rs",
+            &[],
+            Some(&[
+                "cargo",
+                "install",
+                "probe-rs-tools",
+                "--git",
+                "https://github.com/probe-rs/probe-rs",
+                "--force",
+                "--locked",
+            ]),
+            Some((0, 25, 0)),
+        )
+    } else {
+        get_version("probe-rs", &[])
+    };
 
     let esp_config_version = get_version_or_install(
         "esp-config",

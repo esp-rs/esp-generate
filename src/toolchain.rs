@@ -8,6 +8,8 @@ use crate::check;
 
 /// Return all installed rustup toolchains that support the given `target`
 /// and meet the given MSRV.
+/// Return all installed rustup toolchains that support the given `target`
+/// and meet the given MSRV.
 fn filter_toolchains_for(target: &str, msrv: &check::Version) -> Result<Vec<String>> {
     let output = match Command::new("rustup").args(["toolchain", "list"]).output() {
         Ok(res) => res,
@@ -41,55 +43,65 @@ fn filter_toolchains_for(target: &str, msrv: &check::Version) -> Result<Vec<Stri
             continue;
         };
 
-        // check whether this toolchain's rustc knows the desired target
-        // (rustup doesn't recognize some custom toolchains, e.g. `esp`)
-        let output = match Command::new("rustc")
-            .args([
-                format!("+{name}"),
-                "--print".to_string(),
-                "target-list".to_string(),
-            ])
-            .output()
-        {
-            Ok(res) => res,
-            Err(err) => {
-                log::warn!("Failed to run `rustc +{name} --print target-list`: {err}");
-                continue;
-            }
-        };
-
-        if !output.status.success() {
-            log::warn!(
-                "`rustc +{name} --print target-list` exited with status {:?}",
-                output.status.code()
-            );
-            continue;
+        if toolchain_matches_target_and_msrv(name, target, msrv) {
+            available.push(name.to_string());
         }
-
-        if !String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .any(|l| l.trim() == target)
-        {
-            // target not found - skip
-            continue;
-        }
-
-        // call `rustc +<toolchain> --version` and compare to `msrv`
-        if let Some(ver) = check::get_version("rustc", &[&format!("+{name}")]) {
-            if !ver.is_at_least(msrv) {
-                // toolchain version is below MSRV - skip
-                continue;
-            }
-        } else {
-            log::warn!(
-                "Failed to detect rustc version for toolchain `{name}`; skipping MSRV check"
-            );
-        }
-
-        available.push(name.to_string());
     }
 
     Ok(available)
+}
+
+fn toolchain_matches_target_and_msrv(
+    name: &str,
+    target: &str,
+    msrv: &check::Version,
+) -> bool {
+    // check whether this toolchain's rustc knows the desired target
+    // (rustup doesn't recognize some custom toolchains, e.g. `esp`)
+    let output = match Command::new("rustc")
+        .args([
+            format!("+{name}"),
+            "--print".to_string(),
+            "target-list".to_string(),
+        ])
+        .output()
+    {
+        Ok(res) => res,
+        Err(err) => {
+            log::warn!("Failed to run `rustc +{name} --print target-list`: {err}");
+            return false;
+        }
+    };
+
+    if !output.status.success() {
+        log::warn!(
+            "`rustc +{name} --print target-list` exited with status {:?}",
+            output.status.code()
+        );
+        return false;
+    }
+
+    if !String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .any(|l| l.trim() == target)
+    {
+        // target not found - skip
+        return false;
+    }
+
+    // call `rustc +<toolchain> --version` and compare to `msrv`
+    if let Some(ver) = check::get_version("rustc", &[&format!("+{name}")]) {
+        if !ver.is_at_least(msrv) {
+            // toolchain version is below MSRV - skip
+            return false;
+        }
+    } else {
+        log::warn!(
+            "Failed to detect rustc version for toolchain `{name}`; skipping MSRV check"
+        );
+    }
+
+    true
 }
 
 /// Return the currently active rustup toolchain name, if any

@@ -9,17 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Enable https://rust-lang.github.io/rust-clippy/master/index.html#large_stack_frames with a threshold of 1024 (#241)
-- An option for custom toolchain and interactive toolchain selection (#268)
-
 ### Changed
+
+### Fixed
+
+### Removed
+
+## [1.1.0] - 2025-12-11
+
+### Added
+
+- Enable https://rust-lang.github.io/rust-clippy/master/index.html#large_stack_frames with a threshold of 1024 (#241)
+- Add an option for custom toolchain and interactive toolchain selection (#268)
 
 ### Fixed
 
 - `"rttEnabled": true` is now set even if `defmt` is not enabled (#255)
 - Fix examples link in `main.rs` (#258)
-
-### Removed
 
 ## [1.0.1] - 2025-11-05
 
@@ -49,7 +55,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add Wi-Fi/BLE setup code to the blocking template (#233)
-
 - Check for the `esp-config` tool (#221)
 
 ### Changed
@@ -205,7 +210,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/esp-rs/esp-generate/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/esp-rs/esp-generate/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/esp-rs/esp-generate/compare/v0.6.0...v1.0.0
 [0.6.0]: https://github.com/esp-rs/esp-generate/compare/v0.5.0...v0.6.0

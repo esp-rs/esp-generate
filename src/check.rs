@@ -383,9 +383,7 @@ fn get_version_or_install(
         return version;
     } else {
         // For "Check if tool is installed and promt to install if not" case
-        let Some(install_cmd) = install_cmd else {
-            return None;
-        };
+        let install_cmd = install_cmd?;
         prompt_install(cmd, install_cmd);
     }
 

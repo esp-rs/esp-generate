@@ -66,6 +66,7 @@ pub fn check(
     probe_rs_required: bool,
     msrv: Version,
     requires_nightly: bool,
+    headless: bool,
 ) {
     let rust_toolchain = if chip.is_xtensa() {
         "esp"
@@ -82,6 +83,7 @@ pub fn check(
         let _ = get_version_or_install(
             "espup",
             &[],
+            headless,
             Some(&["cargo", "install", "espup", "--locked"]),
             None,
         );
@@ -96,6 +98,7 @@ pub fn check(
     let rust_version = get_version_or_install(
         "rustc",
         &[format!("+{rust_toolchain}").as_str()],
+        headless,
         Some(rust_install_cmd),
         Some((msrv.major, msrv.minor, msrv.patch)),
     );
@@ -104,6 +107,7 @@ pub fn check(
         get_version_or_install(
             "espflash",
             &[],
+            headless,
             Some(&["cargo", "install", "espflash", "--locked"]),
             Some((3, 3, 0)),
         )
@@ -115,6 +119,7 @@ pub fn check(
         get_version_or_install(
             "probe-rs",
             &[],
+            headless,
             Some(&["cargo", "install", "probe-rs-tools", "--locked"]),
             Some((0, 25, 0)),
         )
@@ -125,6 +130,7 @@ pub fn check(
     let esp_config_version = get_version_or_install(
         "esp-config",
         &[],
+        headless,
         Some(&[
             "cargo",
             "install",
@@ -359,10 +365,15 @@ fn offensive_cargo_config_check(path: &Path) -> bool {
 fn get_version_or_install(
     cmd: &str,
     args: &[&str],
+    headless: bool,
     install_cmd: Option<&[&str]>,
     min_version: Option<(u8, u8, u8)>,
 ) -> Option<Version> {
     let version = get_version(cmd, args);
+
+    if headless {
+        return version;
+    }
 
     match min_version {
         Some((min_major, min_minor, min_patch)) => {

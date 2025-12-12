@@ -349,6 +349,7 @@ fn main() -> Result<()> {
         msrv,
         selected.contains(&"stack-smashing-protection".to_string())
             && selected.contains(&"riscv".to_string()),
+        args.headless,
     );
 
     Ok(())

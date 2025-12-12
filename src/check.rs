@@ -364,27 +364,28 @@ fn get_version_or_install(
 ) -> Option<Version> {
     let version = get_version(cmd, args);
 
-    if let Some((min_major, min_minor, min_patch)) = min_version {
-        match check_version(version.clone(), min_major, min_minor, min_patch) {
-            CheckResult::Ok(_) => {
-                // Installed and new enough – nothing to do
-                return version;
-            }
-            CheckResult::WrongVersion | CheckResult::NotFound => {
-                let Some(install_cmd) = install_cmd else {
-                    // no way to offer an automatic install/upgrade
-                    return version;
-                };
-                prompt_install(cmd, install_cmd);
+    match min_version {
+        Some((min_major, min_minor, min_patch)) => {
+            match check_version(version.clone(), min_major, min_minor, min_patch) {
+                CheckResult::Ok(_) => return version, // nothing to do - tool exists and version is above minimal allowed
+                CheckResult::WrongVersion | CheckResult::NotFound => {
+                    let Some(install_cmd) = install_cmd else {
+                        // no way to offer an automatic install/upgrade
+                        return version;
+                    };
+                    prompt_install(cmd, install_cmd);
+                }
             }
         }
-    } else if version.is_some() {
-        // We don't know minimum version and the tool exists – nothing to do
-        return version;
-    } else {
-        // For "Check if tool is installed and promt to install if not" case
-        let install_cmd = install_cmd?;
-        prompt_install(cmd, install_cmd);
+        None => {
+            if version.is_some() {
+                // we don't know minimum version and the tool exists – nothing to do
+                return version;
+            }
+            // tool doesn't exist - prompt to install it
+            let install_cmd = install_cmd?;
+            prompt_install(cmd, install_cmd);
+        }
     }
 
     get_version(cmd, args)

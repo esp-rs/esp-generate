@@ -77,6 +77,16 @@ pub fn check(
 
     let rust_toolchain_tool = if chip.is_xtensa() { "espup" } else { "rustup" };
 
+    if rust_toolchain_tool == "espup" {
+        // We don't enforce a minimum espup version here, we just care that it exists.
+        let _ = get_version_or_install(
+            "espup",
+            &[],
+            Some(&["cargo", "install", "espup", "--locked"]),
+            None,
+        );
+    }
+
     let rust_install_cmd: &[&str] = if rust_toolchain_tool == "espup" {
         &["espup", "install"]
     } else {
@@ -105,15 +115,7 @@ pub fn check(
         get_version_or_install(
             "probe-rs",
             &[],
-            Some(&[
-                "cargo",
-                "install",
-                "probe-rs-tools",
-                "--git",
-                "https://github.com/probe-rs/probe-rs",
-                "--force",
-                "--locked",
-            ]),
+            Some(&["cargo", "install", "probe-rs-tools", "--locked"]),
             Some((0, 25, 0)),
         )
     } else {
@@ -379,6 +381,12 @@ fn get_version_or_install(
     } else if version.is_some() {
         // We don't know minimum version and the tool exists – nothing to do
         return version;
+    } else {
+        // For "Check if tool is installed and promt to install if not" case
+        let Some(install_cmd) = install_cmd else {
+            return None;
+        };
+        prompt_install(cmd, install_cmd);
     }
 
     get_version(cmd, args)
@@ -387,33 +395,36 @@ fn get_version_or_install(
 fn prompt_install(name: &str, cmd: &[&str]) {
     let command_str = cmd.join(" ");
     println!("🛑 {name} is not installed or is below the required version.");
-    println!("Do you want to run to run `{command_str}` now? [y/N]");
 
-    enable_raw_mode().unwrap();
+    if name == "probe-rs" && cfg!(target_os = "linux") {
+        println!(
+            "💡 On Linux, probe-rs requires additional setup before installation.\n\
+            See https://probe.rs/docs/getting-started/installation/ for details."
+        );
+    }
+
+    println!("Do you want to run `{command_str}` now? [y/N]");
+
+    if let Err(err) = enable_raw_mode() {
+        println!(
+            "Failed to enter raw mode for install prompt: {err}.\n\
+            You can run `{command_str}` manually if you want to install the tool."
+        );
+        return;
+    }
+
+    //default: don't run anything unless user explicitly presses 'y'
+    let mut run_cmd: bool = false;
 
     loop {
         match event::read() {
             Ok(Event::Key(key)) => {
                 match key.code {
                     KeyCode::Char('y') | KeyCode::Char('Y') => {
-                        disable_raw_mode().unwrap();
-                        match std::process::Command::new(cmd[0]).args(&cmd[1..]).status() {
-                            Ok(status) if status.success() => {
-                                println!("✅ `{command_str}` finished successfully");
-                            }
-                            Ok(status) => {
-                                println!("❌ `{command_str}` failed with status {status}");
-                            }
-                            Err(err) => {
-                                println!("❌ Failed to run `{command_str}`: {err}");
-                            }
-                        }
-
+                        run_cmd = true;
                         break;
                     }
-
                     KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
-                        disable_raw_mode().unwrap();
                         break;
                     }
                     _ => {
@@ -424,9 +435,33 @@ fn prompt_install(name: &str, cmd: &[&str]) {
             Ok(_) => {
                 // ignore other events
             }
-            Err(_) => {
-                disable_raw_mode().unwrap();
+            Err(err) => {
+                println!(
+                    "Failed to read key press for `{command_str}` prompt: {err}.\n\
+                    You can run the command manually if you wish to install the tool."
+                );
                 break;
+            }
+        }
+    }
+
+    if let Err(err) = disable_raw_mode() {
+        println!(
+            "Failed to leave raw mode cleanly after selection: {err}.\n\
+            You may need to reset your terminal."
+        );
+    }
+
+    if run_cmd {
+        match std::process::Command::new(cmd[0]).args(&cmd[1..]).status() {
+            Ok(status) if status.success() => {
+                println!("✅ `{command_str}` finished successfully");
+            }
+            Ok(status) => {
+                println!("❌ `{command_str}` failed with status {status}");
+            }
+            Err(err) => {
+                println!("❌ Failed to run `{command_str}`: {err}");
             }
         }
     }

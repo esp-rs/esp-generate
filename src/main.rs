@@ -204,6 +204,22 @@ fn main() -> Result<()> {
     .expect("Failed to read Cargo.toml");
 
     let esp_hal_version = versions.dependency_version("esp-hal");
+    let esp_hal_version_full = versions.dependency_version("esp-hal-version-full");
+
+    if esp_hal_version.starts_with(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']) {
+        if esp_hal_version != esp_hal_version_full {
+            bail!("Align the version of `esp-hal-version-full` to `esp-hal`");
+        }
+    } else if esp_hal_version.starts_with('~') {
+        if !esp_hal_version_full.starts_with(esp_hal_version.strip_prefix("~").unwrap()) {
+            bail!("Align the version of `esp-hal-version-full` to `esp-hal`'s version requirement");
+        }
+    } else {
+        bail!(
+            "The esp-hal version can only be specified as a default version-requirement or using '~'"
+        );
+    };
+
     let msrv = versions.msrv().parse().unwrap();
 
     toolchain::populate_toolchain_category(
@@ -313,7 +329,7 @@ fn main() -> Result<()> {
             "generate-version".to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
         ),
-        ("esp-hal-version".to_string(), esp_hal_version),
+        ("esp-hal-version-full".to_string(), esp_hal_version_full),
         ("max-dram2-uninit".to_string(), format!("{max_dram2}")),
     ];
 

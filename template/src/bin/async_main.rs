@@ -135,6 +135,6 @@ async fn main(spawner: Spawner) -> ! {
         Timer::after(Duration::from_secs(1)).await;
     }
 
-    //REPLACE {current-version} esp-hal-version {current-version} esp-hal-version
+    //REPLACE {current-version} esp-hal-version-full
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v{current-version}/examples
 }

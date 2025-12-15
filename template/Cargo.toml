@@ -21,11 +21,7 @@ test = false
 #ENDIF
 
 [dependencies]
-#IF false
-# The version which is used to insert the link to examples with a suitable tag
-esp-hal-version-full = "1.0.0"
-#ENDIF
-esp-hal = { version = "~1.0", features = [
+esp-hal = { version = "~1", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("unstable-hal")

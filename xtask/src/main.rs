@@ -88,8 +88,28 @@ fn check(
         return Ok(());
     }
 
+    let target_dir =
+        PathBuf::from(std::env::var("CARGO_TARGET_DIR").unwrap_or("target".to_string()));
+    let mut counter = 0;
     const PROJECT_NAME: &str = "test";
     for options in to_check {
+        counter += 1;
+        if counter >= 100 {
+            // don't use `cargo clean` since it will fail because it can't delete the xtask executable
+            for f in std::fs::read_dir(&target_dir)? {
+                let f = f?.path();
+
+                // don't fail just because we can't remove a directory or file
+                if f.is_dir() {
+                    let _ = std::fs::remove_dir_all(f);
+                } else {
+                    let _ = std::fs::remove_file(f);
+                }
+            }
+
+            counter = 0;
+        }
+
         log::info!("WITH OPTIONS: {options:?}");
 
         // We will generate the project in a temporary directory, to avoid
@@ -104,11 +124,11 @@ fn check(
 
         // Ensure that the generated project builds without errors:
         let output = Command::new("cargo")
-            .args([if build { "build" } else { "check" }])
+            .args([if build { "build" } else { "check" }, "--quiet"])
             .env_remove("RUSTUP_TOOLCHAIN")
             .current_dir(project_path.join(PROJECT_NAME))
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .output()?;
         if !output.status.success() {
             bail!("Failed to execute cargo check subcommand")
@@ -120,8 +140,8 @@ fn check(
                 .args(["test", "--no-run"])
                 .env_remove("RUSTUP_TOOLCHAIN")
                 .current_dir(project_path.join(PROJECT_NAME))
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
                 .output()?;
             if !output.status.success() {
                 bail!("Failed to execute cargo test subcommand")
@@ -133,8 +153,8 @@ fn check(
             .args(["clippy", "--no-deps", "--", "-Dwarnings"])
             .env_remove("RUSTUP_TOOLCHAIN")
             .current_dir(project_path.join(PROJECT_NAME))
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .output()?;
         if !output.status.success() {
             bail!("Failed to execute cargo clippy subcommand")
@@ -145,8 +165,8 @@ fn check(
             .args(["fmt", "--", "--check"])
             .env_remove("RUSTUP_TOOLCHAIN")
             .current_dir(project_path.join(PROJECT_NAME))
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .output()?;
         if !output.status.success() {
             bail!("Failed to execute cargo fmt subcommand")
@@ -313,6 +333,7 @@ fn generate(
 ) -> Result<()> {
     let mut args = vec![
         "run",
+        "--quiet",
         "--no-default-features",
         "--",
         "--headless",
@@ -332,8 +353,8 @@ fn generate(
     Command::new("cargo")
         .args(args)
         .current_dir(workspace)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .output()?;
 
     Ok(())

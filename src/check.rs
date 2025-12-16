@@ -121,7 +121,7 @@ pub fn check(
             &[],
             headless,
             Some(&["cargo", "install", "probe-rs-tools", "--locked"]),
-            Some((0, 25, 0)),
+            Some((0, 30, 0)),
         )
     } else {
         get_version("probe-rs", &[])
@@ -190,7 +190,9 @@ fn create_check_results(
         false,
         &format!("Rust ({rust_toolchain})"),
         check_version(rust_version, msrv.major, msrv.minor, msrv.patch),
-        format!("minimum required version is 1.88 - use `{rust_toolchain_tool}` to upgrade"),
+        format!(
+            "minimum required version is {msrv} - run `{rust_toolchain_tool} update` to upgrade"
+        ),
         format!("not found - use `{rust_toolchain_tool}` to install"),
         true,
         &mut result,
@@ -207,9 +209,9 @@ fn create_check_results(
     requirements_unsatisfied |= format_result(
         !probe_rs_required,
         "probe-rs",
-        check_version(probers_version, 0, 25, 0),
+        check_version(probers_version, 0, 30, 0),
         format!(
-            "minimum {probers_suggestion_kind} version is 0.25.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"
+            "minimum {probers_suggestion_kind} version is 0.30.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"
         ),
         format!(
             "not found - see https://probe.rs/docs/getting-started/installation/ for how to install ({probers_suggestion_kind})"
@@ -547,14 +549,14 @@ espflash 1.7.0"#;
                 /*msrv*/
                 Version {
                     major: 1,
-                    minor: 85,
+                    minor: 88,
                     patch: 0
                 },
                 /*rust_toolchain*/ "nightly",
                 /*rust_version*/
                 Some(Version {
                     major: 1,
-                    minor: 85,
+                    minor: 88,
                     patch: 0
                 }),
                 /*rust_toolchain_tool*/ "rustup",
@@ -567,7 +569,7 @@ espflash 1.7.0"#;
                 /*probers_version*/
                 Some(Version {
                     major: 0,
-                    minor: 25,
+                    minor: 30,
                     patch: 0
                 }),
                 /*esp_config_version*/
@@ -580,9 +582,9 @@ espflash 1.7.0"#;
             ),
             "
 Checking installed versions
-🆗 Rust (nightly): 1.85.0
+🆗 Rust (nightly): 1.88.0
 🆗 espflash: 3.3.0
-🆗 probe-rs: 0.25.0
+🆗 probe-rs: 0.30.0
 🆗 esp-config: 0.5.0
 "
             .to_string()
@@ -597,14 +599,14 @@ Checking installed versions
                 /*msrv*/
                 Version {
                     major: 1,
-                    minor: 85,
+                    minor: 88,
                     patch: 0
                 },
                 /*rust_toolchain*/ "nightly",
                 /*rust_version*/
                 Some(Version {
                     major: 1,
-                    minor: 85,
+                    minor: 88,
                     patch: 0
                 }),
                 /*rust_toolchain_tool*/ "rustup",
@@ -625,7 +627,7 @@ Checking installed versions
             ),
             "
 Checking installed versions
-🆗 Rust (nightly): 1.85.0
+🆗 Rust (nightly): 1.88.0
 🆗 espflash: 3.3.0
 💡 probe-rs (not found - see https://probe.rs/docs/getting-started/installation/ for how to install (suggested))
 🆗 esp-config: 0.5.0
@@ -642,7 +644,7 @@ Checking installed versions
                 /*msrv*/
                 Version {
                     major: 1,
-                    minor: 85,
+                    minor: 88,
                     patch: 0
                 },
                 /*rust_toolchain*/ "stable",

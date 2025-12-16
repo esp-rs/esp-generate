@@ -5,9 +5,14 @@ use std::{
     str::FromStr,
 };
 
+use ratatui::crossterm::{
+    event::{self, Event, KeyCode},
+    terminal::{disable_raw_mode, enable_raw_mode},
+};
+
 use esp_metadata::Chip;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Version {
     major: u8,
     minor: u8,
@@ -61,6 +66,7 @@ pub fn check(
     probe_rs_required: bool,
     msrv: Version,
     requires_nightly: bool,
+    headless: bool,
 ) {
     let rust_toolchain = if chip.is_xtensa() {
         "esp"
@@ -70,15 +76,70 @@ pub fn check(
         "stable"
     };
 
-    let rust_version = get_version("rustc", &[format!("+{rust_toolchain}").as_str()]);
-
     let rust_toolchain_tool = if chip.is_xtensa() { "espup" } else { "rustup" };
 
-    let espflash_version = get_version("espflash", &[]);
+    if rust_toolchain_tool == "espup" {
+        // We don't enforce a minimum espup version here, we just care that it exists.
+        let _ = get_version_or_install(
+            "espup",
+            &[],
+            headless,
+            Some(&["cargo", "install", "espup", "--locked"]),
+            None,
+        );
+    }
 
-    let probers_version = get_version("probe-rs", &[]);
+    let rust_install_cmd: &[&str] = if rust_toolchain_tool == "espup" {
+        &["espup", "install"]
+    } else {
+        &["rustup", "toolchain", "install", rust_toolchain]
+    };
 
-    let esp_config_version = get_version("esp-config", &[]);
+    let rust_version = get_version_or_install(
+        "rustc",
+        &[format!("+{rust_toolchain}").as_str()],
+        headless,
+        Some(rust_install_cmd),
+        Some((msrv.major, msrv.minor, msrv.patch)),
+    );
+
+    let espflash_version = if !probe_rs_required {
+        get_version_or_install(
+            "espflash",
+            &[],
+            headless,
+            Some(&["cargo", "install", "espflash", "--locked"]),
+            Some((3, 3, 0)),
+        )
+    } else {
+        get_version("espflash", &[])
+    };
+
+    let probers_version = if probe_rs_required {
+        get_version_or_install(
+            "probe-rs",
+            &[],
+            headless,
+            Some(&["cargo", "install", "probe-rs-tools", "--locked"]),
+            Some((0, 30, 0)),
+        )
+    } else {
+        get_version("probe-rs", &[])
+    };
+
+    let esp_config_version = get_version_or_install(
+        "esp-config",
+        &[],
+        headless,
+        Some(&[
+            "cargo",
+            "install",
+            "esp-config",
+            "--features=tui",
+            "--locked",
+        ]),
+        Some((0, 5, 0)),
+    );
 
     let probers_suggestion_kind = if probe_rs_required {
         "required"
@@ -129,7 +190,9 @@ fn create_check_results(
         false,
         &format!("Rust ({rust_toolchain})"),
         check_version(rust_version, msrv.major, msrv.minor, msrv.patch),
-        format!("minimum required version is 1.86 - use `{rust_toolchain_tool}` to upgrade"),
+        format!(
+            "minimum required version is {msrv} - run `{rust_toolchain_tool} update` to upgrade"
+        ),
         format!("not found - use `{rust_toolchain_tool}` to install"),
         true,
         &mut result,
@@ -146,9 +209,9 @@ fn create_check_results(
     requirements_unsatisfied |= format_result(
         !probe_rs_required,
         "probe-rs",
-        check_version(probers_version, 0, 25, 0),
+        check_version(probers_version, 0, 30, 0),
         format!(
-            "minimum {probers_suggestion_kind} version is 0.25.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"
+            "minimum {probers_suggestion_kind} version is 0.30.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"
         ),
         format!(
             "not found - see https://probe.rs/docs/getting-started/installation/ for how to install ({probers_suggestion_kind})"
@@ -298,6 +361,124 @@ fn offensive_cargo_config_check(path: &Path) -> bool {
     false
 }
 
+/// A combination of `get_version` and `prompt_install`: if the tool is not found
+/// or does not meet the minimum version (when provided) and an install command
+/// is provided, it will prompt the user to install/upgrade it and then re-check.
+fn get_version_or_install(
+    cmd: &str,
+    args: &[&str],
+    headless: bool,
+    install_cmd: Option<&[&str]>,
+    min_version: Option<(u8, u8, u8)>,
+) -> Option<Version> {
+    let version = get_version(cmd, args);
+
+    if headless {
+        return version;
+    }
+
+    match min_version {
+        Some((min_major, min_minor, min_patch)) => {
+            match check_version(version.clone(), min_major, min_minor, min_patch) {
+                CheckResult::Ok(_) => return version, // nothing to do - tool exists and version is above minimal allowed
+                CheckResult::WrongVersion | CheckResult::NotFound => {
+                    let Some(install_cmd) = install_cmd else {
+                        // no way to offer an automatic install/upgrade
+                        return version;
+                    };
+                    prompt_install(cmd, install_cmd);
+                }
+            }
+        }
+        None => {
+            if version.is_some() {
+                // we don't know minimum version and the tool exists – nothing to do
+                return version;
+            }
+            // tool doesn't exist - prompt to install it
+            let install_cmd = install_cmd?;
+            prompt_install(cmd, install_cmd);
+        }
+    }
+
+    get_version(cmd, args)
+}
+
+fn prompt_install(name: &str, cmd: &[&str]) {
+    let command_str = cmd.join(" ");
+    println!("🛑 {name} is not installed or is below the required version.");
+
+    if name == "probe-rs" && cfg!(target_os = "linux") {
+        println!(
+            "💡 On Linux, probe-rs requires additional setup before installation.\n\
+            See https://probe.rs/docs/getting-started/installation/ for details."
+        );
+    }
+
+    println!("Do you want to run `{command_str}` now? [y/N]");
+
+    if let Err(err) = enable_raw_mode() {
+        println!(
+            "Failed to enter raw mode for install prompt: {err}.\n\
+            You can run `{command_str}` manually if you want to install the tool."
+        );
+        return;
+    }
+
+    //default: don't run anything unless user explicitly presses 'y'
+    let mut run_cmd: bool = false;
+
+    loop {
+        match event::read() {
+            Ok(Event::Key(key)) => {
+                match key.code {
+                    KeyCode::Char('y') | KeyCode::Char('Y') => {
+                        run_cmd = true;
+                        break;
+                    }
+                    KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                        break;
+                    }
+                    _ => {
+                        // ignore other keys
+                    }
+                }
+            }
+            Ok(_) => {
+                // ignore other events
+            }
+            Err(err) => {
+                println!(
+                    "Failed to read key press for `{command_str}` prompt: {err}.\n\
+                    You can run the command manually if you wish to install the tool."
+                );
+                break;
+            }
+        }
+    }
+
+    if let Err(err) = disable_raw_mode() {
+        println!(
+            "Failed to leave raw mode cleanly after selection: {err}.\n\
+            You may need to reset your terminal."
+        );
+    }
+
+    if run_cmd {
+        match std::process::Command::new(cmd[0]).args(&cmd[1..]).status() {
+            Ok(status) if status.success() => {
+                println!("✅ `{command_str}` finished successfully");
+            }
+            Ok(status) => {
+                println!("❌ `{command_str}` failed with status {status}");
+            }
+            Err(err) => {
+                println!("❌ Failed to run `{command_str}`: {err}");
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -368,14 +549,14 @@ espflash 1.7.0"#;
                 /*msrv*/
                 Version {
                     major: 1,
-                    minor: 85,
+                    minor: 88,
                     patch: 0
                 },
                 /*rust_toolchain*/ "nightly",
                 /*rust_version*/
                 Some(Version {
                     major: 1,
-                    minor: 85,
+                    minor: 88,
                     patch: 0
                 }),
                 /*rust_toolchain_tool*/ "rustup",
@@ -388,7 +569,7 @@ espflash 1.7.0"#;
                 /*probers_version*/
                 Some(Version {
                     major: 0,
-                    minor: 25,
+                    minor: 30,
                     patch: 0
                 }),
                 /*esp_config_version*/
@@ -401,9 +582,9 @@ espflash 1.7.0"#;
             ),
             "
 Checking installed versions
-🆗 Rust (nightly): 1.85.0
+🆗 Rust (nightly): 1.88.0
 🆗 espflash: 3.3.0
-🆗 probe-rs: 0.25.0
+🆗 probe-rs: 0.30.0
 🆗 esp-config: 0.5.0
 "
             .to_string()
@@ -418,14 +599,14 @@ Checking installed versions
                 /*msrv*/
                 Version {
                     major: 1,
-                    minor: 85,
+                    minor: 88,
                     patch: 0
                 },
                 /*rust_toolchain*/ "nightly",
                 /*rust_version*/
                 Some(Version {
                     major: 1,
-                    minor: 85,
+                    minor: 88,
                     patch: 0
                 }),
                 /*rust_toolchain_tool*/ "rustup",
@@ -446,7 +627,7 @@ Checking installed versions
             ),
             "
 Checking installed versions
-🆗 Rust (nightly): 1.85.0
+🆗 Rust (nightly): 1.88.0
 🆗 espflash: 3.3.0
 💡 probe-rs (not found - see https://probe.rs/docs/getting-started/installation/ for how to install (suggested))
 🆗 esp-config: 0.5.0
@@ -463,7 +644,7 @@ Checking installed versions
                 /*msrv*/
                 Version {
                     major: 1,
-                    minor: 85,
+                    minor: 88,
                     patch: 0
                 },
                 /*rust_toolchain*/ "stable",

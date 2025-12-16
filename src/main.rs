@@ -24,8 +24,8 @@ use crate::template_files::TEMPLATE_FILES;
 
 mod check;
 mod template_files;
-mod tui;
 mod toolchain;
+mod tui;
 
 static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
     serde_yaml::from_str(
@@ -349,6 +349,7 @@ fn main() -> Result<()> {
         msrv,
         selected.contains(&"stack-smashing-protection".to_string())
             && selected.contains(&"riscv".to_string()),
+        args.headless,
     );
 
     Ok(())

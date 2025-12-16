@@ -51,11 +51,7 @@ fn filter_toolchains_for(target: &str, msrv: &check::Version) -> Result<Vec<Stri
     Ok(available)
 }
 
-fn toolchain_matches_target_and_msrv(
-    name: &str,
-    target: &str,
-    msrv: &check::Version,
-) -> bool {
+fn toolchain_matches_target_and_msrv(name: &str, target: &str, msrv: &check::Version) -> bool {
     // check whether this toolchain's rustc knows the desired target
     // (rustup doesn't recognize some custom toolchains, e.g. `esp`)
     let output = match Command::new("rustc")
@@ -96,9 +92,7 @@ fn toolchain_matches_target_and_msrv(
             return false;
         }
     } else {
-        log::warn!(
-            "Failed to detect rustc version for toolchain `{name}`; skipping MSRV check"
-        );
+        log::warn!("Failed to detect rustc version for toolchain `{name}`; skipping MSRV check");
     }
 
     true

@@ -115,7 +115,7 @@ fn about() -> String {
             for entry in table.iter() {
                 let name = entry.0;
                 if name.starts_with("esp-") {
-                    about.push_str(&format!("{} => {}\n", name, toml.dependency_version(name)));
+                    about.push_str(&format!("{:23 } {}\n", name, toml.dependency_version(name)));
                 }
             }
         }

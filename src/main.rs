@@ -38,7 +38,7 @@ static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
 });
 
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about = about(), long_about = None)]
 struct Args {
     /// Name of the project to generate
     name: Option<String>,
@@ -94,6 +94,34 @@ fn check_for_update(name: &str, version: &str) {
     if let Some(version) = informer.check_version().ok().flatten() {
         log::warn!("🚀 A new version of {name} is available: {version}");
     }
+}
+
+fn about() -> String {
+    let mut about = String::from(
+        "Template generation tool to create no_std applications targeting Espressif's chips.\n\nThe template will use these versions:\n",
+    );
+
+    let toml = cargo::CargoToml::load(
+        TEMPLATE_FILES
+            .iter()
+            .find(|(k, _)| *k == "Cargo.toml")
+            .expect("Cargo.toml not found in template")
+            .1,
+    )
+    .expect("Failed to read Cargo.toml");
+
+    toml.visit_dependencies(|_, name, table| {
+        if name == "dependencies" {
+            for entry in table.iter() {
+                let name = entry.0;
+                if name.starts_with("esp-") {
+                    about.push_str(&format!("{:23 } {}\n", name, toml.dependency_version(name)));
+                }
+            }
+        }
+    });
+
+    about
 }
 
 fn setup_args_interactive(args: &mut Args) -> Result<()> {

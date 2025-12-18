@@ -204,6 +204,16 @@ fn main() -> Result<()> {
     .expect("Failed to read Cargo.toml");
 
     let esp_hal_version = versions.dependency_version("esp-hal");
+    let esp_hal_version_full = if let Some(stripped) = esp_hal_version.strip_prefix("~") {
+        let mut processed = stripped.to_string();
+        while processed.chars().filter(|c| *c == '.').count() < 2 {
+            processed.push_str(".0");
+        }
+        processed
+    } else {
+        esp_hal_version.clone()
+    };
+
     let msrv = versions.msrv().parse().unwrap();
 
     toolchain::populate_toolchain_category(
@@ -313,7 +323,7 @@ fn main() -> Result<()> {
             "generate-version".to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
         ),
-        ("esp-hal-version".to_string(), esp_hal_version),
+        ("esp-hal-version-full".to_string(), esp_hal_version_full),
         ("max-dram2-uninit".to_string(), format!("{max_dram2}")),
     ];
 

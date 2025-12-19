@@ -1,0 +1,27 @@
+# Lychee link checker configuration
+# https://lychee.cli.rs/configuration/
+
+# Skip files matching these patterns
+exclude_path = ["target"]
+
+# Exclude URLs matching these patterns
+exclude = [
+    # Badge URLs may have rate limiting
+    "shields\\.io",
+    # Crates.io may have rate limiting
+    "crates\\.io/crates",
+    # marketplace URLs sometimes fail
+    "marketplace\\.visualstudio\\.com",
+]
+
+# Max number of concurrent link checks
+max_concurrency = 4
+
+# Timeout for each request in seconds
+timeout = 30
+
+# Accept these status codes as valid
+accept = [200, 204, 206, 301, 302, 403, 429]
+
+# GitHub token from environment variable
+github_token = "$GITHUB_TOKEN"

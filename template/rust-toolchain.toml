@@ -1,14 +1,15 @@
 [toolchain]
-#REPLACE stable rust_toolchain && esp rust_toolchain
 #IF option("riscv")
 #IF option("stack-smashing-protection")
 #+channel    = "nightly"
 #ELSE
+#REPLACE stable rust_toolchain
 channel    = "stable"
 #ENDIF
 components = ["rust-src"]
 #REPLACE riscv32imac-unknown-none-elf rust_target
 targets = ["riscv32imac-unknown-none-elf"]
 #ELIF option("xtensa")
+#REPLACE esp rust_toolchain
 #+channel = "esp"
 #ENDIF

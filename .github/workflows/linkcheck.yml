@@ -1,0 +1,60 @@
+name: Link Check
+
+on:
+  pull_request:
+    paths:
+      - "**/*.md"
+      - "template/**"
+      - ".github/workflows/linkcheck.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.md"
+      - "template/**"
+      - ".github/workflows/linkcheck.yml"
+  schedule:
+    # Run weekly on Monday at 00:00 UTC
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+jobs:
+  linkcheck:
+    name: Check links
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check links in repository files
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --verbose --no-progress '**/*.md'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  linkcheck-generated:
+    name: Check links in generated code
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Generate a sample project
+        run: |
+          cargo run --release --quiet --no-default-features -- --headless --chip=esp32c6 --output-path=. test-project
+
+      - name: Check links in generated project
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --verbose
+            --no-progress
+            './test-project/**/*.rs'
+            './test-project/**/*.toml'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

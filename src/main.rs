@@ -79,6 +79,10 @@ struct Args {
     /// Rust toolchain to use (rustup toolchain name; must support the selected chip target)
     #[arg(long)]
     toolchain: Option<String>,
+
+    /// Use ASCII characters to display selected options instead of emojis
+    #[arg(long, action)]
+    disable_emojis: bool,
 }
 
 /// Check crates.io for a new version of the application
@@ -236,7 +240,7 @@ fn main() -> Result<()> {
         let terminal = tui::init_terminal()?;
 
         // create app and run it
-        let selected = tui::App::new(repository).run(terminal)?;
+        let selected = tui::App::new(repository, args.disable_emojis).run(terminal)?;
 
         tui::restore_terminal()?;
         // done with the TUI

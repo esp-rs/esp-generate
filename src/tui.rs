@@ -235,13 +235,15 @@ pub struct App<'app> {
 }
 
 impl<'app> App<'app> {
-    pub fn new(repository: Repository<'app>) -> Self {
+    pub fn new(repository: Repository<'app>, disable_emojis: bool) -> Self {
         let mut initial_state = ListState::default();
         initial_state.select(Some(0));
 
-        let (ui_elements, colors) = match std::env::var("TERM_PROGRAM").as_deref() {
-            Ok("vscode") => (UiElements::FALLBACK, Colors::RGB),
-            Ok("Apple_Terminal") => (UiElements::FALLBACK, Colors::ANSI),
+        let (ui_elements, colors) = match (std::env::var("TERM_PROGRAM").as_deref(), disable_emojis)
+        {
+            (Ok("vscode"), _) => (UiElements::FALLBACK, Colors::RGB),
+            (Ok("Apple_Terminal"), _) => (UiElements::FALLBACK, Colors::ANSI),
+            (_, true) => (UiElements::FALLBACK, Colors::RGB),
             _ => (UiElements::FANCY, Colors::RGB),
         };
 

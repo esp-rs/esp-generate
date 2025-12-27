@@ -70,10 +70,16 @@ fn main() -> ! {
     //ENDIF
 
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
-    //IF option("wifi") || option("ble-bleps")
+    //IF option("wifi") || option("ble-bleps") || option("module-selected")
     let peripherals = esp_hal::init(config);
     //ELSE
     //+let _peripherals = esp_hal::init(config);
+    //ENDIF
+
+    //IF option("module-selected")
+    // Reserved GPIOs - directly connected to flash/PSRAM
+    //REPLACE __RESERVED_GPIO_CODE__ reserved_gpio_code
+    __RESERVED_GPIO_CODE__
     //ENDIF
 
     //IF option("alloc")

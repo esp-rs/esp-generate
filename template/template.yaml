@@ -1,5 +1,15 @@
 #INCLUDEFILE false
 options:
+  - !Category
+    name: module
+    display_name: Module/Board selection
+    help: Select your specific ESP module to automatically reserve flash-connected GPIOs.
+    options:
+      - !Option
+        name: PLACEHOLDER
+        display_name: "<dynamic - will be replaced at runtime>"
+        selection_group: module
+
   - !Option
     name: unstable-hal
     display_name: Enable unstable HAL features.

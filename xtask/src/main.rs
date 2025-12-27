@@ -14,7 +14,7 @@ use esp_metadata::Chip;
 use log::info;
 
 // Unfortunate hard-coded list of non-codegen options
-const IGNORED_CATEGORIES: &[&str] = &["editor", "optional", "toolchain"];
+const IGNORED_CATEGORIES: &[&str] = &["editor", "module", "optional", "toolchain"];
 
 #[derive(Debug, Parser)]
 struct Cli {

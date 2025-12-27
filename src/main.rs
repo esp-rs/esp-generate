@@ -23,6 +23,7 @@ use taplo::formatter::Options;
 use crate::template_files::TEMPLATE_FILES;
 
 mod check;
+mod module_selector;
 mod template_files;
 mod toolchain;
 mod tui;
@@ -185,14 +186,16 @@ fn main() -> Result<()> {
         bail!("Directory already exists");
     }
 
-    // Validate options. We pass the unmodified template to the function, so that it can tell
-    // the user which options are not supported for the selected chip.
-    process_options(&TEMPLATE, &args)?;
-
     // Now we filter out the incompatible options, so that they are not shown and they also don't
     // screw with our position-based data model.
     let mut template = TEMPLATE.clone();
     remove_incompatible_chip_options(chip, &mut template.options);
+
+    // Populate module category early so it can be validated
+    module_selector::populate_module_category(chip, &mut template.options);
+
+    // Validate options against the populated template
+    process_options(&template, &args)?;
 
     let versions = cargo::CargoToml::load(
         TEMPLATE_FILES
@@ -274,6 +277,15 @@ fn main() -> Result<()> {
         }
     });
 
+    let selected_module = selected.iter().find_map(|name| {
+        let opt = find_option(name, &template.options)?;
+        if opt.selection_group == "module" {
+            Some(name.clone())
+        } else {
+            None
+        }
+    });
+
     // Also add the active selection groups
     for idx in 0..selected.len() {
         let option = find_option(&selected[idx], &template.options).unwrap();
@@ -331,6 +343,22 @@ fn main() -> Result<()> {
 
     if let Some(tc) = selected_toolchain {
         variables.push(("rust_toolchain".to_string(), tc));
+    }
+
+    if let Some(ref module_name) = selected_module {
+        if let Some(module) = esp_generate::modules::find_module(module_name) {
+            selected.push("module-selected".to_string());
+            if module.octal_psram {
+                selected.push("octal-psram".to_string());
+            }
+            let reserved_gpio_code = module
+                .reserved_gpios
+                .iter()
+                .map(|g| format!("    let _ = peripherals.GPIO{g};"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            variables.push(("reserved_gpio_code".to_string(), reserved_gpio_code));
+        }
     }
 
     let project_dir = path.join(&name);

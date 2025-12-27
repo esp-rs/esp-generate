@@ -1,5 +1,6 @@
 pub mod cargo;
 pub mod config;
+pub mod modules;
 pub mod template;
 
 /// This turns a list of strings into a sentence, and appends it to the base string.

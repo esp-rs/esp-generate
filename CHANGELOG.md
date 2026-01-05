@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- add .DS_Store file to .gitIgnore on mac
+
 ### Removed
 
 ## [1.1.0] - 2025-12-11
@@ -151,6 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - It is now possible to select a panic handler, and log library. (#120)
 
 ### Changed
+
 - Update `probe-rs run` arguments (#90)
 - When using `embassy` option, `async_main.rs` file was renamed to `main.rs` (#93)
 - The UI no longer allows selecting options with missing requirements, and does not allow deselecting
@@ -175,14 +178,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.2] - 2025-01-16
 
 ### Added
+
 - The resulting `Cargo.toml` is now formated with Taplo (#72)
 
 ### Changed
+
 - Update the resulting binary name (#62)
 - Include version of `esp-generate` in the generated code (#67)
 - Use `rustc-link-arg` instead of `rustc-link-arg-bin` (#67)
 
 ### Fixed
+
 - Verify the required options are provided (#65)
 - Use `stable` toolchain for Rust Analyzer on Xtensa targets (#69)
 - Added missing template substitution in `devcontainer.json` (#70)
@@ -190,20 +196,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.1] - 2024-11-26
 
 ### Changed
+
 - Allow selecting WiFi and BLE at the same time (#60)
 
 ### Fixed
+
 - Don't deselect just selected option (#58)
 - Added missing init code in non-async template (#57)
 
 ## [0.2.0] - 2024-11-21
 
 ### Added
+
 - Added editor selection. Currently only helix and vscode
 - Before quitting the TUI, it ask for user confirmation
 - Show a hint where to find examples
 
 ### Changed
+
 - Remember position when entering a sub-menu to restore state on exit.
 - Update dependencies to latest esp-hal releases.
 - Use `systimer` instead of `timg` in embassy templates for all targets but ESP32

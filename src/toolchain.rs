@@ -1,4 +1,6 @@
 use std::process::Command;
+use std::sync::mpsc;
+use std::thread;
 
 use anyhow::{Result, bail};
 use esp_generate::template::GeneratorOptionItem;
@@ -6,8 +8,38 @@ use esp_metadata::Chip;
 
 use crate::check;
 
-/// Return all installed rustup toolchains that support the given `target`
-/// and meet the given MSRV.
+pub struct ToolchainScan {
+    rx: mpsc::Receiver<Result<Vec<String>>>,
+}
+
+impl ToolchainScan {
+    pub fn wait(self) -> Result<Vec<String>> {
+        // This will block until the background thread sends its result.
+        self.rx.recv().unwrap_or_else(|e| {
+            log::warn!("Toolchain scan thread failed: {e}");
+            Ok(Vec::new())
+        })
+    }
+}
+
+/// Start discovering toolchains in a background thread.
+pub fn start_toolchain_scan(
+    chip: Chip,
+    cli_toolchain: Option<String>,
+    msrv: check::Version,
+) -> ToolchainScan {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let cli_ref = cli_toolchain.as_deref();
+        let result = find_toolchains(chip, cli_ref, &msrv);
+        let _ = tx.send(result);
+    });
+
+    ToolchainScan { rx }
+}
+
+
 /// Return all installed rustup toolchains that support the given `target`
 /// and meet the given MSRV.
 fn filter_toolchains_for(target: &str, msrv: &check::Version) -> Result<Vec<String>> {
@@ -29,7 +61,6 @@ fn filter_toolchains_for(target: &str, msrv: &check::Version) -> Result<Vec<Stri
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-
     let mut available = Vec::new();
 
     for line in stdout.lines() {
@@ -115,15 +146,13 @@ fn active_rustup_toolchain() -> Option<String> {
         .and_then(|line| line.split_whitespace().next().map(|name| name.to_string()))
 }
 
-/// Find the `toolchain` category in `template.yaml` and replace its placeholder
-/// option with one option per installed rustup toolchain that supports the
-/// required target and MSRV.
-pub(crate) fn populate_toolchain_category(
-    chip: Chip,
-    options: &mut [GeneratorOptionItem],
+/// Among all installed toolchains, finds ones that support the required target and satisfy the MSRV.
+pub(crate) fn find_toolchains(
+    chip: Chip, 
     cli_toolchain: Option<&str>,
     msrv: &check::Version,
-) -> Result<()> {
+) -> Result<Vec<String>>
+{
     let target = chip.target().to_string();
 
     let mut available = filter_toolchains_for(&target, msrv)?;
@@ -157,7 +186,7 @@ pub(crate) fn populate_toolchain_category(
         log::warn!(
             "No rustc toolchains found that have `{target}` installed; toolchain category will stay as placeholder"
         );
-        return Ok(());
+        return Ok(Vec::new());
     }
 
     if let Some(cli) = cli_toolchain {
@@ -178,6 +207,18 @@ pub(crate) fn populate_toolchain_category(
         // put CLI toolchain first in toolchain search in case it was provided.
         available.sort();
         available.sort_by_key(|t| if t == cli { 0 } else { 1 });
+    }
+    Ok(available)
+}
+
+/// Rewrite the `toolchain` category using the provided `available` toolchains.
+pub(crate) fn populate_toolchain_category_from_list(
+    options: &mut [GeneratorOptionItem],
+    available: &[String],
+) -> Result<()> {
+    if available.is_empty(){
+        // nothing to do
+        return Ok(());
     }
 
     // get active/default toolchain to mark it properly
@@ -204,7 +245,7 @@ pub(crate) fn populate_toolchain_category(
         // remove the placeholder, we've "scanned" it already
         category.options.clear();
 
-        for toolchain in &available {
+        for toolchain in available {
             // copy our placeholder option (again) to populate another toolchain instead of it
             let mut opt = template_opt.clone();
 
@@ -225,4 +266,14 @@ pub(crate) fn populate_toolchain_category(
     }
 
     Ok(())
+}
+
+pub(crate) fn populate_toolchain_category(
+    chip: Chip,
+    options: &mut [GeneratorOptionItem],
+    cli_toolchain: Option<&str>,
+    msrv: &check::Version,
+) -> Result<()> {
+    let available = find_toolchains(chip, cli_toolchain, msrv)?;
+    populate_toolchain_category_from_list(options, &available)
 }

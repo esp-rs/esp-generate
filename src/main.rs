@@ -185,15 +185,6 @@ fn main() -> Result<()> {
         bail!("Directory already exists");
     }
 
-    // Validate options. We pass the unmodified template to the function, so that it can tell
-    // the user which options are not supported for the selected chip.
-    process_options(&TEMPLATE, &args)?;
-
-    // Now we filter out the incompatible options, so that they are not shown and they also don't
-    // screw with our position-based data model.
-    let mut template = TEMPLATE.clone();
-    remove_incompatible_chip_options(chip, &mut template.options);
-
     let versions = cargo::CargoToml::load(
         TEMPLATE_FILES
             .iter()
@@ -214,14 +205,37 @@ fn main() -> Result<()> {
         esp_hal_version.clone()
     };
 
-    let msrv = versions.msrv().parse().unwrap();
+    let msrv: check::Version = versions.msrv().parse().unwrap();
 
-    toolchain::populate_toolchain_category(
-        chip,
-        &mut template.options,
-        args.toolchain.as_deref(),
-        &msrv,
-    )?;
+    // For headless, we keep the old "block now" behaviour.
+    let toolchain_scan = if args.headless {
+        None
+    } else {
+        // TUI: don't block; start background scan instead.
+        Some(toolchain::start_toolchain_scan(
+            chip,
+            args.toolchain.clone(),
+            msrv.clone(),
+        ))
+    };
+
+    // Validate options. We pass the unmodified template to the function, so that it can tell
+    // the user which options are not supported for the selected chip.
+    process_options(&TEMPLATE, &args)?;
+
+    // Now we filter out the incompatible options, so that they are not shown and they also don't
+    // screw with our position-based data model.
+    let mut template = TEMPLATE.clone();
+    remove_incompatible_chip_options(chip, &mut template.options);
+
+    if args.headless {
+        toolchain::populate_toolchain_category(
+            chip,
+            &mut template.options,
+            args.toolchain.as_deref(),
+            &msrv,
+        )?;
+    }
 
     // Initial selection for TUI/headless, including toolchain if provided.
     let mut initial_selected = args.option.clone();
@@ -230,6 +244,14 @@ fn main() -> Result<()> {
     }
 
     let mut selected = if !args.headless {
+        if let Some(scan) = toolchain_scan {
+            let available = scan.wait()?;
+            toolchain::populate_toolchain_category_from_list(
+                &mut template.options,
+                &available,
+            )?;
+        }
+
         let repository = tui::Repository::new(chip, &template.options, &initial_selected);
 
         // TUI stuff ahead

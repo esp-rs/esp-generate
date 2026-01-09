@@ -3,19 +3,19 @@ use esp_metadata::Chip;
 use crate::template::{GeneratorOption, GeneratorOptionItem};
 
 #[derive(Debug)]
-pub struct ActiveConfiguration<'c> {
+pub struct ActiveConfiguration {
     /// The chip that is configured for
     pub chip: Chip,
     /// The names of the selected options
     pub selected: Vec<String>,
     /// All available options
-    pub options: &'c [GeneratorOptionItem],
+    pub options: Vec<GeneratorOptionItem>,
 }
 
-impl ActiveConfiguration<'_> {
+impl ActiveConfiguration {
     pub fn is_group_selected(&self, group: &str) -> bool {
         self.selected.iter().any(|s| {
-            let option = find_option(s, self.options).unwrap();
+            let option = find_option(s, &self.options).unwrap();
             option.selection_group == group
         })
     }
@@ -63,11 +63,11 @@ impl ActiveConfiguration<'_> {
     }
 
     pub fn select(&mut self, option: String) {
-        let o = find_option(&option, self.options).unwrap();
+        let o = find_option(&option, &self.options).unwrap();
         if !self.is_option_active(o) {
             return;
         }
-        if !Self::deselect_group(&mut self.selected, self.options, &o.selection_group) {
+        if !Self::deselect_group(&mut self.selected, &self.options, &o.selection_group) {
             return;
         }
         self.selected.push(option);
@@ -117,7 +117,7 @@ impl ActiveConfiguration<'_> {
             }
 
             // Requirement is a group that must have a selected option?
-            let is_group = Self::group_exists(key, self.options);
+            let is_group = Self::group_exists(key, &self.options);
             if is_group && self.is_group_selected(key) == expected {
                 continue;
             }
@@ -144,7 +144,7 @@ impl ActiveConfiguration<'_> {
 
         // Does any of the enabled options have a requirement against this one?
         for selected in self.selected.iter() {
-            let Some(selected_option) = find_option(selected, self.options) else {
+            let Some(selected_option) = find_option(selected, &self.options) else {
                 ratatui::restore();
                 panic!("selected option not found: {selected}");
             };
@@ -163,7 +163,7 @@ impl ActiveConfiguration<'_> {
 
     // An option can only be disabled if it's not required by any other selected option.
     pub fn can_be_disabled(&self, option: &str) -> bool {
-        Self::can_be_disabled_impl(&self.selected, self.options, option, false)
+        Self::can_be_disabled_impl(&self.selected, &self.options, option, false)
     }
 
     fn can_be_disabled_impl(
@@ -195,7 +195,7 @@ impl ActiveConfiguration<'_> {
         let mut disabled_by = Vec::new();
 
         self.selected.iter().for_each(|opt| {
-            let opt = find_option(opt.as_str(), self.options).unwrap();
+            let opt = find_option(opt.as_str(), &self.options).unwrap();
             for o in opt.requires.iter() {
                 if let Some(disables) = o.strip_prefix("!") {
                     if disables == option.name() {
@@ -270,7 +270,7 @@ mod test {
 
     #[test]
     fn required_by_and_requires_pick_the_right_options() {
-        let options = &[
+        let options = vec![
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "option1".to_string(),
                 display_name: "Foobar".to_string(),
@@ -294,18 +294,18 @@ mod test {
             options,
         };
 
-        let rels = active.collect_relationships(&options[0]);
+        let rels = active.collect_relationships(&active.options[0]);
         assert_eq!(rels.requires, &["option2"]);
         assert_eq!(rels.required_by, <&[&str]>::default());
 
-        let rels = active.collect_relationships(&options[1]);
+        let rels = active.collect_relationships(&active.options[1]);
         assert_eq!(rels.requires, <&[&str]>::default());
         assert_eq!(rels.required_by, &["option1"]);
     }
 
     #[test]
     fn selecting_one_in_group_deselects_other() {
-        let options = &[
+        let options = vec![
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "option1".to_string(),
                 display_name: "Foobar".to_string(),
@@ -353,7 +353,7 @@ mod test {
 
     #[test]
     fn depending_on_group_allows_changing_group_option() {
-        let options = &[
+        let options = vec![
             GeneratorOptionItem::Category(GeneratorOptionCategory {
                 name: "group-options".to_string(),
                 display_name: "Group options".to_string(),
@@ -423,7 +423,7 @@ mod test {
 
     #[test]
     fn depending_on_group_prevents_deselecting() {
-        let options = &[
+        let options = vec![
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "option1".to_string(),
                 display_name: "Foobar".to_string(),
@@ -456,7 +456,7 @@ mod test {
 
     #[test]
     fn requiring_not_option_only_rejects_existing_group() {
-        let options = &[
+        let options = vec![
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "option1".to_string(),
                 display_name: "Foobar".to_string(),
@@ -481,7 +481,7 @@ mod test {
         };
 
         active.select("option1".to_string());
-        let opt2 = find_option("option2", options).unwrap();
+        let opt2 = find_option("option2", &active.options).unwrap();
         assert!(!active.is_option_active(opt2));
     }
 

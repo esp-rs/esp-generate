@@ -1,5 +1,6 @@
 use std::process::Command;
 use std::sync::mpsc;
+use std::sync::mpsc::TryRecvError;
 use std::thread;
 
 use anyhow::{Result, bail};
@@ -10,18 +11,32 @@ use crate::check;
 
 pub struct ToolchainScan {
     rx: mpsc::Receiver<Result<Vec<String>>>,
+    cached: Option<Result<Vec<String>>>,
 }
 
 impl ToolchainScan {
-    pub fn wait(self) -> Result<Vec<String>> {
-        // This will block until the background thread sends its result.
-        self.rx.recv().unwrap_or_else(|e| {
-            log::warn!("Toolchain scan thread failed: {e}");
-            Ok(Vec::new())
-        })
+    /// Try to get the scanned toolchain list *without blocking*.
+    pub fn try_get_toolchain_list(&mut self) -> Option<&Result<Vec<String>>> {
+        if self.cached.is_some() {
+            return self.cached.as_ref();
+        }
+
+        match self.rx.try_recv() {
+            Ok(res) => {
+                self.cached = Some(res);
+                self.cached.as_ref()
+            }
+            Err(TryRecvError::Empty) => None,
+            Err(TryRecvError::Disconnected) => {
+                log::warn!(
+                    "Toolchain scan thread failed or channel disconnected; treating as no toolchains"
+                );
+                self.cached = Some(Ok(Vec::new()));
+                self.cached.as_ref()
+            }
+        }
     }
 }
-
 /// Start discovering toolchains in a background thread.
 pub fn start_toolchain_scan(
     chip: Chip,
@@ -36,9 +51,8 @@ pub fn start_toolchain_scan(
         let _ = tx.send(result);
     });
 
-    ToolchainScan { rx }
+    ToolchainScan { rx, cached: None }
 }
-
 
 /// Return all installed rustup toolchains that support the given `target`
 /// and meet the given MSRV.
@@ -148,11 +162,10 @@ fn active_rustup_toolchain() -> Option<String> {
 
 /// Among all installed toolchains, finds ones that support the required target and satisfy the MSRV.
 pub(crate) fn find_toolchains(
-    chip: Chip, 
+    chip: Chip,
     cli_toolchain: Option<&str>,
     msrv: &check::Version,
-) -> Result<Vec<String>>
-{
+) -> Result<Vec<String>> {
     let target = chip.target().to_string();
 
     let mut available = filter_toolchains_for(&target, msrv)?;
@@ -216,7 +229,7 @@ pub(crate) fn populate_toolchain_category_from_list(
     options: &mut [GeneratorOptionItem],
     available: &[String],
 ) -> Result<()> {
-    if available.is_empty(){
+    if available.is_empty() {
         // nothing to do
         return Ok(());
     }

@@ -347,17 +347,21 @@ fn main() -> Result<()> {
 
     if let Some(ref module_name) = selected_module {
         if let Some(module) = esp_generate::modules::find_module(module_name) {
-            selected.push("module-selected".to_string());
-            if module.octal_psram {
-                selected.push("octal-psram".to_string());
+            // Only set module-selected if there are GPIOs to reserve,
+            // otherwise the generated code would have unused `peripherals` variable
+            if !module.reserved_gpios.is_empty() {
+                selected.push("module-selected".to_string());
+                if module.octal_psram {
+                    selected.push("octal-psram".to_string());
+                }
+                let reserved_gpio_code = module
+                    .reserved_gpios
+                    .iter()
+                    .map(|g| format!("    let _ = peripherals.GPIO{g};"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                variables.push(("reserved_gpio_code".to_string(), reserved_gpio_code));
             }
-            let reserved_gpio_code = module
-                .reserved_gpios
-                .iter()
-                .map(|g| format!("    let _ = peripherals.GPIO{g};"))
-                .collect::<Vec<_>>()
-                .join("\n");
-            variables.push(("reserved_gpio_code".to_string(), reserved_gpio_code));
         }
     }
 

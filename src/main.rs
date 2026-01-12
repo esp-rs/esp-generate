@@ -269,12 +269,12 @@ fn main() -> Result<()> {
                         if !toolchains_populated {
                             toolchain::populate_toolchain_category_from_list(
                                 &mut template.options,
-                                &list,
+                                list,
                             )?;
 
                             toolchain::populate_toolchain_category_from_list(
                                 app.options_mut(),
-                                &list,
+                                list,
                             )?;
 
                             toolchains_populated = true;

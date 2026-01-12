@@ -169,6 +169,7 @@ fn main() -> Result<()> {
     }
 
     let chip = args.chip.unwrap();
+
     let name = args.name.clone().unwrap();
 
     let path = &args
@@ -245,10 +246,8 @@ fn main() -> Result<()> {
     let mut selected = if !args.headless {
         let repository = tui::Repository::new(chip, template.options.clone(), &initial_selected);
 
-        // TUI stuff ahead
         let mut app = tui::App::new(repository);
 
-        // create app and run it
         let mut terminal = tui::init_terminal()?;
 
         let mut final_selected: Option<Vec<String>> = None;
@@ -256,6 +255,10 @@ fn main() -> Result<()> {
         let mut toolchains_populated = false;
 
         while running {
+            // Toolchain scan in the background. 
+            // In order to prevent the application from being slow,
+            // toolchain scanning and filtering is done in a separate thread
+            // and we poll the result before each frame is drawn
             if let Some(scan) = toolchain_scan.as_mut() {
                 match scan.try_get_toolchain_list() {
                     None => {
@@ -292,8 +295,7 @@ fn main() -> Result<()> {
 
             // handle input (non-blocking poll)
             if event::poll(Duration::from_millis(100))? {
-                let ev = event::read()?;
-                match app.handle_event(ev)? {
+                match app.handle_event(event::read()?)? {
                     tui::AppResult::Continue => {}
                     tui::AppResult::Quit => {
                         final_selected = None;

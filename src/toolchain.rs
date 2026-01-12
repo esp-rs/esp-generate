@@ -75,6 +75,7 @@ fn filter_toolchains_for(target: &str, msrv: &check::Version) -> Result<Vec<Stri
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
+    
     let mut available = Vec::new();
 
     for line in stdout.lines() {

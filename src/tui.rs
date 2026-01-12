@@ -311,17 +311,13 @@ impl App {
                 if self.confirm_quit {
                     match key.code {
                         Char('y') | Char('Y') => return Ok(AppResult::Quit),
-                        _ => {
-                            self.confirm_quit = false;
-                        }
+                        _ => self.confirm_quit = false,
                     }
                     return Ok(AppResult::Continue);
                 }
 
                 match key.code {
-                    Char('q') => {
-                        self.confirm_quit = true;
-                    }
+                    Char('q') => self.confirm_quit = true,
                     Char('s') | Char('S') => {
                         return Ok(AppResult::Save);
                     }
@@ -346,12 +342,8 @@ impl App {
                             self.enter_menu();
                         }
                     }
-                    Char('j') | Down => {
-                        self.select_next();
-                    }
-                    Char('k') | Up => {
-                        self.select_previous();
-                    }
+                    Char('j') | Down => self.select_next(),
+                    Char('k') | Up => self.select_previous(),
                     _ => {}
                 }
             }

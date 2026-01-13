@@ -9,18 +9,18 @@ use esp_generate::{
 use esp_metadata::Chip;
 use ratatui::crossterm::{
     ExecutableCommand,
-    event::{self, Event, KeyCode, KeyEventKind},
+    event::{Event, KeyCode, KeyEventKind},
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 
-pub struct Repository<'app> {
-    config: ActiveConfiguration<'app>,
+pub struct Repository {
+    pub config: ActiveConfiguration,
     path: Vec<usize>,
 }
 
-impl<'app> Repository<'app> {
-    pub fn new(chip: Chip, options: &'app [GeneratorOptionItem], selected: &[String]) -> Self {
+impl Repository {
+    pub fn new(chip: Chip, options: Vec<GeneratorOptionItem>, selected: &[String]) -> Self {
         Self {
             config: ActiveConfiguration {
                 chip,
@@ -37,7 +37,7 @@ impl<'app> Repository<'app> {
             .selected
             .iter()
             .find(|name| {
-                esp_generate::config::find_option(name, self.config.options)
+                esp_generate::config::find_option(name, &self.config.options)
                     .map(|opt| opt.selection_group == "toolchain")
                     .unwrap_or(false)
             })
@@ -45,7 +45,7 @@ impl<'app> Repository<'app> {
     }
 
     fn current_level(&self) -> &[GeneratorOptionItem] {
-        let mut current = self.config.options;
+        let mut current: &[GeneratorOptionItem] = &self.config.options;
 
         for &index in &self.path {
             current = match &current[index] {
@@ -57,8 +57,31 @@ impl<'app> Repository<'app> {
         current
     }
 
+    /// Returns `true` if the current menu level is inside a category called `name`.
+    fn is_in_category(&self, name: &str) -> bool {
+        if self.path.is_empty() {
+            return false;
+        }
+
+        let mut current: &[GeneratorOptionItem] = &self.config.options;
+        let mut last: Option<&GeneratorOptionItem> = None;
+
+        for &index in &self.path {
+            last = current.get(index);
+            current = match last {
+                Some(GeneratorOptionItem::Category(category)) => category.options.as_slice(),
+                Some(GeneratorOptionItem::Option(_)) | None => return false,
+            };
+        }
+
+        matches!(
+            last,
+            Some(GeneratorOptionItem::Category(category)) if category.name == name
+        )
+    }
+
     fn current_level_is_active(&self) -> bool {
-        let mut current = self.config.options;
+        let mut current: &[GeneratorOptionItem] = &self.config.options;
 
         for &index in &self.path {
             if !self.config.is_active(&current[index]) {
@@ -226,16 +249,26 @@ impl UiElements {
     };
 }
 
-pub struct App<'app> {
+pub enum AppResult {
+    /// Keep running
+    Continue,
+    /// User confirmed quit (q + y)
+    Quit,
+    /// User pressed s/S to save and generate
+    Save,
+}
+
+pub struct App {
     state: Vec<ListState>,
-    repository: Repository<'app>,
+    repository: Repository,
     confirm_quit: bool,
     ui_elements: UiElements,
     colors: Colors,
+    toolchains_loading: bool,
 }
 
-impl<'app> App<'app> {
-    pub fn new(repository: Repository<'app>) -> Self {
+impl App {
+    pub fn new(repository: Repository) -> Self {
         let mut initial_state = ListState::default();
         initial_state.select(Some(0));
 
@@ -251,6 +284,7 @@ impl<'app> App<'app> {
             confirm_quit: false,
             ui_elements,
             colors,
+            toolchains_loading: false,
         }
     }
     pub fn selected(&self) -> usize {
@@ -281,65 +315,75 @@ impl<'app> App<'app> {
             self.state.pop();
         }
     }
+    pub fn set_toolchains_loading(&mut self, loading: bool) {
+        self.toolchains_loading = loading;
+    }
+    pub fn options_mut(&mut self) -> &mut [GeneratorOptionItem] {
+        &mut self.repository.config.options
+    }
+    pub fn selected_options(&self) -> Vec<String> {
+        self.repository.config.selected.clone()
+    }
 }
 
-impl App<'_> {
-    pub fn run(&mut self, mut terminal: Terminal<impl Backend>) -> Result<Option<Vec<String>>> {
-        loop {
-            self.draw(&mut terminal)?;
+impl App {
+    pub fn handle_event(&mut self, event: Event) -> Result<AppResult> {
+        if let Event::Key(key) = event {
+            if key.kind == KeyEventKind::Press {
+                use KeyCode::*;
 
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    use KeyCode::*;
-
-                    if self.confirm_quit {
-                        match key.code {
-                            Char('y') | Char('Y') => return Ok(None),
-                            _ => self.confirm_quit = false,
-                        }
-                        continue;
-                    }
-
+                if self.confirm_quit {
                     match key.code {
-                        Char('q') => self.confirm_quit = true,
-                        Char('s') | Char('S') => {
-                            return Ok(Some(self.repository.config.selected.clone()));
-                        }
-                        Esc => {
-                            if self.state.len() == 1 {
-                                self.confirm_quit = true;
-                            } else {
-                                self.repository.up();
-                                self.exit_menu();
-                            }
-                        }
-                        Char('h') | Left => {
+                        Char('y') | Char('Y') => return Ok(AppResult::Quit),
+                        _ => self.confirm_quit = false,
+                    }
+                    return Ok(AppResult::Continue);
+                }
+
+                match key.code {
+                    Char('q') => self.confirm_quit = true,
+                    Char('s') | Char('S') => {
+                        return Ok(AppResult::Save);
+                    }
+                    Esc => {
+                        if self.state.len() == 1 {
+                            self.confirm_quit = true;
+                        } else {
                             self.repository.up();
                             self.exit_menu();
                         }
-                        Char('l') | Char(' ') | Right | Enter => {
-                            let selected = self.selected();
-                            if self.repository.is_option(selected) {
-                                self.repository.toggle_current(selected);
-                            } else {
-                                self.repository.enter_group(self.selected());
-                                self.enter_menu();
-                            }
-                        }
-                        Char('j') | Down => {
-                            self.select_next();
-                        }
-                        Char('k') | Up => {
-                            self.select_previous();
-                        }
-                        _ => {}
                     }
+                    Char('h') | Left => {
+                        self.repository.up();
+                        self.exit_menu();
+                    }
+                    Char('l') | Char(' ') | Right | Enter => {
+                        let selected = self.selected();
+
+                        // While toolchains are still being scanned, ignore selection inside the
+                        // `toolchain` category
+                        if self.toolchains_loading && self.repository.is_in_category("toolchain") {
+                            return Ok(AppResult::Continue);
+                        }
+
+                        if self.repository.is_option(selected) {
+                            self.repository.toggle_current(selected);
+                        } else {
+                            self.repository.enter_group(self.selected());
+                            self.enter_menu();
+                        }
+                    }
+                    Char('j') | Down => self.select_next(),
+                    Char('k') | Up => self.select_previous(),
+                    _ => {}
                 }
             }
         }
+
+        Ok(AppResult::Continue)
     }
 
-    fn draw(&mut self, terminal: &mut Terminal<impl Backend>) -> Result<()> {
+    pub fn draw(&mut self, terminal: &mut Terminal<impl Backend>) -> Result<()> {
         terminal.draw(|f| {
             f.render_widget(self, f.area());
         })?;
@@ -348,7 +392,7 @@ impl App<'_> {
     }
 }
 
-impl Widget for &mut App<'_> {
+impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let vertical = Layout::vertical([
             Constraint::Length(2),
@@ -365,7 +409,7 @@ impl Widget for &mut App<'_> {
     }
 }
 
-impl App<'_> {
+impl App {
     fn render_title(&self, area: Rect, buf: &mut Buffer) {
         let mut title = String::from("esp-generate");
 
@@ -506,6 +550,12 @@ impl App<'_> {
             "Are you sure you want to quit? (y/N)"
         } else {
             "Use ↓↑ to move, ESC/← to go up, → to go deeper or change the value, s/S to save and generate, ESC/q to cancel"
+        };
+
+        let text = if self.toolchains_loading {
+            format!("{text}  |  Scanning installed toolchains…")
+        } else {
+            text.to_string()
         };
 
         Paragraph::new(text)

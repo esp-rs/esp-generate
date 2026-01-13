@@ -1,11 +1,3 @@
-use std::{
-    collections::HashMap,
-    env, fs,
-    path::{Path, PathBuf},
-    process::Command,
-    sync::LazyLock,
-};
-
 use anyhow::{Result, bail};
 use clap::Parser;
 use env_logger::{Builder, Env};
@@ -17,6 +9,15 @@ use esp_generate::{
 use esp_generate::{cargo, config::find_option};
 use esp_metadata::Chip;
 use inquire::{Select, Text};
+use ratatui::crossterm::event;
+use std::{
+    collections::HashMap,
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+    sync::LazyLock,
+    time::Duration,
+};
 use strum::IntoEnumIterator;
 use taplo::formatter::Options;
 
@@ -84,7 +85,6 @@ struct Args {
 /// Check crates.io for a new version of the application
 #[cfg(feature = "update-informer")]
 fn check_for_update(name: &str, version: &str) {
-    use std::time::Duration;
     use update_informer::{Check, registry};
     // By setting the interval to 0 seconds we invalidate the cache with each
     // invocation and ensure we're getting up-to-date results
@@ -185,15 +185,6 @@ fn main() -> Result<()> {
         bail!("Directory already exists");
     }
 
-    // Validate options. We pass the unmodified template to the function, so that it can tell
-    // the user which options are not supported for the selected chip.
-    process_options(&TEMPLATE, &args)?;
-
-    // Now we filter out the incompatible options, so that they are not shown and they also don't
-    // screw with our position-based data model.
-    let mut template = TEMPLATE.clone();
-    remove_incompatible_chip_options(chip, &mut template.options);
-
     let versions = cargo::CargoToml::load(
         TEMPLATE_FILES
             .iter()
@@ -214,14 +205,37 @@ fn main() -> Result<()> {
         esp_hal_version.clone()
     };
 
-    let msrv = versions.msrv().parse().unwrap();
+    let msrv: check::Version = versions.msrv().parse().unwrap();
 
-    toolchain::populate_toolchain_category(
-        chip,
-        &mut template.options,
-        args.toolchain.as_deref(),
-        &msrv,
-    )?;
+    // Start toolchain scan as early as we know chip and msrv (TUI only).
+    let mut toolchain_scan = if args.headless {
+        None
+    } else {
+        Some(toolchain::start_toolchain_scan(
+            chip,
+            args.toolchain.clone(),
+            msrv.clone(),
+        ))
+    };
+
+    // Validate options. We pass the unmodified template to the function, so that it can tell
+    // the user which options are not supported for the selected chip.
+    process_options(&TEMPLATE, &args)?;
+
+    // Now we filter out the incompatible options, so that they are not shown and they also don't
+    // screw with our position-based data model.
+    let mut template = TEMPLATE.clone();
+    remove_incompatible_chip_options(chip, &mut template.options);
+
+    // Headless: keep the old "block now" behaviour.
+    if args.headless {
+        toolchain::populate_toolchain_category(
+            chip,
+            &mut template.options,
+            args.toolchain.as_deref(),
+            &msrv,
+        )?;
+    }
 
     // Initial selection for TUI/headless, including toolchain if provided.
     let mut initial_selected = args.option.clone();
@@ -230,18 +244,75 @@ fn main() -> Result<()> {
     }
 
     let mut selected = if !args.headless {
-        let repository = tui::Repository::new(chip, &template.options, &initial_selected);
+        let repository = tui::Repository::new(chip, template.options.clone(), &initial_selected);
 
-        // TUI stuff ahead
-        let terminal = tui::init_terminal()?;
+        let mut app = tui::App::new(repository);
 
-        // create app and run it
-        let selected = tui::App::new(repository).run(terminal)?;
+        let mut terminal = tui::init_terminal()?;
+
+        let mut final_selected: Option<Vec<String>> = None;
+        let mut running = true;
+        let mut toolchains_populated = false;
+
+        while running {
+            // Toolchain scan in the background.
+            // In order to prevent the application from being slow,
+            // toolchain scanning and filtering is done in a separate thread
+            // and we poll the result before each frame is drawn
+            if let Some(scan) = toolchain_scan.as_mut() {
+                match scan.try_get_toolchain_list() {
+                    None => {
+                        // still loading
+                        app.set_toolchains_loading(true);
+                    }
+                    Some(Ok(list)) => {
+                        if !toolchains_populated {
+                            toolchain::populate_toolchain_category_from_list(
+                                &mut template.options,
+                                list,
+                            )?;
+
+                            toolchain::populate_toolchain_category_from_list(
+                                app.options_mut(),
+                                list,
+                            )?;
+
+                            toolchains_populated = true;
+                        }
+                        app.set_toolchains_loading(false);
+                    }
+
+                    Some(Err(err)) => {
+                        log::warn!("Toolchain scan failed: {err}");
+                        app.set_toolchains_loading(false);
+                        toolchains_populated = true;
+                    }
+                }
+            }
+
+            // draw a frame
+            app.draw(&mut terminal)?;
+
+            // handle input (non-blocking poll)
+            if event::poll(Duration::from_millis(100))? {
+                match app.handle_event(event::read()?)? {
+                    tui::AppResult::Continue => {}
+                    tui::AppResult::Quit => {
+                        final_selected = None;
+                        running = false;
+                    }
+                    tui::AppResult::Save => {
+                        final_selected = Some(app.selected_options());
+                        running = false;
+                    }
+                }
+            }
+        }
 
         tui::restore_terminal()?;
         // done with the TUI
 
-        let Some(selected) = selected else {
+        let Some(selected) = final_selected else {
             return Ok(());
         };
 
@@ -619,7 +690,7 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
     let selected_config = ActiveConfiguration {
         chip: arg_chip,
         selected: args.option.clone(),
-        options: &template.options,
+        options: template.options.clone(),
     };
 
     let mut same_selection_group: HashMap<&str, Vec<&str>> = HashMap::new();

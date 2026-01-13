@@ -181,21 +181,32 @@ fn enable_config_and_dependencies(config: &mut ActiveConfiguration, option: &str
         return Ok(());
     }
 
-    let option = find_option(option, &config.options)
-        .ok_or_else(|| anyhow::anyhow!("Option not found: {option}"))?;
+    // We copy `requires` and `name` into separate values so that the
+    // borrow from `find_option` ends before we recursive call and later
+    // mutate `config`. Not doing so would make
+    // the borrow checker sad.
+    let (requires, option_name) = {
+        let option = find_option(option, &config.options)
+            .ok_or_else(|| anyhow::anyhow!("Option not found: {option}"))?;
 
-    for dependency in option.requires.iter() {
+        (option.requires.clone(), option.name.clone())
+    };
+
+    for dependency in &requires {
         if dependency.starts_with('!') {
             continue;
         }
         enable_config_and_dependencies(config, dependency)?;
     }
 
+    let option = find_option(&option_name, &config.options)
+        .ok_or_else(|| anyhow::anyhow!("Option not found after resolving dependencies: {option_name}"))?;
+
     if !config.is_option_active(option) {
         return Ok(());
     }
 
-    config.select(option.name.to_string());
+    config.select(option_name);
 
     Ok(())
 }
@@ -273,7 +284,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
             let mut config = ActiveConfiguration {
                 chip,
                 selected: vec![],
-                options: &template.options,
+                options: template.options.clone(),
             };
 
             if let Some(base_template) = base_template {
@@ -302,7 +313,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
         let mut config = ActiveConfiguration {
             chip,
             selected: vec![],
-            options: &template.options,
+            options: template.options.clone(),
         };
 
         for j in 0..available_options.len() {

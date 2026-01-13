@@ -11,15 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Prompt user to install a missing or outdated tool (#270)
-
 ### Changed
 
 ### Fixed
 
-- add .DS_Store file to .gitIgnore on mac
-
 ### Removed
+
+## [1.2.0] - 2025-01-13
+
+### Added
+
+- Prompt user to install a missing or outdated tool (#270)
+- Show the esp-* crate versions in the help message (#276)
+
+### Fixed
+
+- Add .DS_Store file to .gitIgnore on mac (#285)
+- Optimize toolchain scanning and filtering process (#286)
+- Fix rust-toolchain.toml template (#282)
 
 ## [1.1.0] - 2025-12-11
 
@@ -224,7 +233,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/esp-rs/esp-generate/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/esp-rs/esp-generate/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/esp-rs/esp-generate/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/esp-rs/esp-generate/compare/v0.6.0...v1.0.0

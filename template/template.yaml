@@ -198,6 +198,6 @@ options:
     display_name: Rust toolchain
     options:
       - !Option
-        name: PLACEHOLDER
-        display_name: "<dynamic - will be replaced at runtime>"
+        name:
+        display_name: "Scanning installed toolchains..."
         selection_group: toolchain

@@ -186,17 +186,6 @@ fn main() -> Result<()> {
         bail!("Directory already exists");
     }
 
-    // Now we filter out the incompatible options, so that they are not shown and they also don't
-    // screw with our position-based data model.
-    let mut template = TEMPLATE.clone();
-    remove_incompatible_chip_options(chip, &mut template.options);
-
-    // Populate module category early so it can be validated
-    module_selector::populate_module_category(chip, &mut template.options);
-
-    // Validate options against the populated template
-    process_options(&template, &args)?;
-
     let versions = cargo::CargoToml::load(
         TEMPLATE_FILES
             .iter()
@@ -230,14 +219,10 @@ fn main() -> Result<()> {
         ))
     };
 
-    // Validate options. We pass the unmodified template to the function, so that it can tell
-    // the user which options are not supported for the selected chip.
-    process_options(&TEMPLATE, &args)?;
-
-    // Now we filter out the incompatible options, so that they are not shown and they also don't
-    // screw with our position-based data model.
     let mut template = TEMPLATE.clone();
     remove_incompatible_chip_options(chip, &mut template.options);
+    module_selector::populate_module_category(chip, &mut template.options);
+    process_options(&template, &args)?;
 
     // Headless: keep the old "block now" behaviour.
     if args.headless {

@@ -167,7 +167,7 @@ impl Repository {
     }
 }
 
-pub fn init_terminal() -> Result<Terminal<impl Backend>> {
+pub fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     io::stdout().execute(EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(io::stdout());
@@ -383,7 +383,10 @@ impl App {
         Ok(AppResult::Continue)
     }
 
-    pub fn draw(&mut self, terminal: &mut Terminal<impl Backend>) -> Result<()> {
+    pub fn draw<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<()>
+    where
+        <B as ratatui::backend::Backend>::Error: Send + Sync + 'static,
+    {
         terminal.draw(|f| {
             f.render_widget(self, f.area());
         })?;

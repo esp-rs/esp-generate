@@ -32,7 +32,7 @@ jobs:
             args: --all-features --workspace -- -D warnings
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Rust
 #IF option("riscv")
         uses: dtolnay/rust-toolchain@v1

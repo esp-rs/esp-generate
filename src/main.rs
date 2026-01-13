@@ -255,7 +255,7 @@ fn main() -> Result<()> {
         let mut toolchains_populated = false;
 
         while running {
-            // Toolchain scan in the background. 
+            // Toolchain scan in the background.
             // In order to prevent the application from being slow,
             // toolchain scanning and filtering is done in a separate thread
             // and we poll the result before each frame is drawn

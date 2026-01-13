@@ -56,6 +56,30 @@ impl Repository {
 
         current
     }
+
+    /// Returns `true` if the current menu level is inside a category called `name`.
+    fn is_in_category(&self, name: &str) -> bool {
+        if self.path.is_empty() {
+            return false;
+        }
+
+        let mut current: &[GeneratorOptionItem] = &self.config.options;
+        let mut last: Option<&GeneratorOptionItem> = None;
+
+        for &index in &self.path {
+            last = current.get(index);
+            current = match last {
+                Some(GeneratorOptionItem::Category(category)) => category.options.as_slice(),
+                Some(GeneratorOptionItem::Option(_)) | None => return false,
+            };
+        }
+
+        matches!(
+            last,
+            Some(GeneratorOptionItem::Category(category)) if category.name == name
+        )
+    }
+
     fn current_level_is_active(&self) -> bool {
         let mut current: &[GeneratorOptionItem] = &self.config.options;
 
@@ -335,6 +359,13 @@ impl App {
                     }
                     Char('l') | Char(' ') | Right | Enter => {
                         let selected = self.selected();
+
+                        // While toolchains are still being scanned, ignore selection inside the
+                        // `toolchain` category
+                        if self.toolchains_loading && self.repository.is_in_category("toolchain") {
+                            return Ok(AppResult::Continue);
+                        }
+
                         if self.repository.is_option(selected) {
                             self.repository.toggle_current(selected);
                         } else {

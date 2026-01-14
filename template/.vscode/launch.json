@@ -14,6 +14,7 @@
             "flashingConfig": {
                 "flashingEnabled": true,
                 "haltAfterReset": true,
+                "verifyBeforeFlashing": true,
                 "formatOptions": {
                     "binaryFormat": "idf"
                 }

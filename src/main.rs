@@ -130,7 +130,15 @@ fn about() -> String {
 
 fn setup_args_interactive(args: &mut Args) -> Result<()> {
     if args.headless {
-        bail!("You can't use TUI to set the target chip or output directory name in headless mode");
+        let mut missing = String::from("You are in headless mode, but esp-generate needs more information to generate your project.");
+        if args.chip.is_none() {
+            missing.push_str("\nThe target chip is missing. Add --chip <your-chip-name> to the command.");
+        }
+        if args.name.is_none() {
+            missing.push_str("\nThe project name is missing. Add the name of your project to the end of the command.");
+        }
+
+        bail!("{missing}");
     }
 
     if args.chip.is_none() {

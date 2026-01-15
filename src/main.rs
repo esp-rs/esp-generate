@@ -322,27 +322,32 @@ fn main() -> Result<()> {
             return Ok(());
         };
 
-        println!(
-            "Selected options: --chip {}{}{}",
-            chip,
-            selected.iter().fold(String::new(), |mut acc, s| {
-                use std::fmt::Write;
-                write!(&mut acc, " -o {s}").unwrap();
-                acc
-            }),
-            if let Some(tc) = &args.toolchain {
-                format!(" --toolchain {tc}")
-            } else {
-                String::new()
-            }
-        );
-
         selected
     } else {
         initial_selected
     };
 
     let flat_options = flatten_options(&template.options);
+    let mut toolchain_replaced = false;
+    let selected_options = format!(
+        "--chip {}{}",
+        chip,
+        selected.iter().fold(String::new(), |mut acc, s| {
+            if Some(s) == args.toolchain.as_ref() && !toolchain_replaced {
+                acc.push_str(" --toolchain ");
+                // Just in case someone decides to call their toolchain `defmt`, make sure we only replace it once
+                toolchain_replaced = true;
+            } else {
+                acc.push_str(" -o ");
+            };
+            acc.push_str(s);
+            acc
+        })
+    );
+    if !args.headless {
+        println!("Selected options: {selected_options}");
+    }
+
     let selected_toolchain = if args.headless {
         args.toolchain
     } else {
@@ -414,6 +419,7 @@ fn main() -> Result<()> {
             "generate-version".to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
         ),
+        ("generate-parameters".to_string(), selected_options),
         ("esp-hal-version-full".to_string(), esp_hal_version_full),
         ("max-dram2-uninit".to_string(), format!("{max_dram2}")),
     ];

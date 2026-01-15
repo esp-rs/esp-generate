@@ -63,7 +63,7 @@ struct Args {
             for opt in option.options() {
                 // Remove duplicates, which usually are chip-specific variations of an option.
                 // An example of this is probe-rs.
-                if !all_options.contains(&opt) {
+                if !all_options.contains(&opt) && opt != "PLACEHOLDER" {
                     all_options.push(opt);
                 }
             }
@@ -82,6 +82,8 @@ struct Args {
     skip_update_check: bool,
 
     /// Rust toolchain to use (rustup toolchain name; must support the selected chip target)
+    ///
+    /// Note that in headless mode this is not checked.
     #[arg(long)]
     toolchain: Option<String>,
 }

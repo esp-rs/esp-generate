@@ -127,9 +127,13 @@ fn about() -> String {
 
 fn setup_args_interactive(args: &mut Args) -> Result<()> {
     if args.headless {
-        let mut missing = String::from("You are in headless mode, but esp-generate needs more information to generate your project.");
+        let mut missing = String::from(
+            "You are in headless mode, but esp-generate needs more information to generate your project.",
+        );
         if args.chip.is_none() {
-            missing.push_str("\nThe target chip is missing. Add --chip <your-chip-name> to the command.");
+            missing.push_str(
+                "\nThe target chip is missing. Add --chip <your-chip-name> to the command.",
+            );
         }
         if args.name.is_none() {
             missing.push_str("\nThe project name is missing. Add the name of your project to the end of the command.");
@@ -232,16 +236,6 @@ fn main() -> Result<()> {
     module_selector::populate_module_category(chip, &mut template.options);
     process_options(&template, &args)?;
 
-    // Headless: keep the old "block now" behaviour.
-    if args.headless {
-        toolchain::populate_toolchain_category(
-            chip,
-            &mut template.options,
-            args.toolchain.as_deref(),
-            &msrv,
-        )?;
-    }
-
     // Initial selection for TUI/headless, including toolchain if provided.
     let mut initial_selected = args.option.clone();
     if let Some(ref tc) = args.toolchain {
@@ -341,14 +335,18 @@ fn main() -> Result<()> {
         initial_selected
     };
 
-    let selected_toolchain = selected.iter().find_map(|name| {
-        let opt = find_option(name, &template.options)?;
-        if opt.selection_group == "toolchain" {
-            Some(name.clone())
-        } else {
-            None
-        }
-    });
+    let selected_toolchain = if args.headless {
+        args.toolchain
+    } else {
+        selected.iter().find_map(|name| {
+            let opt = find_option(name, &template.options)?;
+            if opt.selection_group == "toolchain" {
+                Some(name.clone())
+            } else {
+                None
+            }
+        })
+    };
 
     let selected_module = selected.iter().find_map(|name| {
         let opt = find_option(name, &template.options)?;
@@ -361,8 +359,9 @@ fn main() -> Result<()> {
 
     // Also add the active selection groups
     for idx in 0..selected.len() {
-        let option = find_option(&selected[idx], &template.options).unwrap();
-        selected.push(option.selection_group.clone());
+        if let Some(option) = find_option(&selected[idx], &template.options) {
+            selected.push(option.selection_group.clone());
+        }
     }
 
     selected.push(chip.to_string());

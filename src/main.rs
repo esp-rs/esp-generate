@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use env_logger::{Builder, Env};
-use esp_generate::template::{GeneratorOptionItem, Template};
+use esp_generate::template::{GeneratorOption, GeneratorOptionItem, Template};
 use esp_generate::{
     append_list_as_sentence,
     config::{ActiveConfiguration, Relationships},
@@ -11,8 +11,10 @@ use esp_generate::{
     config::{find_option, flatten_options},
 };
 use esp_metadata::Chip;
+use indexmap::IndexMap;
 use inquire::{Select, Text};
 use ratatui::crossterm::event;
+use std::collections::HashSet;
 use std::{
     collections::HashMap,
     env, fs,
@@ -43,7 +45,7 @@ static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
 });
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = about(), long_about = None)]
+#[command(author, version, about = about(), long_about = None, subcommand_negates_reqs = true)]
 struct Args {
     /// Name of the project to generate
     name: Option<String>,
@@ -86,6 +88,136 @@ struct Args {
     /// Note that in headless mode this is not checked.
     #[arg(long)]
     toolchain: Option<String>,
+
+    #[clap(subcommand)]
+    subcommands: Option<SubCommands>,
+}
+
+#[derive(Subcommand, Debug)]
+enum SubCommands {
+    /// List available template options
+    ListOptions,
+
+    /// Print information about a template option
+    Explain { option: String },
+}
+
+impl SubCommands {
+    fn handle(&self) -> Result<()> {
+        fn chip_info_text(options: &[&GeneratorOption], opt: &GeneratorOption) -> String {
+            let mut chips = Vec::new();
+            for option in options.iter().filter(|o| o.name == opt.name) {
+                chips.extend_from_slice(&option.chips);
+            }
+
+            let chip_count = Chip::iter().count();
+
+            if chips.is_empty() || chips.len() == chip_count {
+                String::new()
+            } else if chips.len() < chip_count / 2 {
+                format!(
+                    "Only available on {}.",
+                    chips
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                format!(
+                    "Not available on {}.",
+                    Chip::iter()
+                        .filter(|c| !chips.contains(c))
+                        .map(|c| c.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+        }
+
+        match self {
+            SubCommands::ListOptions => {
+                println!(
+                    "The following template options are available. The group names are not part of the option name. Only one option in a group can be selected."
+                );
+                let mut groups = IndexMap::new();
+                let mut seen = HashSet::new();
+                let all_options = TEMPLATE.all_options();
+                for (index, option) in all_options
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, o)| !["toolchain", "module"].contains(&o.selection_group.as_str()))
+                {
+                    let group = groups.entry(&option.selection_group).or_insert(Vec::new());
+
+                    if seen.insert(&option.name) {
+                        group.push(index);
+                    }
+                }
+                for (group, options) in groups {
+                    println!("Group: {}", group);
+                    for option in options {
+                        let option = &all_options[option];
+                        let mut help_text = option.display_name.clone();
+
+                        if !option.requires.is_empty() {
+                            help_text.push_str(" Requires: ");
+                            help_text.push_str(&option.requires.join(", "));
+                            help_text.push('.');
+                        }
+                        let chip_info = chip_info_text(&all_options, option);
+                        if !chip_info.is_empty() {
+                            help_text.push(' ');
+                            help_text.push_str(&chip_info);
+                        }
+                        println!("    {}: {help_text}", option.name);
+                    }
+                }
+                Ok(())
+            }
+            SubCommands::Explain { option } => {
+                let all_options = TEMPLATE.all_options();
+                if let Some(option) = all_options.iter().find(|o| &o.name == option) {
+                    println!(
+                        "Option: {}\n\n{}{}",
+                        option.name,
+                        option.display_name,
+                        if option.help.is_empty() {
+                            String::new()
+                        } else {
+                            format!("\n{}\n", option.help)
+                        }
+                    );
+                    if !option.requires.is_empty() {
+                        println!();
+                        let positive_req = option.requires.iter().filter(|r| !r.starts_with("!"));
+                        let negative_req = option.requires.iter().filter(|r| r.starts_with("!"));
+                        if positive_req.clone().next().is_some() {
+                            println!("Requires the following options to be set:");
+                            for require in positive_req {
+                                println!("    {}", require);
+                            }
+                        }
+                        if negative_req.clone().next().is_some() {
+                            println!("Requires the following options to NOT be set:");
+                            for require in negative_req {
+                                if let Some(stripped) = require.strip_prefix('!') {
+                                    println!("    {}", stripped);
+                                }
+                            }
+                        }
+                    }
+                    let chip_info = chip_info_text(&all_options, option);
+                    if !chip_info.is_empty() {
+                        println!("{}", chip_info);
+                    }
+                } else {
+                    println!("Unknown option: {}", option);
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 /// Check crates.io for a new version of the application
@@ -167,11 +299,16 @@ fn setup_args_interactive(args: &mut Args) -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    // Set up logging.
     Builder::from_env(Env::default().default_filter_or(log::LevelFilter::Info.as_str()))
         .format_target(false)
         .init();
 
     let mut args = Args::parse();
+
+    if let Some(subcommand) = args.subcommands {
+        return subcommand.handle();
+    }
 
     // Only check for updates once the command-line arguments have been processed,
     // to avoid printing any update notifications when the help message is

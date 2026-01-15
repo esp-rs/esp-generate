@@ -36,39 +36,11 @@ You can also directly download pre-compiled [release binaries] or use [`cargo-bi
       ```
       Use the `--headless` flag to avoid using the TUI.
 
-      Replace the chip and project name accordingly, and select the desired options using the `-o/--option` flag. For a full list of available options, see [Available Options](#available-options) section of this README.
+      Replace the chip and project name accordingly, and select the desired options using the `-o/--option` flag.
+      Use the `esp-generate list-options` command to see a list of available options. Use `esp-generate explain <option>` to get a detailed explanation of an option.
 
 [release binaries]: https://github.com/esp-rs/esp-generate/releases
 [`cargo-binstall`]: https://github.com/cargo-bins/cargo-binstall
-
-## Available Options
-
-- `unstable-hal`: Enables esp-hal features that may not be ready for general use yet.
-- `alloc`: Enables allocations via the `esp-alloc` crate.
-- `wifi`: Enables Wi-Fi via the `esp-radio` crate; requires `alloc`.
-- `ble-bleps`: Enables BLE via the `esp-radio` crate using `bleps`; requires `alloc`, mutually exclusive with `ble-trouble`.
-- `ble-trouble`: Enables BLE via the `esp-radio`crate using `embassy-trouble`; requires `alloc`, mutually exclusive with `ble-bleps`.
-- `embassy`: Adds `embassy` framework support.
-- `stack-smashing-protection`: Enables [stack smashing protection](https://doc.rust-lang.org/rustc/exploit-mitigations.html#stack-smashing-protection). Requires nightly Rust.
-- `probe-rs`: Replaces `espflash` with `probe-rs` and enables RTT-based options.
-- `flashing-probe-rs`: Contains options that require `probe-rs`:
-  - `defmt`: Adds support for `defmt` printing. Uses `rtt-target` as the RTT implementation.
-  - `panic-rtt-target`: Uses `panic-rtt-target` as the panic handler.
-  - `embedded-test`: Enables `embedded-test` support and generates a simple demo test case.
-- `flashing-espflash`: Contains options that require `espflash`:
-  - `log`: Uses the `log` library to print messages.
-  - `defmt`: Adds support for `defmt` printing. Uses `esp-println` and configures `espflash` to decode `defmt` logs.
-  - `esp-backtrace`: Uses `esp-backtrace` as the panic handler.
-- `optional`: Enables the following set of options:
-  - `wokwi`: Adds support for Wokwi simulation using [VS Code Wokwi extension].
-  - `ci` Adds GitHub Actions support with some basics checks.
-- `editors`: Select the editor integrations:
-   - `helix`: The Helix editor
-   - `neovim`: Neovim
-   - `vscode`: Visual Studio Code
-   - `zed`: The Zed editor
-
-[VS Code Wokwi extension]: https://marketplace.visualstudio.com/items?itemName=wokwi.wokwi-vscode
 
 ## License
 

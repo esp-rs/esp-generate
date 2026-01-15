@@ -8,6 +8,7 @@ use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use esp_generate::{
     config::{ActiveConfiguration, find_option},
+    modules::populate_module_category,
     template::{GeneratorOptionCategory, GeneratorOptionItem, Template},
 };
 use esp_metadata::Chip;
@@ -234,7 +235,10 @@ fn is_valid(config: &ActiveConfiguration) -> bool {
 
 fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String>>> {
     let options = include_str!("../../template/template.yaml");
-    let template = serde_yaml::from_str::<Template>(options)?;
+    let mut template = serde_yaml::from_str::<Template>(options)?;
+
+    // Populate the module category with chip-specific modules
+    populate_module_category(chip, &mut template.options);
 
     fn collect(all_options: &mut Vec<String>, category: &GeneratorOptionCategory) {
         for option in &category.options {

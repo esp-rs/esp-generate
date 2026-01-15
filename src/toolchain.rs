@@ -285,14 +285,3 @@ pub(crate) fn populate_toolchain_category_from_list(
 
     Ok(())
 }
-
-pub(crate) fn populate_toolchain_category(
-    chip: Chip,
-    options: &mut [GeneratorOptionItem],
-    flat_options: &mut Vec<GeneratorOption>,
-    cli_toolchain: Option<&str>,
-    msrv: &check::Version,
-) -> Result<()> {
-    let available = find_toolchains(chip, cli_toolchain, msrv)?;
-    populate_toolchain_category_from_list(options, flat_options, &available)
-}

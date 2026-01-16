@@ -2,6 +2,7 @@ use std::{
     collections::HashSet,
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    time::Instant,
 };
 
 use anyhow::{Result, bail};
@@ -12,10 +13,13 @@ use esp_generate::{
     template::{GeneratorOptionCategory, GeneratorOptionItem, Template},
 };
 use esp_metadata::Chip;
+use itertools::Itertools;
 use log::info;
 
-// Unfortunate hard-coded list of non-codegen options
+// Unfortunate hard-coded list of non-codegen options.
 const IGNORED_CATEGORIES: &[&str] = &["editor", "optional", "toolchain"];
+// The module selector generates way too many test cases to check with --all-combinations.
+const IGNORED_CATEGORIES_FULL: &[&str] = &["editor", "optional", "toolchain", "module"];
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -200,8 +204,9 @@ fn enable_config_and_dependencies(config: &mut ActiveConfiguration, option: &str
         enable_config_and_dependencies(config, dependency)?;
     }
 
-    let option = find_option(&option_name, &config.options)
-        .ok_or_else(|| anyhow::anyhow!("Option not found after resolving dependencies: {option_name}"))?;
+    let option = find_option(&option_name, &config.options).ok_or_else(|| {
+        anyhow::anyhow!("Option not found after resolving dependencies: {option_name}")
+    })?;
 
     if !config.is_option_active(option) {
         return Ok(());
@@ -225,7 +230,7 @@ fn is_valid(config: &ActiveConfiguration) -> bool {
 
         // Reject combination if a selection group contains two selected options. This prevents
         // testing mutually exclusive options like defmt and log.
-        if !option.selection_group.is_empty() && !groups.insert(option.selection_group.clone()) {
+        if !option.selection_group.is_empty() && !groups.insert(&option.selection_group) {
             return false;
         }
     }
@@ -237,19 +242,29 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     let options = include_str!("../../template/template.yaml");
     let mut template = serde_yaml::from_str::<Template>(options)?;
 
+    let ignored_categories = if all_combinations {
+        IGNORED_CATEGORIES_FULL
+    } else {
+        IGNORED_CATEGORIES
+    };
+
     // Populate the module category with chip-specific modules
     populate_module_category(chip, &mut template.options);
 
-    fn collect(all_options: &mut Vec<String>, category: &GeneratorOptionCategory) {
+    fn collect<'data>(
+        all_options: &mut Vec<&'data str>,
+        category: &'data GeneratorOptionCategory,
+        ignored_categories: &[&str],
+    ) {
         for option in &category.options {
             match option {
                 GeneratorOptionItem::Option(option) => {
-                    all_options.push(option.name.clone());
+                    all_options.push(option.name.as_str());
                 }
                 GeneratorOptionItem::Category(category)
-                    if !IGNORED_CATEGORIES.contains(&category.name.as_str()) =>
+                    if !ignored_categories.contains(&category.name.as_str()) =>
                 {
-                    collect(all_options, category)
+                    collect(all_options, category, ignored_categories)
                 }
                 _ => {}
             }
@@ -267,13 +282,13 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
                 if option.selection_group == "base-template" {
                     template_selectors.push(Some(option.name.clone()));
                 } else {
-                    all_options.push(option.name.clone());
+                    all_options.push(option.name.as_str());
                 }
             }
             GeneratorOptionItem::Category(category)
-                if !IGNORED_CATEGORIES.contains(&category.name.as_str()) =>
+                if !ignored_categories.contains(&category.name.as_str()) =>
             {
-                collect(&mut all_options, &category)
+                collect(&mut all_options, &category, ignored_categories)
             }
             _ => {}
         }
@@ -312,29 +327,34 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     }
 
     // Return all the combination of available options
+    let start = Instant::now();
     let mut result = vec![];
-    for i in 0..(1 << available_options.len()) {
+    // Avoid cloning the template for each checked configuration.
+    let mut template_options = Some(template.options);
+    for options in available_options.iter().map(|v| v.as_slice()).powerset() {
         let mut config = ActiveConfiguration {
             chip,
-            selected: vec![],
-            options: template.options.clone(),
+            selected: options.into_iter().flatten().unique().cloned().collect(),
+            options: template_options.take().unwrap(),
         };
 
-        for j in 0..available_options.len() {
-            if i & (1 << j) != 0 {
-                config.selected.extend(available_options[j].clone());
-            }
-        }
-        config.selected.sort();
-        config.selected.dedup();
-
         if is_valid(&config) {
+            config.selected.sort();
             result.push(config.selected);
         }
+
+        template_options = Some(config.options);
     }
 
     result.sort();
     result.dedup();
+
+    let elapsed = start.elapsed();
+    log::info!(
+        "Generated {} test configurations in {:?}",
+        result.len(),
+        elapsed
+    );
 
     Ok(result)
 }

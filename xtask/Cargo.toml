@@ -13,3 +13,4 @@ esp-generate = { path = "..", default-features = false }
 log          = "0.4.28"
 tempfile     = "3.23.0"
 serde_yaml   = "0.9.33"
+itertools    = "0.14.0"

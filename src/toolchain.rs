@@ -4,7 +4,7 @@ use std::sync::mpsc::TryRecvError;
 use std::thread;
 
 use anyhow::{Result, bail};
-use esp_generate::template::GeneratorOptionItem;
+use esp_generate::template::{GeneratorOption, GeneratorOptionItem};
 use esp_metadata::Chip;
 
 use crate::check;
@@ -228,6 +228,7 @@ pub(crate) fn find_toolchains(
 /// Rewrite the `toolchain` category using the provided `available` toolchains.
 pub(crate) fn populate_toolchain_category_from_list(
     options: &mut [GeneratorOptionItem],
+    flat_options: &mut Vec<GeneratorOption>,
     available: &[String],
 ) -> Result<()> {
     if available.is_empty() {
@@ -273,7 +274,10 @@ pub(crate) fn populate_toolchain_category_from_list(
             };
             opt.selection_group = "toolchain".to_string();
 
-            category.options.push(GeneratorOptionItem::Option(opt));
+            category
+                .options
+                .push(GeneratorOptionItem::Option(opt.clone()));
+            flat_options.push(opt);
         }
 
         break;
@@ -285,9 +289,10 @@ pub(crate) fn populate_toolchain_category_from_list(
 pub(crate) fn populate_toolchain_category(
     chip: Chip,
     options: &mut [GeneratorOptionItem],
+    flat_options: &mut Vec<GeneratorOption>,
     cli_toolchain: Option<&str>,
     msrv: &check::Version,
 ) -> Result<()> {
     let available = find_toolchains(chip, cli_toolchain, msrv)?;
-    populate_toolchain_category_from_list(options, &available)
+    populate_toolchain_category_from_list(options, flat_options, &available)
 }

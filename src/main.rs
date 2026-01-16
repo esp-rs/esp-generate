@@ -6,7 +6,10 @@ use esp_generate::{
     append_list_as_sentence,
     config::{ActiveConfiguration, Relationships},
 };
-use esp_generate::{cargo, config::find_option};
+use esp_generate::{
+    cargo,
+    config::{find_option, flatten_options},
+};
 use esp_metadata::Chip;
 use inquire::{Select, Text};
 use ratatui::crossterm::event;
@@ -229,6 +232,7 @@ fn main() -> Result<()> {
         toolchain::populate_toolchain_category(
             chip,
             &mut template.options,
+            &mut Vec::new(),
             args.toolchain.as_deref(),
             &msrv,
         )?;
@@ -266,11 +270,13 @@ fn main() -> Result<()> {
                         if !toolchains_populated {
                             toolchain::populate_toolchain_category_from_list(
                                 &mut template.options,
+                                &mut Vec::new(),
                                 list,
                             )?;
 
                             toolchain::populate_toolchain_category_from_list(
-                                app.options_mut(),
+                                &mut app.repository.config.options,
+                                &mut app.repository.config.flat_options,
                                 list,
                             )?;
 
@@ -333,8 +339,9 @@ fn main() -> Result<()> {
         initial_selected
     };
 
+    let flat_options = flatten_options(&template.options);
     let selected_toolchain = selected.iter().find_map(|name| {
-        let opt = find_option(name, &template.options)?;
+        let (_, opt) = find_option(name, &flat_options)?;
         if opt.selection_group == "toolchain" {
             Some(name.clone())
         } else {
@@ -343,7 +350,7 @@ fn main() -> Result<()> {
     });
 
     let selected_module = selected.iter().find_map(|name| {
-        let opt = find_option(name, &template.options)?;
+        let (_, opt) = find_option(name, &flat_options)?;
         if opt.selection_group == "module" {
             Some(name.clone())
         } else {
@@ -353,7 +360,7 @@ fn main() -> Result<()> {
 
     // Also add the active selection groups
     for idx in 0..selected.len() {
-        let option = find_option(&selected[idx], &template.options).unwrap();
+        let (_, option) = find_option(&selected[idx], &flat_options).unwrap();
         selected.push(option.selection_group.clone());
     }
 
@@ -713,19 +720,26 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
 
     let arg_chip = args.chip.unwrap();
 
+    let flat_options = flatten_options(&template.options);
     let selected_config = ActiveConfiguration {
         chip: arg_chip,
-        selected: args.option.clone(),
+        selected: args
+            .option
+            .iter()
+            .flat_map(|opt_name| flat_options.iter().position(|o| &o.name == opt_name))
+            .collect(),
+        flat_options,
         options: template.options.clone(),
     };
 
     let mut same_selection_group: HashMap<&str, Vec<&str>> = HashMap::new();
 
     for option in &selected_config.selected {
+        let option = selected_config.flat_options[*option].name.as_str();
         // Find the matching option in the template
         let mut option_found = false;
         let mut option_found_for_chip = false;
-        for &option_item in all_options.iter().filter(|item| item.name == *option) {
+        for &option_item in all_options.iter().filter(|item| item.name == option) {
             option_found = true; // The input refers to an existing option.
 
             // Check if the chip is supported. If the chip list is empty, all chips are supported.
@@ -749,7 +763,7 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
                         .entry(&option_item.selection_group)
                         .or_default();
 
-                    if !options.contains(&option.as_str()) {
+                    if !options.contains(&option) {
                         options.push(option);
                     }
                 }

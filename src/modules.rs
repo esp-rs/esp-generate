@@ -200,12 +200,6 @@ pub fn populate_module_category(chip: Chip, options: &mut [GeneratorOptionItem])
 
         category.options.clear();
 
-        let mut opt = template_opt.clone();
-        opt.name = "generic".to_string();
-        opt.display_name = "Generic/unknown (no GPIO reservations)".to_string();
-        opt.selection_group = "module".to_string();
-        category.options.push(GeneratorOptionItem::Option(opt));
-
         for module in modules {
             let mut opt = template_opt.clone();
             opt.name = module.name.to_string();

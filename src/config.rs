@@ -7,17 +7,28 @@ pub struct ActiveConfiguration {
     /// The chip that is configured for
     pub chip: Chip,
     /// The names of the selected options
-    pub selected: Vec<String>,
-    /// All available options
+    pub selected: Vec<usize>,
+    /// The tree of all available options
     pub options: Vec<GeneratorOptionItem>,
+    /// All available option items (categories are not included), flattened to avoid the need for recursion.
+    pub flat_options: Vec<GeneratorOption>,
+}
+
+pub fn flatten_options(options: &[GeneratorOptionItem]) -> Vec<GeneratorOption> {
+    options
+        .iter()
+        .flat_map(|item| match item {
+            GeneratorOptionItem::Category(category) => flatten_options(&category.options),
+            GeneratorOptionItem::Option(option) => vec![option.clone()],
+        })
+        .collect()
 }
 
 impl ActiveConfiguration {
     pub fn is_group_selected(&self, group: &str) -> bool {
-        self.selected.iter().any(|s| {
-            let option = find_option(s, &self.options).unwrap();
-            option.selection_group == group
-        })
+        self.selected
+            .iter()
+            .any(|s| self.flat_options[*s].selection_group == group)
     }
 
     pub fn is_selected(&self, option: &str) -> bool {
@@ -25,24 +36,22 @@ impl ActiveConfiguration {
     }
 
     pub fn selected_index(&self, option: &str) -> Option<usize> {
-        self.selected.iter().position(|s| s == option)
+        self.selected
+            .iter()
+            .position(|s| self.flat_options[*s].name == option)
     }
 
     /// Tries to deselect all options in a selection group. Returns false if it's prevented by some
     /// requirement.
-    fn deselect_group(
-        selected: &mut Vec<String>,
-        options: &[GeneratorOptionItem],
-        group: &str,
-    ) -> bool {
+    fn deselect_group(selected: &mut Vec<usize>, options: &[GeneratorOption], group: &str) -> bool {
         // No group, nothing to deselect
         if group.is_empty() {
             return true;
         }
 
         // Avoid deselecting some options then failing.
-        if !selected.iter().all(|s| {
-            let o = find_option(s, options).unwrap();
+        if !selected.iter().copied().all(|s| {
+            let o = &options[s];
             if o.selection_group == group {
                 // We allow deselecting group options because we are changing the options in the
                 // group, so after this operation the group have a selected item still.
@@ -54,23 +63,25 @@ impl ActiveConfiguration {
             return false;
         }
 
-        selected.retain(|s| {
-            let option = find_option(s, options).unwrap();
-            option.selection_group != group
-        });
+        selected.retain(|s| options[*s].selection_group != group);
 
         true
     }
 
-    pub fn select(&mut self, option: String) {
-        let o = find_option(&option, &self.options).unwrap();
+    pub fn select(&mut self, option: &str) {
+        let (index, _o) = find_option(option, &self.flat_options).unwrap();
+        self.select_idx(index);
+    }
+
+    pub fn select_idx(&mut self, idx: usize) {
+        let o = &self.flat_options[idx];
         if !self.is_option_active(o) {
             return;
         }
-        if !Self::deselect_group(&mut self.selected, &self.options, &o.selection_group) {
+        if !Self::deselect_group(&mut self.selected, &self.flat_options, &o.selection_group) {
             return;
         }
-        self.selected.push(option);
+        self.selected.push(idx);
     }
 
     /// Returns whether an item is active (can be selected).
@@ -117,7 +128,7 @@ impl ActiveConfiguration {
             }
 
             // Requirement is a group that must have a selected option?
-            let is_group = Self::group_exists(key, &self.options);
+            let is_group = Self::group_exists(key, &self.flat_options);
             if is_group && self.is_group_selected(key) == expected {
                 continue;
             }
@@ -143,8 +154,8 @@ impl ActiveConfiguration {
         }
 
         // Does any of the enabled options have a requirement against this one?
-        for selected in self.selected.iter() {
-            let Some(selected_option) = find_option(selected, &self.options) else {
+        for selected in self.selected.iter().copied() {
+            let Some(selected_option) = self.flat_options.get(selected) else {
                 ratatui::restore();
                 panic!("selected option not found: {selected}");
             };
@@ -163,22 +174,23 @@ impl ActiveConfiguration {
 
     // An option can only be disabled if it's not required by any other selected option.
     pub fn can_be_disabled(&self, option: &str) -> bool {
-        Self::can_be_disabled_impl(&self.selected, &self.options, option, false)
+        let (option, _) = find_option(option, &self.flat_options).unwrap();
+        Self::can_be_disabled_impl(&self.selected, &self.flat_options, option, false)
     }
 
     fn can_be_disabled_impl(
-        selected: &[String],
-        options: &[GeneratorOptionItem],
-        option: &str,
+        selected: &[usize],
+        options: &[GeneratorOption],
+        option: usize,
         allow_deselecting_group: bool,
     ) -> bool {
-        let op = find_option(option, options).unwrap();
-        for selected in selected.iter() {
-            let selected_option = find_option(selected, options).unwrap();
+        let op = &options[option];
+        for selected in selected.iter().copied() {
+            let selected_option = &options[selected];
             if selected_option
                 .requires
                 .iter()
-                .any(|o| o == option || (o == &op.selection_group && !allow_deselecting_group))
+                .any(|o| o == &op.name || (o == &op.selection_group && !allow_deselecting_group))
             {
                 return false;
             }
@@ -195,7 +207,7 @@ impl ActiveConfiguration {
         let mut disabled_by = Vec::new();
 
         self.selected.iter().for_each(|opt| {
-            let opt = find_option(opt.as_str(), &self.options).unwrap();
+            let opt = &self.flat_options[*opt];
             for o in opt.requires.iter() {
                 if let Some(disables) = o.strip_prefix("!") {
                     if disables == option.name() {
@@ -223,11 +235,8 @@ impl ActiveConfiguration {
         }
     }
 
-    fn group_exists(key: &str, options: &[GeneratorOptionItem]) -> bool {
-        options.iter().any(|o| match o {
-            GeneratorOptionItem::Option(o) => o.selection_group == key,
-            GeneratorOptionItem::Category(c) => Self::group_exists(key, &c.options),
-        })
+    fn group_exists(key: &str, options: &[GeneratorOption]) -> bool {
+        options.iter().any(|o| o.selection_group == key)
     }
 }
 
@@ -239,24 +248,9 @@ pub struct Relationships<'a> {
 
 pub fn find_option<'c>(
     option: &str,
-    options: &'c [GeneratorOptionItem],
-) -> Option<&'c GeneratorOption> {
-    for item in options {
-        match item {
-            GeneratorOptionItem::Category(category) => {
-                let found_option = find_option(option, &category.options);
-                if found_option.is_some() {
-                    return found_option;
-                }
-            }
-            GeneratorOptionItem::Option(item) => {
-                if item.name == option {
-                    return Some(item);
-                }
-            }
-        }
-    }
-    None
+    options: &'c [GeneratorOption],
+) -> Option<(usize, &'c GeneratorOption)> {
+    options.iter().enumerate().find(|(_, o)| o.name == option)
 }
 
 #[cfg(test)]
@@ -264,7 +258,7 @@ mod test {
     use esp_metadata::Chip;
 
     use crate::{
-        config::{ActiveConfiguration, find_option},
+        config::*,
         template::{GeneratorOption, GeneratorOptionCategory, GeneratorOptionItem},
     };
 
@@ -290,7 +284,8 @@ mod test {
         ];
         let active = ActiveConfiguration {
             chip: Chip::Esp32,
-            selected: vec!["option1".to_string()],
+            selected: vec![0],
+            flat_options: flatten_options(&options),
             options,
         };
 
@@ -334,21 +329,22 @@ mod test {
         let mut active = ActiveConfiguration {
             chip: Chip::Esp32,
             selected: vec![],
+            flat_options: flatten_options(&options),
             options,
         };
 
-        active.select("option1".to_string());
-        assert_eq!(active.selected, &["option1"]);
+        active.select("option1");
+        assert_eq!(active.selected, &[0]);
 
-        active.select("option2".to_string());
-        assert_eq!(active.selected, &["option2"]);
+        active.select("option2");
+        assert_eq!(active.selected, &[1]);
 
         // Enable option3, which prevents deselecting option2, which disallows selecting option1
-        active.select("option3".to_string());
-        assert_eq!(active.selected, &["option2", "option3"]);
+        active.select("option3");
+        assert_eq!(active.selected, &[1, 2]);
 
-        active.select("option1".to_string());
-        assert_eq!(active.selected, &["option2", "option3"]);
+        active.select("option1");
+        assert_eq!(active.selected, &[1, 2]);
     }
 
     #[test]
@@ -398,27 +394,28 @@ mod test {
         let mut active = ActiveConfiguration {
             chip: Chip::Esp32,
             selected: vec![],
+            flat_options: flatten_options(&options),
             options,
         };
 
         // Nothing is selected in group, so option3 can't be selected
-        active.select("option3".to_string());
+        active.select("option3");
         assert_eq!(active.selected, empty());
 
-        active.select("option1".to_string());
-        assert_eq!(active.selected, &["option1"]);
+        active.select("option1");
+        assert_eq!(active.selected, &[0]);
 
-        active.select("option3".to_string());
-        assert_eq!(active.selected, &["option1", "option3"]);
+        active.select("option3");
+        assert_eq!(active.selected, &[0, 2]);
 
         // The rejection algorithm must not trigger on unrelated options. This option is
         // meant to test the group filtering. It prevents disabling "option3" but it does not
         // belong to `group`, so it should not prevent selecting between "option1" or "option2".
-        active.select("option4".to_string());
-        assert_eq!(active.selected, &["option1", "option3", "option4"]);
+        active.select("option4");
+        assert_eq!(active.selected, &[0, 2, 3]);
 
-        active.select("option2".to_string());
-        assert_eq!(active.selected, &["option3", "option4", "option2"]);
+        active.select("option2");
+        assert_eq!(active.selected, &[2, 3, 1]);
     }
 
     #[test]
@@ -444,11 +441,12 @@ mod test {
         let mut active = ActiveConfiguration {
             chip: Chip::Esp32,
             selected: vec![],
+            flat_options: flatten_options(&options),
             options,
         };
 
-        active.select("option1".to_string());
-        active.select("option2".to_string());
+        active.select("option1");
+        active.select("option2");
 
         // Option1 can't be deselected because option2 requires that a `group` option is selected
         assert!(!active.can_be_disabled("option1"));
@@ -477,15 +475,16 @@ mod test {
         let mut active = ActiveConfiguration {
             chip: Chip::Esp32,
             selected: vec![],
+            flat_options: flatten_options(&options),
             options,
         };
 
-        active.select("option1".to_string());
-        let opt2 = find_option("option2", &active.options).unwrap();
+        active.select("option1");
+        let (_, opt2) = find_option("option2", &active.flat_options).unwrap();
         assert!(!active.is_option_active(opt2));
     }
 
-    fn empty() -> &'static [&'static str] {
+    fn empty() -> &'static [usize] {
         &[]
     }
 }

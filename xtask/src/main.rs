@@ -8,7 +8,7 @@ use std::{
 use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use esp_generate::{
-    config::{ActiveConfiguration, find_option},
+    config::{ActiveConfiguration, find_option, flatten_options},
     modules::populate_module_category,
     template::{GeneratorOptionCategory, GeneratorOptionItem, Template},
 };
@@ -182,37 +182,31 @@ fn check(
 }
 
 fn enable_config_and_dependencies(config: &mut ActiveConfiguration, option: &str) -> Result<()> {
-    if config.selected.contains(&option.to_string()) {
+    let (idx, option) = find_option(option, &config.flat_options)
+        .ok_or_else(|| anyhow::anyhow!("Option not found: {option}"))?;
+
+    if config.selected.contains(&idx) {
         return Ok(());
     }
 
-    // We copy `requires` and `name` into separate values so that the
-    // borrow from `find_option` ends before we recursive call and later
+    // We copy `requires` into so that the borrow from `find_option`
+    // ends before we recursive call and later
     // mutate `config`. Not doing so would make
     // the borrow checker sad.
-    let (requires, option_name) = {
-        let option = find_option(option, &config.options)
-            .ok_or_else(|| anyhow::anyhow!("Option not found: {option}"))?;
-
-        (option.requires.clone(), option.name.clone())
-    };
-
-    for dependency in &requires {
+    for dependency in option.requires.clone() {
         if dependency.starts_with('!') {
             continue;
         }
-        enable_config_and_dependencies(config, dependency)?;
+        enable_config_and_dependencies(config, &dependency)?;
     }
 
-    let option = find_option(&option_name, &config.options).ok_or_else(|| {
-        anyhow::anyhow!("Option not found after resolving dependencies: {option_name}")
-    })?;
+    let option = &config.flat_options[idx];
 
     if !config.is_option_active(option) {
         return Ok(());
     }
 
-    config.select(option_name);
+    config.select_idx(idx);
 
     Ok(())
 }
@@ -221,7 +215,7 @@ fn is_valid(config: &ActiveConfiguration) -> bool {
     let mut groups = HashSet::new();
 
     for item in config.selected.iter() {
-        let option = find_option(item, &config.options).unwrap();
+        let option = &config.flat_options[*item];
 
         // Option could not have been selected on UI.
         if !config.is_option_active(option) {
@@ -239,17 +233,18 @@ fn is_valid(config: &ActiveConfiguration) -> bool {
 }
 
 fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String>>> {
-    let options = include_str!("../../template/template.yaml");
-    let mut template = serde_yaml::from_str::<Template>(options)?;
-
     let ignored_categories = if all_combinations {
         IGNORED_CATEGORIES_FULL
     } else {
         IGNORED_CATEGORIES
     };
 
+    let options = include_str!("../../template/template.yaml");
+    let mut template = serde_yaml::from_str::<Template>(options)?;
+
     // Populate the module category with chip-specific modules
     populate_module_category(chip, &mut template.options);
+    let flat_options = flatten_options(&template.options);
 
     fn collect<'data>(
         all_options: &mut Vec<&'data str>,
@@ -299,10 +294,12 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
 
     for base_template in &template_selectors {
         for option in &all_options {
-            let option = find_option(&option, &template.options).unwrap();
+            let (_idx, option) = find_option(&option, &flat_options)
+                .unwrap_or_else(|| panic!("Option not found: {}", option));
             let mut config = ActiveConfiguration {
                 chip,
                 selected: vec![],
+                flat_options: flat_options.clone(),
                 options: template.options.clone(),
             };
 
@@ -323,7 +320,14 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     available_options.dedup();
 
     if !all_combinations {
-        return Ok(available_options);
+        return Ok(available_options
+            .into_iter()
+            .map(|idxs| {
+                idxs.into_iter()
+                    .map(|idx| flat_options[idx].name.clone())
+                    .collect()
+            })
+            .collect());
     }
 
     // Return all the combination of available options
@@ -331,6 +335,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     let mut result = vec![];
     // Avoid cloning the template for each checked configuration.
     let mut template_options = Some(template.options);
+    let mut flat_options = Some(flat_options);
     for options in available_options.iter().map(|v| v.as_slice()).powerset() {
         let mut config = ActiveConfiguration {
             chip,
@@ -342,6 +347,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
                 .cloned()
                 .collect(),
             options: template_options.take().unwrap(),
+            flat_options: flat_options.take().unwrap(),
         };
 
         if is_valid(&config) {
@@ -350,6 +356,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
         }
 
         template_options = Some(config.options);
+        flat_options = Some(config.flat_options);
     }
 
     result.sort();
@@ -362,7 +369,16 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
         elapsed
     );
 
-    Ok(result)
+    let flat_options = flat_options.unwrap();
+
+    Ok(result
+        .into_iter()
+        .map(|idxs| {
+            idxs.into_iter()
+                .map(|idx| flat_options[idx].name.clone())
+                .collect()
+        })
+        .collect())
 }
 
 fn generate(

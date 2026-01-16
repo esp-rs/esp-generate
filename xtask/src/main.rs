@@ -334,7 +334,13 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     for options in available_options.iter().map(|v| v.as_slice()).powerset() {
         let mut config = ActiveConfiguration {
             chip,
-            selected: options.into_iter().flatten().unique().cloned().collect(),
+            selected: options
+                .into_iter()
+                .flatten()
+                .collect::<HashSet<_>>() // We don't need iteration order stability, slightly faster than `.unique()`
+                .into_iter()
+                .cloned()
+                .collect(),
             options: template_options.take().unwrap(),
         };
 

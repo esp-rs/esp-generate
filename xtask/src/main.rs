@@ -129,13 +129,12 @@ fn check(
 
         // Ensure that the generated project builds without errors:
         let output = Command::new("cargo")
-            .args([if build { "build" } else { "check" }, "--quiet"])
+            .args([if build { "build" } else { "check" }])
             .env_remove("RUSTUP_TOOLCHAIN")
             .current_dir(project_path.join(PROJECT_NAME))
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
             .output()?;
         if !output.status.success() {
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
             bail!("Failed to execute cargo check subcommand")
         }
 
@@ -145,10 +144,9 @@ fn check(
                 .args(["test", "--no-run"])
                 .env_remove("RUSTUP_TOOLCHAIN")
                 .current_dir(project_path.join(PROJECT_NAME))
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
                 .output()?;
             if !output.status.success() {
+                eprintln!("{}", String::from_utf8_lossy(&output.stderr));
                 bail!("Failed to execute cargo test subcommand")
             }
         }
@@ -158,10 +156,9 @@ fn check(
             .args(["clippy", "--no-deps", "--", "-Dwarnings"])
             .env_remove("RUSTUP_TOOLCHAIN")
             .current_dir(project_path.join(PROJECT_NAME))
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
             .output()?;
         if !output.status.success() {
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
             bail!("Failed to execute cargo clippy subcommand")
         }
 
@@ -170,10 +167,9 @@ fn check(
             .args(["fmt", "--", "--check"])
             .env_remove("RUSTUP_TOOLCHAIN")
             .current_dir(project_path.join(PROJECT_NAME))
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
             .output()?;
         if !output.status.success() {
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
             bail!("Failed to execute cargo fmt subcommand")
         }
     }

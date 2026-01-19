@@ -1,6 +1,7 @@
 use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use esp_generate::Chip;
+use esp_generate::modules::populate_module_category;
 use esp_generate::template::{GeneratorOption, GeneratorOptionItem, Template};
 use esp_generate::{
     append_list_as_sentence,
@@ -28,7 +29,6 @@ use taplo::formatter::Options;
 use crate::template_files::TEMPLATE_FILES;
 
 mod check;
-mod module_selector;
 mod template_files;
 mod toolchain;
 mod tui;
@@ -378,7 +378,7 @@ fn main() -> Result<()> {
 
     let mut template = TEMPLATE.clone();
     remove_incompatible_chip_options(chip, &mut template.options);
-    module_selector::populate_module_category(chip, &mut template.options);
+    populate_module_category(chip, &mut template.options);
     process_options(&template, &args)?;
 
     // Initial selection for TUI/headless, including toolchain if provided.

@@ -576,7 +576,7 @@ dependencies = [
 [[package]]
 name = "esp-metadata-generated"
 version = "0.3.0"
-source = "git+https://github.com/esp-rs/esp-hal?rev=66c4313eb#66c4313eb6f4209292487bfc28229ff70529d3de"
+source = "git+https://github.com/esp-rs/esp-hal?rev=f9150cbbc#f9150cbbca2b905e8b5c605729410acc8c40a9ef"
 
 [[package]]
 name = "etcetera"

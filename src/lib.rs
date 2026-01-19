@@ -1,5 +1,7 @@
-use esp_metadata_generated::MemoryRegion;
+use esp_metadata_generated::{MemoryRegion, PinInfo};
 use serde::{Deserialize, Serialize};
+
+use crate::modules::Module;
 
 pub mod cargo;
 pub mod config;
@@ -59,6 +61,28 @@ impl Chip {
             .memory_layout()
             .region("dram2_uninit")
             .expect("All chips should have a dram2_uninit region")
+    }
+
+    pub fn pins(self) -> &'static [PinInfo] {
+        self.metadata().pins()
+    }
+
+    pub fn modules(self) -> &'static [Module] {
+        match self {
+            Chip::Esp32 => crate::modules::ESP32_MODULES,
+            Chip::Esp32c2 => crate::modules::ESP32C2_MODULES,
+            Chip::Esp32c3 => crate::modules::ESP32C3_MODULES,
+            Chip::Esp32c6 => crate::modules::ESP32C6_MODULES,
+            Chip::Esp32h2 => crate::modules::ESP32H2_MODULES,
+            Chip::Esp32s2 => crate::modules::ESP32S2_MODULES,
+            Chip::Esp32s3 => crate::modules::ESP32S3_MODULES,
+        }
+    }
+
+    pub fn module_by_name(&self, module_name: &str) -> Option<&'static Module> {
+        self.modules()
+            .iter()
+            .find(|module| module.name == module_name)
     }
 }
 

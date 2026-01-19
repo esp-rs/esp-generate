@@ -14,6 +14,7 @@ use esp_generate::{
 };
 use inquire::{Select, Text};
 use ratatui::crossterm::event;
+use std::fmt::Write;
 use std::{
     collections::HashMap,
     env, fs,
@@ -402,25 +403,55 @@ fn main() -> Result<()> {
         variables.push(("rust_toolchain".to_string(), tc));
     }
 
+    let mut reserved_gpio_code = String::new();
+
     if let Some(ref module_name) = selected_module {
-        if let Some(module) = esp_generate::modules::find_module(module_name) {
-            // Only set module-selected if there are GPIOs to reserve,
-            // otherwise the generated code would have unused `peripherals` variable
-            if !module.reserved_gpios.is_empty() {
-                selected.push("module-selected".to_string());
-                if module.octal_psram {
-                    selected.push("octal-psram".to_string());
-                }
-                let reserved_gpio_code = module
-                    .reserved_gpios
+        if let Some(module) = chip.module_by_name(module_name) {
+            let restricted_pins = chip.pins().iter().filter(|pin| {
+                module
+                    .remove_pins
                     .iter()
-                    .map(|g| format!("    let _ = peripherals.GPIO{g};"))
+                    .any(|lim| pin.limitations.contains(lim))
+            });
+            let strapping_pins = chip
+                .pins()
+                .iter()
+                .filter(|pin| pin.limitations.contains(&"strapping"))
+                .collect::<Vec<_>>();
+
+            if !strapping_pins.is_empty() {
+                let strapping = strapping_pins
+                    .iter()
+                    .map(|pin| format!("// - GPIO{}", pin.pin))
                     .collect::<Vec<_>>()
                     .join("\n");
-                variables.push(("reserved_gpio_code".to_string(), reserved_gpio_code));
+                writeln!(
+                    &mut reserved_gpio_code,
+                    r#"// The following pins are used to bootstrap the chip. They are available
+                    // for use, but check the datasheet of the module for more information on them.
+                    {strapping}"#
+                )
+                .unwrap();
             }
+
+            // Only set module-selected if there are GPIOs to reserve
+            if restricted_pins.clone().next().is_some() {
+                selected.push("module-selected".to_string());
+
+                let pin_plucker = restricted_pins
+                    .map(|pin| format!("    let _ = peripherals.GPIO{};", pin.pin))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                writeln!(
+                    &mut reserved_gpio_code,
+                    r#"// These GPIO pins are in use by some feature of the module and should not be used.
+                    {pin_plucker}"#
+                )
+                .unwrap();
+            };
         }
     }
+    variables.push(("reserved_gpio_code".to_string(), reserved_gpio_code));
 
     let project_dir = path.join(&name);
     fs::create_dir(&project_dir)?;

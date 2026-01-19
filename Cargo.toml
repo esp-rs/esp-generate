@@ -24,11 +24,11 @@ update-informer = ["dep:update-informer"]
 
 [dependencies]
 anyhow          = "1.0.100"
-strum           = "0.27.2"
+strum           = { version = "0.27.2", features = ["derive"] }
 inquire         = "0.9.1"
 clap            = { version = "4.6.1", features = ["derive"] }
 env_logger      = "0.11.8"
-esp-metadata    = { version = "0.10.1", features = ["clap"] }
+esp-metadata-generated = { version = "0.4.0", features = ["build-script"] }
 log             = "0.4.29"
 # Ratatui 0.30.0 has a bug in the TUI display for Windows, we are using the older version until it is fixed.
 # For more details: https://github.com/esp-rs/esp-generate/issues/309

@@ -10,7 +10,7 @@ use ratatui::crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 
-use esp_metadata::Chip;
+use esp_metadata_generated::Chip;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Version {

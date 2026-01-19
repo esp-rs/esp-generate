@@ -1,4 +1,4 @@
-use esp_metadata::Chip;
+use crate::Chip;
 
 #[derive(Clone, Debug)]
 pub struct Module {

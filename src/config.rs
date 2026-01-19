@@ -1,4 +1,4 @@
-use esp_metadata::Chip;
+use crate::Chip;
 
 use crate::template::{GeneratorOption, GeneratorOptionItem};
 

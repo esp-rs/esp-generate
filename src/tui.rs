@@ -4,13 +4,13 @@ use std::io;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use crate::Chip;
 use env_logger::{Builder, Env, Logger};
 use esp_generate::{
     append_list_as_sentence,
     config::{ActiveConfiguration, Relationships, flatten_options},
     template::GeneratorOptionItem,
 };
-use esp_metadata::Chip;
 use log::{Level, LevelFilter, Log, Metadata, Record, SetLoggerError};
 use ratatui::crossterm::{
     ExecutableCommand,
@@ -509,8 +509,8 @@ impl App {
 #[cfg(test)]
 mod test {
     use super::Repository;
+    use crate::Chip;
     use esp_generate::template::{GeneratorOption, GeneratorOptionItem};
-    use esp_metadata::Chip;
 
     fn option(name: &str, requires: &[&str]) -> GeneratorOptionItem {
         GeneratorOptionItem::Option(GeneratorOption {

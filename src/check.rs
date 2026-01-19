@@ -121,7 +121,7 @@ pub fn check(
             &[],
             headless,
             Some(&["cargo", "install", "probe-rs-tools", "--locked"]),
-            Some((0, 30, 0)),
+            Some((0, 31, 0)),
         )
     } else {
         get_version("probe-rs", &[])
@@ -209,9 +209,9 @@ fn create_check_results(
     requirements_unsatisfied |= format_result(
         !probe_rs_required,
         "probe-rs",
-        check_version(probers_version, 0, 30, 0),
+        check_version(probers_version, 0, 31, 0),
         format!(
-            "minimum {probers_suggestion_kind} version is 0.30.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"
+            "minimum {probers_suggestion_kind} version is 0.31.0 - see https://probe.rs/docs/getting-started/installation/ for how to upgrade"
         ),
         format!(
             "not found - see https://probe.rs/docs/getting-started/installation/ for how to install ({probers_suggestion_kind})"
@@ -569,7 +569,7 @@ espflash 1.7.0"#;
                 /*probers_version*/
                 Some(Version {
                     major: 0,
-                    minor: 30,
+                    minor: 31,
                     patch: 0
                 }),
                 /*esp_config_version*/
@@ -584,7 +584,7 @@ espflash 1.7.0"#;
 Checking installed versions
 🆗 Rust (nightly): 1.88.0
 🆗 espflash: 3.3.0
-🆗 probe-rs: 0.30.0
+🆗 probe-rs: 0.31.0
 🆗 esp-config: 0.5.0
 "
             .to_string()

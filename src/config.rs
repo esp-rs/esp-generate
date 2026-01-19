@@ -296,7 +296,7 @@ pub fn find_option<'c>(
 
 #[cfg(test)]
 mod test {
-    use esp_metadata::Chip;
+    use crate::Chip;
 
     use crate::{
         config::*,

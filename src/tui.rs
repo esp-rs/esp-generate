@@ -3,7 +3,7 @@ use std::io;
 
 use esp_generate::{
     append_list_as_sentence,
-    config::{ActiveConfiguration, Relationships},
+    config::{ActiveConfiguration, Relationships, flatten_options},
     template::GeneratorOptionItem,
 };
 use esp_metadata::Chip;
@@ -21,10 +21,15 @@ pub struct Repository {
 
 impl Repository {
     pub fn new(chip: Chip, options: Vec<GeneratorOptionItem>, selected: &[String]) -> Self {
+        let flat_options = flatten_options(&options);
         Self {
             config: ActiveConfiguration {
                 chip,
-                selected: Vec::from(selected),
+                selected: selected
+                    .iter()
+                    .flat_map(|option| flat_options.iter().position(|o| &o.name == option))
+                    .collect(),
+                flat_options,
                 options,
             },
             path: Vec::new(),
@@ -33,15 +38,14 @@ impl Repository {
 
     /// Returns the *explicitly* selected toolchain, if there is any
     fn selected_toolchain(&self) -> Option<String> {
-        self.config
-            .selected
-            .iter()
-            .find(|name| {
-                esp_generate::config::find_option(name, &self.config.options)
-                    .map(|opt| opt.selection_group == "toolchain")
-                    .unwrap_or(false)
-            })
-            .cloned()
+        self.config.selected.iter().find_map(|idx| {
+            let option = &self.config.flat_options[*idx];
+            if option.selection_group == "toolchain" {
+                Some(option.name.clone())
+            } else {
+                None
+            }
+        })
     }
 
     fn current_level(&self) -> &[GeneratorOptionItem] {
@@ -118,7 +122,7 @@ impl Repository {
                 self.config.selected.swap_remove(i);
             }
         } else {
-            self.config.select(option.name.clone());
+            self.config.select(&option.name.clone());
         }
     }
 
@@ -142,14 +146,19 @@ impl Repository {
                 } else {
                     ""
                 };
-                let indicator =
-                    if self.config.selected.iter().any(|o| o == v.name()) && level_active {
-                        style.selected
-                    } else if v.is_category() {
-                        style.category
-                    } else {
-                        style.unselected
-                    };
+                let indicator = if self
+                    .config
+                    .selected
+                    .iter()
+                    .any(|o| self.config.flat_options[*o].name == v.name())
+                    && level_active
+                {
+                    style.selected
+                } else if v.is_category() {
+                    style.category
+                } else {
+                    style.unselected
+                };
                 // reserve indicator spacing; saturating_sub keeps padding non-negative so narrow widths don't overflow
                 let padding = (width as usize).saturating_sub(v.title().len() + 4);
                 (
@@ -260,7 +269,7 @@ pub enum AppResult {
 
 pub struct App {
     state: Vec<ListState>,
-    repository: Repository,
+    pub repository: Repository,
     confirm_quit: bool,
     ui_elements: UiElements,
     colors: Colors,
@@ -318,11 +327,13 @@ impl App {
     pub fn set_toolchains_loading(&mut self, loading: bool) {
         self.toolchains_loading = loading;
     }
-    pub fn options_mut(&mut self) -> &mut [GeneratorOptionItem] {
-        &mut self.repository.config.options
-    }
     pub fn selected_options(&self) -> Vec<String> {
-        self.repository.config.selected.clone()
+        self.repository
+            .config
+            .selected
+            .iter()
+            .map(|idx| self.repository.config.flat_options[*idx].name.clone())
+            .collect()
     }
 }
 

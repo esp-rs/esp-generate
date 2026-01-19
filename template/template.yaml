@@ -3,7 +3,7 @@ options:
   - !Category
     name: module
     display_name: Module/Board selection
-    help: Select your specific ESP module to automatically reserve flash-connected GPIOs.
+    help: Select your specific ESP32 module. This selection is optional, but it will generate code to help you avoid using reserved GPIOs.
     options:
       - !Option
         name: PLACEHOLDER

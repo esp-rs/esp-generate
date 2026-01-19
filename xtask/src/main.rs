@@ -181,8 +181,12 @@ fn check(
     Ok(())
 }
 
-fn enable_config_and_dependencies(config: &mut ActiveConfiguration, option: &str) -> Result<()> {
-    let (idx, option) = find_option(option, &config.flat_options)
+fn enable_config_and_dependencies(
+    config: &mut ActiveConfiguration,
+    option: &str,
+    chip: Chip,
+) -> Result<()> {
+    let (idx, option) = find_option(option, &config.flat_options, chip)
         .ok_or_else(|| anyhow::anyhow!("Option not found: {option}"))?;
 
     if config.selected.contains(&idx) {
@@ -197,7 +201,7 @@ fn enable_config_and_dependencies(config: &mut ActiveConfiguration, option: &str
         if dependency.starts_with('!') {
             continue;
         }
-        enable_config_and_dependencies(config, &dependency)?;
+        enable_config_and_dependencies(config, &dependency, chip)?;
     }
 
     let option = &config.flat_options[idx];
@@ -250,16 +254,19 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
         all_options: &mut Vec<&'data str>,
         category: &'data GeneratorOptionCategory,
         ignored_categories: &[&str],
+        chip: Chip,
     ) {
         for option in &category.options {
             match option {
                 GeneratorOptionItem::Option(option) => {
-                    all_options.push(option.name.as_str());
+                    if option.chips.is_empty() || option.chips.contains(&chip) {
+                        all_options.push(option.name.as_str());
+                    }
                 }
                 GeneratorOptionItem::Category(category)
                     if !ignored_categories.contains(&category.name.as_str()) =>
                 {
-                    collect(all_options, category, ignored_categories)
+                    collect(all_options, category, ignored_categories, chip)
                 }
                 _ => {}
             }
@@ -276,14 +283,14 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
             GeneratorOptionItem::Option(option) => {
                 if option.selection_group == "base-template" {
                     template_selectors.push(Some(option.name.clone()));
-                } else {
+                } else if option.chips.is_empty() || option.chips.contains(&chip) {
                     all_options.push(option.name.as_str());
                 }
             }
             GeneratorOptionItem::Category(category)
                 if !ignored_categories.contains(&category.name.as_str()) =>
             {
-                collect(&mut all_options, &category, ignored_categories)
+                collect(&mut all_options, &category, ignored_categories, chip)
             }
             _ => {}
         }
@@ -294,7 +301,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
 
     for base_template in &template_selectors {
         for option in &all_options {
-            let (_idx, option) = find_option(&option, &flat_options)
+            let (_, option) = find_option(&option, &flat_options, chip)
                 .unwrap_or_else(|| panic!("Option not found: {}", option));
             let mut config = ActiveConfiguration {
                 chip,
@@ -304,10 +311,10 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
             };
 
             if let Some(base_template) = base_template {
-                enable_config_and_dependencies(&mut config, &base_template)?;
+                enable_config_and_dependencies(&mut config, &base_template, chip)?;
             }
 
-            enable_config_and_dependencies(&mut config, &option.name)?;
+            enable_config_and_dependencies(&mut config, &option.name, chip)?;
 
             if is_valid(&config) {
                 config.selected.sort();

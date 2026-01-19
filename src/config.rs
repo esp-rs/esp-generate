@@ -69,7 +69,7 @@ impl ActiveConfiguration {
     }
 
     pub fn select(&mut self, option: &str) {
-        let (index, _o) = find_option(option, &self.flat_options).unwrap();
+        let (index, _o) = find_option(option, &self.flat_options, self.chip).unwrap();
         self.select_idx(index);
     }
 
@@ -174,7 +174,7 @@ impl ActiveConfiguration {
 
     // An option can only be disabled if it's not required by any other selected option.
     pub fn can_be_disabled(&self, option: &str) -> bool {
-        let (option, _) = find_option(option, &self.flat_options).unwrap();
+        let (option, _) = find_option(option, &self.flat_options, self.chip).unwrap();
         Self::can_be_disabled_impl(&self.selected, &self.flat_options, option, false)
     }
 
@@ -249,8 +249,12 @@ pub struct Relationships<'a> {
 pub fn find_option<'c>(
     option: &str,
     options: &'c [GeneratorOption],
+    chip: Chip,
 ) -> Option<(usize, &'c GeneratorOption)> {
-    options.iter().enumerate().find(|(_, o)| o.name == option)
+    options
+        .iter()
+        .enumerate()
+        .find(|(_, opt)| opt.name == option && (opt.chips.is_empty() || opt.chips.contains(&chip)))
 }
 
 #[cfg(test)]
@@ -480,7 +484,7 @@ mod test {
         };
 
         active.select("option1");
-        let (_, opt2) = find_option("option2", &active.flat_options).unwrap();
+        let (_, opt2) = find_option("option2", &active.flat_options, Chip::Esp32).unwrap();
         assert!(!active.is_option_active(opt2));
     }
 

@@ -341,7 +341,7 @@ fn main() -> Result<()> {
 
     let flat_options = flatten_options(&template.options);
     let selected_toolchain = selected.iter().find_map(|name| {
-        let (_, opt) = find_option(name, &flat_options)?;
+        let (_, opt) = find_option(name, &flat_options, chip)?;
         if opt.selection_group == "toolchain" {
             Some(name.clone())
         } else {
@@ -350,7 +350,7 @@ fn main() -> Result<()> {
     });
 
     let selected_module = selected.iter().find_map(|name| {
-        let (_, opt) = find_option(name, &flat_options)?;
+        let (_, opt) = find_option(name, &flat_options, chip)?;
         if opt.selection_group == "module" {
             Some(name.clone())
         } else {
@@ -360,7 +360,7 @@ fn main() -> Result<()> {
 
     // Also add the active selection groups
     for idx in 0..selected.len() {
-        let (_, option) = find_option(&selected[idx], &flat_options).unwrap();
+        let (_, option) = find_option(&selected[idx], &flat_options, chip).unwrap();
         selected.push(option.selection_group.clone());
     }
 

@@ -162,7 +162,14 @@ impl SubCommands {
 
                         if !option.requires.is_empty() {
                             help_text.push_str(" Requires: ");
-                            help_text.push_str(&option.requires.join(", "));
+                            let readable = option.requires.iter().map(|option| {
+                                if let Some(stripped) = option.strip_prefix('!') {
+                                    format!("{} unselected", stripped)
+                                } else {
+                                    option.to_string()
+                                }
+                            });
+                            help_text.push_str(&readable.collect::<Vec<String>>().join(", "));
                             help_text.push('.');
                         }
                         let chip_info = chip_info_text(&all_options, option);

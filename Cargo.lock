@@ -568,6 +568,7 @@ dependencies = [
  "clap",
  "env_logger",
  "esp-metadata",
+ "indexmap",
  "inquire",
  "log",
  "quote",

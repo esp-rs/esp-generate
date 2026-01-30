@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - VSCode debugger launch configuration now sets `verifyBeforeFlashing` to `true` (#290)
+- esp-generate adds the selected template parameters to the generated code (#293)
+- Added `explain` and `list-options` subcommands (#293)
 
 ### Changed
 

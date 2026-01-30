@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use env_logger::{Builder, Env};
-use esp_generate::template::{GeneratorOptionItem, Template};
+use esp_generate::template::{GeneratorOption, GeneratorOptionItem, Template};
 use esp_generate::{
     append_list_as_sentence,
     config::{ActiveConfiguration, Relationships},
@@ -11,8 +11,10 @@ use esp_generate::{
     config::{find_option, flatten_options},
 };
 use esp_metadata::Chip;
+use indexmap::IndexMap;
 use inquire::{Select, Text};
 use ratatui::crossterm::event;
+use std::collections::HashSet;
 use std::{
     collections::HashMap,
     env, fs,
@@ -43,7 +45,7 @@ static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
 });
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = about(), long_about = None)]
+#[command(author, version, about = about(), long_about = None, subcommand_negates_reqs = true)]
 struct Args {
     /// Name of the project to generate
     name: Option<String>,
@@ -63,7 +65,7 @@ struct Args {
             for opt in option.options() {
                 // Remove duplicates, which usually are chip-specific variations of an option.
                 // An example of this is probe-rs.
-                if !all_options.contains(&opt) {
+                if !all_options.contains(&opt) && opt != "PLACEHOLDER" {
                     all_options.push(opt);
                 }
             }
@@ -82,8 +84,147 @@ struct Args {
     skip_update_check: bool,
 
     /// Rust toolchain to use (rustup toolchain name; must support the selected chip target)
+    ///
+    /// Note that in headless mode this is not checked.
     #[arg(long)]
     toolchain: Option<String>,
+
+    #[clap(subcommand)]
+    subcommands: Option<SubCommands>,
+}
+
+#[derive(Subcommand, Debug)]
+enum SubCommands {
+    /// List available template options
+    ListOptions,
+
+    /// Print information about a template option
+    Explain { option: String },
+}
+
+impl SubCommands {
+    fn handle(&self) -> Result<()> {
+        fn chip_info_text(options: &[&GeneratorOption], opt: &GeneratorOption) -> String {
+            let mut chips = Vec::new();
+            for option in options.iter().filter(|o| o.name == opt.name) {
+                chips.extend_from_slice(&option.chips);
+            }
+
+            let chip_count = Chip::iter().count();
+
+            if chips.is_empty() || chips.len() == chip_count {
+                String::new()
+            } else if chips.len() < chip_count / 2 {
+                format!(
+                    "Only available on {}.",
+                    chips
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                format!(
+                    "Not available on {}.",
+                    Chip::iter()
+                        .filter(|c| !chips.contains(c))
+                        .map(|c| c.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+        }
+
+        match self {
+            SubCommands::ListOptions => {
+                println!(
+                    "The following template options are available. The group names are not part of the option name. Only one option in a group can be selected."
+                );
+                let mut groups = IndexMap::new();
+                let mut seen = HashSet::new();
+                let all_options = TEMPLATE.all_options();
+                for (index, option) in all_options
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, o)| !["toolchain", "module"].contains(&o.selection_group.as_str()))
+                {
+                    let group = groups.entry(&option.selection_group).or_insert(Vec::new());
+
+                    if seen.insert(&option.name) {
+                        group.push(index);
+                    }
+                }
+                for (group, options) in groups {
+                    println!("Group: {}", group);
+                    for option in options {
+                        let option = &all_options[option];
+                        let mut help_text = option.display_name.clone();
+
+                        if !option.requires.is_empty() {
+                            help_text.push_str(" Requires: ");
+                            let readable = option.requires.iter().map(|option| {
+                                if let Some(stripped) = option.strip_prefix('!') {
+                                    format!("{} unselected", stripped)
+                                } else {
+                                    option.to_string()
+                                }
+                            });
+                            help_text.push_str(&readable.collect::<Vec<String>>().join(", "));
+                            help_text.push('.');
+                        }
+                        let chip_info = chip_info_text(&all_options, option);
+                        if !chip_info.is_empty() {
+                            help_text.push(' ');
+                            help_text.push_str(&chip_info);
+                        }
+                        println!("    {}: {help_text}", option.name);
+                    }
+                }
+                Ok(())
+            }
+            SubCommands::Explain { option } => {
+                let all_options = TEMPLATE.all_options();
+                if let Some(option) = all_options.iter().find(|o| &o.name == option) {
+                    println!(
+                        "Option: {}\n\n{}{}",
+                        option.name,
+                        option.display_name,
+                        if option.help.is_empty() {
+                            String::new()
+                        } else {
+                            format!("\n{}\n", option.help)
+                        }
+                    );
+                    if !option.requires.is_empty() {
+                        println!();
+                        let positive_req = option.requires.iter().filter(|r| !r.starts_with("!"));
+                        let negative_req = option.requires.iter().filter(|r| r.starts_with("!"));
+                        if positive_req.clone().next().is_some() {
+                            println!("Requires the following options to be set:");
+                            for require in positive_req {
+                                println!("    {}", require);
+                            }
+                        }
+                        if negative_req.clone().next().is_some() {
+                            println!("Requires the following options to NOT be set:");
+                            for require in negative_req {
+                                if let Some(stripped) = require.strip_prefix('!') {
+                                    println!("    {}", stripped);
+                                }
+                            }
+                        }
+                    }
+                    let chip_info = chip_info_text(&all_options, option);
+                    if !chip_info.is_empty() {
+                        println!("{}", chip_info);
+                    }
+                } else {
+                    println!("Unknown option: {}", option);
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 /// Check crates.io for a new version of the application
@@ -130,7 +271,19 @@ fn about() -> String {
 
 fn setup_args_interactive(args: &mut Args) -> Result<()> {
     if args.headless {
-        bail!("You can't use TUI to set the target chip or output directory name in headless mode");
+        let mut missing = String::from(
+            "You are in headless mode, but esp-generate needs more information to generate your project.",
+        );
+        if args.chip.is_none() {
+            missing.push_str(
+                "\nThe target chip is missing. Add --chip <your-chip-name> to the command.",
+            );
+        }
+        if args.name.is_none() {
+            missing.push_str("\nThe project name is missing. Add the name of your project to the end of the command.");
+        }
+
+        bail!("{missing}");
     }
 
     if args.chip.is_none() {
@@ -153,11 +306,16 @@ fn setup_args_interactive(args: &mut Args) -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    // Set up logging.
     Builder::from_env(Env::default().default_filter_or(log::LevelFilter::Info.as_str()))
         .format_target(false)
         .init();
 
     let mut args = Args::parse();
+
+    if let Some(subcommand) = args.subcommands {
+        return subcommand.handle();
+    }
 
     // Only check for updates once the command-line arguments have been processed,
     // to avoid printing any update notifications when the help message is
@@ -226,17 +384,6 @@ fn main() -> Result<()> {
     remove_incompatible_chip_options(chip, &mut template.options);
     module_selector::populate_module_category(chip, &mut template.options);
     process_options(&template, &args)?;
-
-    // Headless: keep the old "block now" behaviour.
-    if args.headless {
-        toolchain::populate_toolchain_category(
-            chip,
-            &mut template.options,
-            &mut Vec::new(),
-            args.toolchain.as_deref(),
-            &msrv,
-        )?;
-    }
 
     // Initial selection for TUI/headless, including toolchain if provided.
     let mut initial_selected = args.option.clone();
@@ -319,35 +466,44 @@ fn main() -> Result<()> {
             return Ok(());
         };
 
-        println!(
-            "Selected options: --chip {}{}{}",
-            chip,
-            selected.iter().fold(String::new(), |mut acc, s| {
-                use std::fmt::Write;
-                write!(&mut acc, " -o {s}").unwrap();
-                acc
-            }),
-            if let Some(tc) = &args.toolchain {
-                format!(" --toolchain {tc}")
-            } else {
-                String::new()
-            }
-        );
-
         selected
     } else {
         initial_selected
     };
 
     let flat_options = flatten_options(&template.options);
-    let selected_toolchain = selected.iter().find_map(|name| {
-        let (_, opt) = find_option(name, &flat_options, chip)?;
-        if opt.selection_group == "toolchain" {
-            Some(name.clone())
-        } else {
-            None
-        }
-    });
+    let mut toolchain_replaced = false;
+    let selected_options = format!(
+        "--chip {}{}",
+        chip,
+        selected.iter().fold(String::new(), |mut acc, s| {
+            if Some(s) == args.toolchain.as_ref() && !toolchain_replaced {
+                acc.push_str(" --toolchain ");
+                // Just in case someone decides to call their toolchain `defmt`, make sure we only replace it once
+                toolchain_replaced = true;
+            } else {
+                acc.push_str(" -o ");
+            };
+            acc.push_str(s);
+            acc
+        })
+    );
+    if !args.headless {
+        println!("Selected options: {selected_options}");
+    }
+
+    let selected_toolchain = if args.headless {
+        args.toolchain
+    } else {
+        selected.iter().find_map(|name| {
+            let (_, opt) = find_option(name, &flat_options, chip)?;
+            if opt.selection_group == "toolchain" {
+                Some(name.clone())
+            } else {
+                None
+            }
+        })
+    };
 
     let selected_module = selected.iter().find_map(|name| {
         let (_, opt) = find_option(name, &flat_options, chip)?;
@@ -407,6 +563,7 @@ fn main() -> Result<()> {
             "generate-version".to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
         ),
+        ("generate-parameters".to_string(), selected_options),
         ("esp-hal-version-full".to_string(), esp_hal_version_full),
         ("max-dram2-uninit".to_string(), format!("{max_dram2}")),
     ];

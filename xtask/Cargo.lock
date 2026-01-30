@@ -113,15 +113,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
-name = "basic-toml"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "823388e228f614e9558c6804262db37960ec8821856535f5c3f59913140558f8"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "beef"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -485,7 +476,7 @@ dependencies = [
  "anyhow",
  "clap",
  "env_logger",
- "esp-metadata",
+ "esp-metadata-generated",
  "inquire",
  "log",
  "quote",
@@ -500,20 +491,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "esp-metadata"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae786e826c5bb95238633794b07292c167d59524cedd4f3dfcee34a3819f7c7e"
-dependencies = [
- "anyhow",
- "basic-toml",
- "clap",
- "indexmap",
- "proc-macro2",
- "quote",
- "serde",
- "strum",
-]
+name = "esp-metadata-generated"
+version = "0.3.0"
+source = "git+https://github.com/esp-rs/esp-hal?rev=f9150cbbc#f9150cbbca2b905e8b5c605729410acc8c40a9ef"
 
 [[package]]
 name = "euclid"
@@ -673,8 +653,6 @@ checksum = "7714e70437a7dc3ac8eb7e6f8df75fd8eb422675fc7678aff7364301092b1017"
 dependencies = [
  "equivalent",
  "hashbrown 0.16.1",
- "serde",
- "serde_core",
 ]
 
 [[package]]
@@ -2189,7 +2167,6 @@ dependencies = [
  "clap",
  "env_logger",
  "esp-generate",
- "esp-metadata",
  "itertools 0.14.0",
  "log",
  "serde_yaml",

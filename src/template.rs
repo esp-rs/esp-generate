@@ -1,5 +1,6 @@
-use esp_metadata::Chip;
 use serde::{Deserialize, Serialize};
+
+use crate::Chip;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GeneratorOption {

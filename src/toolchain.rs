@@ -5,9 +5,8 @@ use std::thread;
 
 use anyhow::{Result, bail};
 use esp_generate::template::{GeneratorOption, GeneratorOptionItem};
-use esp_metadata::Chip;
 
-use crate::check;
+use crate::{Chip, check};
 
 pub struct ToolchainScan {
     rx: mpsc::Receiver<Result<Vec<String>>>,
@@ -167,12 +166,12 @@ pub(crate) fn find_toolchains(
     cli_toolchain: Option<&str>,
     msrv: &check::Version,
 ) -> Result<Vec<String>> {
-    let target = chip.target().to_string();
+    let target = chip.metadata().target().to_string();
 
     let mut available = filter_toolchains_for(&target, msrv)?;
 
     // for now, we should hide the generic toolchains for Xtensa (stable-*, beta-*, nightly-*).
-    if chip.is_xtensa() {
+    if chip.metadata().is_xtensa() {
         available.retain(|name| {
             !(name.starts_with("stable") || name.starts_with("beta") || name.starts_with("nightly"))
         });
@@ -181,7 +180,7 @@ pub(crate) fn find_toolchains(
     // sanity check
     if available.is_empty() {
         if let Some(cli) = cli_toolchain {
-            if chip.is_xtensa()
+            if chip.metadata().is_xtensa()
                 && (cli.starts_with("stable")
                     || cli.starts_with("beta")
                     || cli.starts_with("nightly"))
@@ -205,7 +204,7 @@ pub(crate) fn find_toolchains(
 
     if let Some(cli) = cli_toolchain {
         if !available.iter().any(|t| t == cli) {
-            if chip.is_xtensa()
+            if chip.metadata().is_xtensa()
                 && (cli.starts_with("stable")
                     || cli.starts_with("beta")
                     || cli.starts_with("nightly"))

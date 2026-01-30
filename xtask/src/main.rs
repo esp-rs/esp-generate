@@ -8,11 +8,11 @@ use std::{
 use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use esp_generate::{
+    Chip,
     config::{ActiveConfiguration, find_option, flatten_options},
     modules::populate_module_category,
     template::{GeneratorOptionCategory, GeneratorOptionItem, Template},
 };
-use esp_metadata::Chip;
 use itertools::Itertools;
 use log::info;
 

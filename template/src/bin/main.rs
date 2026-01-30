@@ -76,11 +76,8 @@ fn main() -> ! {
     //+let _peripherals = esp_hal::init(config);
     //ENDIF
 
-    //IF option("module-selected")
-    // Reserved GPIOs - directly connected to flash/PSRAM
-    //REPLACE __RESERVED_GPIO_CODE__ reserved_gpio_code
-    __RESERVED_GPIO_CODE__
-    //ENDIF
+    //REPLACE __RESERVED_GPIO_CODE__; reserved_gpio_code
+    __RESERVED_GPIO_CODE__;
 
     //IF option("alloc")
     //REPLACE 65536 max-dram2-uninit

@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix IDE settings and checks when using `-a/--name` (#302)
+
 ### Removed
 
 ## [1.2.0] - 2025-01-13

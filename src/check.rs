@@ -67,13 +67,16 @@ pub fn check(
     msrv: Version,
     requires_nightly: bool,
     headless: bool,
+    selected_toolchain: Option<&str>,
 ) {
-    let rust_toolchain = if chip.is_xtensa() {
-        "esp"
+    let rust_toolchain: String = if let Some(name) = selected_toolchain {
+        name.to_string()
+    } else if chip.is_xtensa() {
+        "esp".to_string()
     } else if requires_nightly {
-        "nightly"
+        "nightly".to_string()
     } else {
-        "stable"
+        "stable".to_string()
     };
 
     let rust_toolchain_tool = if chip.is_xtensa() { "espup" } else { "rustup" };
@@ -92,7 +95,7 @@ pub fn check(
     let rust_install_cmd: &[&str] = if rust_toolchain_tool == "espup" {
         &["espup", "install"]
     } else {
-        &["rustup", "toolchain", "install", rust_toolchain]
+        &["rustup", "toolchain", "install", &rust_toolchain]
     };
 
     let rust_version = get_version_or_install(
@@ -152,7 +155,7 @@ pub fn check(
         create_check_results(
             probe_rs_required,
             msrv,
-            rust_toolchain,
+            &rust_toolchain,
             rust_version,
             rust_toolchain_tool,
             espflash_version,
@@ -173,13 +176,13 @@ pub fn check(
 fn create_check_results(
     probe_rs_required: bool,
     msrv: Version,
-    rust_toolchain: &'static str,
+    rust_toolchain: &str,
     rust_version: Option<Version>,
-    rust_toolchain_tool: &'static str,
+    rust_toolchain_tool: &str,
     espflash_version: Option<Version>,
     probers_version: Option<Version>,
     esp_config_version: Option<Version>,
-    probers_suggestion_kind: &'static str,
+    probers_suggestion_kind: &str,
 ) -> String {
     let mut result = String::new();
 

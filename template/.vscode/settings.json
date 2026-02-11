@@ -8,9 +8,11 @@
     "RUSTUP_TOOLCHAIN": "stable"
   },
   "rust-analyzer.check.extraEnv": {
+    //REPLACE esp rust_toolchain
     "RUSTUP_TOOLCHAIN": "esp"
   },
   "rust-analyzer.cargo.extraEnv": {
+    //REPLACE esp rust_toolchain
     "RUSTUP_TOOLCHAIN": "esp"
   },
   //ENDIF

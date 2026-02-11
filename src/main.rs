@@ -349,6 +349,10 @@ fn main() -> Result<()> {
         }
     });
 
+    // Prefer explicit CLI toolchain, otherwise use the selected toolchain from options (if any)
+    let toolchain_name_for_check: Option<String> =
+        args.toolchain.clone().or(selected_toolchain.clone());
+
     let selected_module = selected.iter().find_map(|name| {
         let (_, opt) = find_option(name, &flat_options, chip)?;
         if opt.selection_group == "module" {
@@ -492,6 +496,7 @@ fn main() -> Result<()> {
         selected.contains(&"stack-smashing-protection".to_string())
             && selected.contains(&"riscv".to_string()),
         args.headless,
+        toolchain_name_for_check.as_deref(),
     );
 
     Ok(())

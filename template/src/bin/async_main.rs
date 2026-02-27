@@ -80,11 +80,8 @@ async fn main(spawner: Spawner) -> ! {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
-    //IF option("module-selected")
-    // Reserved GPIOs - directly connected to flash/PSRAM
-    //REPLACE __RESERVED_GPIO_CODE__ reserved_gpio_code
-    __RESERVED_GPIO_CODE__
-    //ENDIF
+    //REPLACE __RESERVED_GPIO_CODE__; reserved_gpio_code
+    __RESERVED_GPIO_CODE__;
 
     //IF option("alloc")
     //REPLACE 65536 max-dram2-uninit

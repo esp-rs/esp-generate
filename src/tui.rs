@@ -1,12 +1,12 @@
 use anyhow::Result;
 use std::io;
 
+use crate::Chip;
 use esp_generate::{
     append_list_as_sentence,
     config::{ActiveConfiguration, Relationships, flatten_options},
     template::GeneratorOptionItem,
 };
-use esp_metadata::Chip;
 use ratatui::crossterm::{
     ExecutableCommand,
     event::{Event, KeyCode, KeyEventKind},

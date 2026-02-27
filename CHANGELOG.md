@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Add module selector
 
 ### Added
 
 - VSCode debugger launch configuration now sets `verifyBeforeFlashing` to `true` (#290)
+- Add module selector (#289, #298)
 
 ### Changed
 

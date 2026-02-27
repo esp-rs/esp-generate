@@ -1,7 +1,90 @@
+use esp_metadata_generated::{MemoryRegion, PinInfo};
+use serde::{Deserialize, Serialize};
+
+use crate::modules::Module;
+
 pub mod cargo;
 pub mod config;
 pub mod modules;
 pub mod template;
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    clap::ValueEnum,
+    strum::EnumIter,
+    strum::Display,
+)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+pub enum Chip {
+    Esp32,
+    Esp32c2,
+    Esp32c3,
+    Esp32c6,
+    Esp32h2,
+    Esp32s2,
+    Esp32s3,
+}
+impl Chip {
+    pub fn metadata(self) -> esp_metadata_generated::Chip {
+        match self {
+            Chip::Esp32 => esp_metadata_generated::Chip::Esp32,
+            Chip::Esp32c2 => esp_metadata_generated::Chip::Esp32c2,
+            Chip::Esp32c3 => esp_metadata_generated::Chip::Esp32c3,
+            Chip::Esp32c6 => esp_metadata_generated::Chip::Esp32c6,
+            Chip::Esp32h2 => esp_metadata_generated::Chip::Esp32h2,
+            Chip::Esp32s2 => esp_metadata_generated::Chip::Esp32s2,
+            Chip::Esp32s3 => esp_metadata_generated::Chip::Esp32s3,
+        }
+    }
+
+    pub fn wokwi(self) -> &'static str {
+        match self {
+            Chip::Esp32 => "board-esp32-devkit-c-v4",
+            Chip::Esp32c2 => "",
+            Chip::Esp32c3 => "board-esp32-c3-devkitm-1",
+            Chip::Esp32c6 => "board-esp32-c6-devkitc-1",
+            Chip::Esp32h2 => "board-esp32-h2-devkitm-1",
+            Chip::Esp32s2 => "board-esp32-s2-devkitm-1",
+            Chip::Esp32s3 => "board-esp32-s3-devkitc-1",
+        }
+    }
+
+    pub fn dram2_region(self) -> &'static MemoryRegion {
+        self.metadata()
+            .memory_layout()
+            .region("dram2_uninit")
+            .expect("All chips should have a dram2_uninit region")
+    }
+
+    pub fn pins(self) -> &'static [PinInfo] {
+        self.metadata().pins()
+    }
+
+    pub fn modules(self) -> &'static [Module] {
+        match self {
+            Chip::Esp32 => crate::modules::ESP32_MODULES,
+            Chip::Esp32c2 => crate::modules::ESP32C2_MODULES,
+            Chip::Esp32c3 => crate::modules::ESP32C3_MODULES,
+            Chip::Esp32c6 => crate::modules::ESP32C6_MODULES,
+            Chip::Esp32h2 => crate::modules::ESP32H2_MODULES,
+            Chip::Esp32s2 => crate::modules::ESP32S2_MODULES,
+            Chip::Esp32s3 => crate::modules::ESP32S3_MODULES,
+        }
+    }
+
+    pub fn module_by_name(&self, module_name: &str) -> Option<&'static Module> {
+        self.modules()
+            .iter()
+            .find(|module| module.name == module_name)
+    }
+}
 
 /// This turns a list of strings into a sentence, and appends it to the base string.
 ///

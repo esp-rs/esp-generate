@@ -20,27 +20,47 @@ use bt_hci::controller::ExternalController;
 use trouble_host::prelude::*;
 //ENDIF
 
+use embassy_executor::Spawner;
+use embassy_time::{Duration, Timer};
+
 //IF option("defmt")
 //IF !option("probe-rs")
 //+use esp_println as _;
 //ENDIF
 //+use defmt::info;
+//IF !option("panic-handler")
+//+use defmt::error;
+//ENDIF !option("panic-handler")
 //ELIF option("log")
 use log::info;
+//IF !option("panic-handler")
+use log::error;
+//ENDIF !option("panic-handler")
 //ELIF option("probe-rs") // without defmt
-use rtt_target::rprintln;
+//+use rtt_target::rprintln;
 //ENDIF !defmt
 
-use embassy_executor::Spawner;
-use embassy_time::{Duration, Timer};
-
 //IF !option("panic-handler")
+//IF option("defmt") || option("log")
 //+#[panic_handler]
-//+fn panic(_: &core::panic::PanicInfo) -> ! {
+//+fn panic(panic_info: &core::panic::PanicInfo) -> ! {
+//+    error!("{}", panic_info);
 //+    loop {}
 //+}
+//ELIF option("probe-rs")
+//+#[panic_handler]
+//+fn panic(panic_info: &core::panic::PanicInfo) -> ! {
+//+    rprintln!("{}", panic_info);
+//+    loop {}
+//+}
+//ELSE
+#[panic_handler]
+fn panic(_: &core::panic::PanicInfo) -> ! {
+    loop {}
+}
+//ENDIF
 //ELIF option("esp-backtrace")
-use esp_backtrace as _;
+//+use esp_backtrace as _;
 //ELIF option("panic-rtt-target")
 //+use panic_rtt_target as _;
 //ENDIF

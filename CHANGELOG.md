@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - esp-generate now recommends probe-rs version 0.31.0 or newer (#296)
+- The default panic handler has been updated to print the panic info using the configured log method (#307)
 
 ### Fixed
 

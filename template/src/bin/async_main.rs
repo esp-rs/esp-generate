@@ -66,6 +66,8 @@ esp_bootloader_esp_idf::esp_app_desc!();
 async fn main(spawner: Spawner) -> ! {
     //REPLACE generate-version generate-version
     // generator version: generate-version
+    //REPLACE generate-parameters generate-parameters
+    // generator parameters: generate-parameters
 
     //IF option("probe-rs")
     //IF option("defmt")

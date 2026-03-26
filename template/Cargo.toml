@@ -240,16 +240,14 @@ embedded-test = { version = "0.7.0", features = [
 ] }
 #ENDIF embedded-test
 
+# For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
 [profile.dev]
-# Rust debug is too slow.
-# For debug builds always builds with some optimization
+# The default debug profile is too slow and too big for resource-constrained devices.
+# Always build with some optimizations enabled.
 opt-level = "s"
 
 [profile.release]
-codegen-units = 1        # LLVM can perform better optimizations using a single thread
-debug = 2
-debug-assertions = false
-incremental = false
+codegen-units = 1       # LLVM can perform better optimizations using a single thread
+debug = 2               # prefer slower builds but better debugging experience
 lto = 'fat'
 opt-level = 's'
-overflow-checks = false

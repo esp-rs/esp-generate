@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Preserve per-method flashing options when switching probe-rs and espflash
 - Add module selector
 
 ### Added

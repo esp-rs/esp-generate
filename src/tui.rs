@@ -219,6 +219,15 @@ impl Repository {
         true
     }
 
+    fn is_item_actionable(&self, item: &GeneratorOptionItem) -> bool {
+        match item {
+            GeneratorOptionItem::Category(_) => self.config.is_active(item),
+            GeneratorOptionItem::Option(option) => {
+                self.config.is_option_active(option) || self.can_switch_method_option(&option.name)
+            }
+        }
+    }
+
     fn enter_group(&mut self, index: usize) {
         self.path.push(index);
     }
@@ -289,7 +298,7 @@ impl Repository {
                 // reserve indicator spacing; saturating_sub keeps padding non-negative so narrow widths don't overflow
                 let padding = (width as usize).saturating_sub(v.title().len() + 4);
                 (
-                    level_active && self.config.is_active(v),
+                    level_active && self.is_item_actionable(v),
                     format!(
                         " {} {}{:>padding$}",
                         indicator,
@@ -674,7 +683,7 @@ impl App {
                         .get(idx.min(items.len() - 1))
                 }) {
                 self.repository.current_level_is_active()
-                    && self.repository.config.is_active(current)
+                    && self.repository.is_item_actionable(current)
             } else {
                 false
             };
@@ -700,11 +709,19 @@ impl App {
             .min(self.repository.current_level().len() - 1);
         let option = &self.repository.current_level()[selected];
 
+        let mut relationships = self.repository.config.collect_relationships(option);
+
+        if let GeneratorOptionItem::Option(option) = option {
+            if self.repository.can_switch_method_option(&option.name) {
+                relationships.disabled_by.clear();
+            }
+        }
+
         let Relationships {
             requires,
             required_by,
             disabled_by,
-        } = self.repository.config.collect_relationships(option);
+        } = relationships;
 
         let help_text = option.help();
         let help_text = append_list_as_sentence(help_text, "Requires", &requires);

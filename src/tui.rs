@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::collections::HashMap;
 use std::io;
 
 use esp_generate::{
@@ -17,8 +18,8 @@ use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 pub struct Repository {
     pub config: ActiveConfiguration,
     path: Vec<usize>,
-    probe_rs_method_selected: Vec<String>,
-    espflash_method_selected: Vec<String>,
+    method_option_selected: HashMap<String, Vec<String>>,
+    method_option_unselected: HashMap<String, Vec<String>>,
 }
 
 impl Repository {
@@ -35,13 +36,9 @@ impl Repository {
                 options,
             },
             path: Vec::new(),
-            probe_rs_method_selected: Vec::new(),
-            espflash_method_selected: Vec::new(),
+            method_option_selected: HashMap::new(),
+            method_option_unselected: HashMap::new(),
         }
-    }
-
-    fn is_probe_rs_selected(&self) -> bool {
-        self.config.is_selected("probe-rs")
     }
 
     fn option_requires(
@@ -51,46 +48,70 @@ impl Repository {
         option.requires.iter().any(|r| r == requirement)
     }
 
-    fn option_is_method_specific(
+    fn option_is_method_specific_for_state(
         option: &esp_generate::template::GeneratorOption,
-        probe_rs_method: bool,
+        method_option: &str,
+        method_option_selected: bool,
     ) -> bool {
-        if probe_rs_method {
-            Self::option_requires(option, "probe-rs")
+        if method_option_selected {
+            Self::option_requires(option, method_option)
         } else {
-            Self::option_requires(option, "!probe-rs")
+            let requirement = format!("!{method_option}");
+            Self::option_requires(option, &requirement)
         }
     }
 
-    fn remember_method_selection(&mut self, probe_rs_method: bool) {
+    fn remember_method_selection(&mut self, method_option: &str, method_option_selected: bool) {
         let snapshot: Vec<String> = self
             .config
             .selected
             .iter()
             .map(|idx| &self.config.flat_options[*idx])
-            .filter(|option| Self::option_is_method_specific(option, probe_rs_method))
+            .filter(|option| {
+                Self::option_is_method_specific_for_state(
+                    option,
+                    method_option,
+                    method_option_selected,
+                )
+            })
             .map(|option| option.name.clone())
             .collect();
 
-        if probe_rs_method {
-            self.probe_rs_method_selected = snapshot;
+        if method_option_selected {
+            self.method_option_selected
+                .insert(method_option.to_string(), snapshot);
         } else {
-            self.espflash_method_selected = snapshot;
+            self.method_option_unselected
+                .insert(method_option.to_string(), snapshot);
         }
     }
 
-    fn clear_method_specific_selection(&mut self, probe_rs_method: bool) {
+    fn clear_method_specific_selection(
+        &mut self,
+        method_option: &str,
+        method_option_selected: bool,
+    ) {
         self.config.selected.retain(|idx| {
             let option = &self.config.flat_options[*idx];
-            !Self::option_is_method_specific(option, probe_rs_method)
+            !Self::option_is_method_specific_for_state(
+                option,
+                method_option,
+                method_option_selected,
+            )
         });
     }
 
-    fn restore_method_selection(&mut self, probe_rs_method: bool) {
-        let to_restore = if probe_rs_method {
-            self.probe_rs_method_selected.clone()
+    fn restore_method_selection(&mut self, method_option: &str, method_option_selected: bool) {
+        let to_restore = if method_option_selected {
+            self.method_option_selected
+                .get(method_option)
+                .cloned()
+                .unwrap_or_default()
         } else {
-            self.espflash_method_selected.clone()
+            self.method_option_unselected
+                .get(method_option)
+                .cloned()
+                .unwrap_or_default()
         };
 
         for option_name in to_restore {
@@ -98,20 +119,40 @@ impl Repository {
         }
     }
 
-    fn switch_flashing_method(&mut self) {
-        let probe_rs_selected = self.is_probe_rs_selected();
-        self.remember_method_selection(probe_rs_selected);
-        self.clear_method_specific_selection(probe_rs_selected);
+    fn can_switch_method_option(&self, method_option: &str) -> bool {
+        let mut has_selected_side = false;
+        let mut has_unselected_side = false;
 
-        if probe_rs_selected {
-            if let Some(i) = self.config.selected_index("probe-rs") {
+        let negated = format!("!{method_option}");
+        for option in &self.config.flat_options {
+            if Self::option_requires(option, method_option) {
+                has_selected_side = true;
+            }
+            if Self::option_requires(option, &negated) {
+                has_unselected_side = true;
+            }
+            if has_selected_side && has_unselected_side {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn switch_method_option(&mut self, method_option: &str) {
+        let currently_selected = self.config.is_selected(method_option);
+        self.remember_method_selection(method_option, currently_selected);
+        self.clear_method_specific_selection(method_option, currently_selected);
+
+        if currently_selected {
+            if let Some(i) = self.config.selected_index(method_option) {
                 self.config.selected.swap_remove(i);
             }
-            self.restore_method_selection(false);
         } else {
-            self.config.select("probe-rs");
-            self.restore_method_selection(true);
+            self.config.select(method_option);
         }
+
+        self.restore_method_selection(method_option, !currently_selected);
     }
 
     /// Returns the *explicitly* selected toolchain, if there is any
@@ -186,9 +227,6 @@ impl Repository {
         if !self.current_level_is_active() {
             return;
         }
-        if !self.config.is_active(&self.current_level()[index]) {
-            return;
-        }
 
         let GeneratorOptionItem::Option(ref option) = self.current_level()[index] else {
             ratatui::restore();
@@ -196,14 +234,19 @@ impl Repository {
         };
 
         let option_name = option.name.clone();
-        if option_name == "probe-rs" {
-            self.switch_flashing_method();
+        let is_active = self.config.is_option_active(option);
+        if !is_active {
+            if self.can_switch_method_option(&option_name) {
+                self.switch_method_option(&option_name);
+            }
             return;
         }
 
         if let Some(i) = self.config.selected_index(&option_name) {
             if self.config.can_be_disabled(&option_name) {
                 self.config.selected.swap_remove(i);
+            } else if self.can_switch_method_option(&option_name) {
+                self.switch_method_option(&option_name);
             }
         } else {
             self.config.select(&option_name);
@@ -439,13 +482,13 @@ mod test {
     }
 
     #[test]
-    fn switching_flashing_method_restores_previous_method_specific_selections() {
+    fn switching_method_option_restores_previous_method_specific_selections() {
         let options = vec![
-            option("probe-rs", &[]),
-            option("panic-rtt-target", &["probe-rs"]),
-            option("embedded-test", &["probe-rs"]),
-            option("log", &["!probe-rs"]),
-            option("esp-backtrace", &["!probe-rs"]),
+            option("method", &[]),
+            option("method-selected-a", &["method"]),
+            option("method-selected-b", &["method"]),
+            option("method-unselected-a", &["!method"]),
+            option("method-unselected-b", &["!method"]),
             option("defmt", &[]),
         ];
 
@@ -453,27 +496,27 @@ mod test {
             Chip::Esp32,
             options,
             &[
-                "probe-rs".to_string(),
-                "panic-rtt-target".to_string(),
+                "method".to_string(),
+                "method-selected-a".to_string(),
                 "defmt".to_string(),
             ],
         );
 
-        repository.switch_flashing_method();
-        assert!(!repository.config.is_selected("probe-rs"));
-        assert!(!repository.config.is_selected("panic-rtt-target"));
+        repository.switch_method_option("method");
+        assert!(!repository.config.is_selected("method"));
+        assert!(!repository.config.is_selected("method-selected-a"));
         assert!(repository.config.is_selected("defmt"));
 
-        repository.config.select("log");
-        repository.switch_flashing_method();
-        assert!(repository.config.is_selected("probe-rs"));
-        assert!(repository.config.is_selected("panic-rtt-target"));
-        assert!(!repository.config.is_selected("log"));
+        repository.config.select("method-unselected-a");
+        repository.switch_method_option("method");
+        assert!(repository.config.is_selected("method"));
+        assert!(repository.config.is_selected("method-selected-a"));
+        assert!(!repository.config.is_selected("method-unselected-a"));
         assert!(repository.config.is_selected("defmt"));
 
-        repository.switch_flashing_method();
-        assert!(!repository.config.is_selected("probe-rs"));
-        assert!(repository.config.is_selected("log"));
+        repository.switch_method_option("method");
+        assert!(!repository.config.is_selected("method"));
+        assert!(repository.config.is_selected("method-unselected-a"));
     }
 }
 

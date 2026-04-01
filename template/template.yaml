@@ -88,7 +88,8 @@ options:
     display_name: Use probe-rs to flash and monitor instead of espflash.
     help: probe-rs is a debugger that connects to the chips over JTAG. It can be used to flash and
       monitor, and it can also be used to interactively debug an application, or run tests on the
-      hardware. Semihosting or RTT-based technologies like defmt-rtt require probe-rs.
+      hardware. Semihosting or RTT-based technologies like defmt-rtt require probe-rs. Switching
+      between probe-rs and espflash restores the last flashing selections for each method.
     chips:
       - esp32c6
       - esp32h2
@@ -99,7 +100,8 @@ options:
     display_name: Use probe-rs to flash and monitor instead of espflash.
     help: probe-rs is a debugger that connects to the chips over JTAG. It can be used to flash and
       monitor, and it can also be used to interactively debug an application, or run tests on the
-      hardware. Semihosting or RTT-based technologies like defmt-rtt require probe-rs.
+      hardware. Semihosting or RTT-based technologies like defmt-rtt require probe-rs. Switching
+      between probe-rs and espflash restores the last flashing selections for each method.
 
       probe-rs requires a debug probe like esp-prog, and will not work with USB-UART adapters that
       often come on development boards.
@@ -112,6 +114,8 @@ options:
   - !Category
     name: flashing-probe-rs
     display_name: Flashing, logging and debugging (probe-rs)
+    help: Only options specific to probe-rs are shown here. They are remembered when switching
+      methods.
     requires:
       - probe-rs
     options:
@@ -134,6 +138,8 @@ options:
   - !Category
     name: flashing-espflash
     display_name: Flashing, logging and debugging (espflash)
+    help: Only options specific to espflash are shown here. They are remembered when switching
+      methods.
     requires:
       - "!probe-rs"
     options:

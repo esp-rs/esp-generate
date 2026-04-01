@@ -3,20 +3,22 @@ use std::io;
 
 use esp_generate::{
     append_list_as_sentence,
-    config::{ActiveConfiguration, Relationships, flatten_options},
+    config::{flatten_options, ActiveConfiguration, Relationships},
     template::GeneratorOptionItem,
 };
 use esp_metadata::Chip;
 use ratatui::crossterm::{
-    ExecutableCommand,
     event::{Event, KeyCode, KeyEventKind},
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    ExecutableCommand,
 };
 use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 
 pub struct Repository {
     pub config: ActiveConfiguration,
     path: Vec<usize>,
+    probe_rs_method_selected: Vec<String>,
+    espflash_method_selected: Vec<String>,
 }
 
 impl Repository {
@@ -33,6 +35,82 @@ impl Repository {
                 options,
             },
             path: Vec::new(),
+            probe_rs_method_selected: Vec::new(),
+            espflash_method_selected: Vec::new(),
+        }
+    }
+
+    fn is_probe_rs_selected(&self) -> bool {
+        self.config.is_selected("probe-rs")
+    }
+
+    fn option_requires(
+        option: &esp_generate::template::GeneratorOption,
+        requirement: &str,
+    ) -> bool {
+        option.requires.iter().any(|r| r == requirement)
+    }
+
+    fn option_is_method_specific(
+        option: &esp_generate::template::GeneratorOption,
+        probe_rs_method: bool,
+    ) -> bool {
+        if probe_rs_method {
+            Self::option_requires(option, "probe-rs")
+        } else {
+            Self::option_requires(option, "!probe-rs")
+        }
+    }
+
+    fn remember_method_selection(&mut self, probe_rs_method: bool) {
+        let snapshot: Vec<String> = self
+            .config
+            .selected
+            .iter()
+            .map(|idx| &self.config.flat_options[*idx])
+            .filter(|option| Self::option_is_method_specific(option, probe_rs_method))
+            .map(|option| option.name.clone())
+            .collect();
+
+        if probe_rs_method {
+            self.probe_rs_method_selected = snapshot;
+        } else {
+            self.espflash_method_selected = snapshot;
+        }
+    }
+
+    fn clear_method_specific_selection(&mut self, probe_rs_method: bool) {
+        self.config.selected.retain(|idx| {
+            let option = &self.config.flat_options[*idx];
+            !Self::option_is_method_specific(option, probe_rs_method)
+        });
+    }
+
+    fn restore_method_selection(&mut self, probe_rs_method: bool) {
+        let to_restore = if probe_rs_method {
+            self.probe_rs_method_selected.clone()
+        } else {
+            self.espflash_method_selected.clone()
+        };
+
+        for option_name in to_restore {
+            self.config.select(&option_name);
+        }
+    }
+
+    fn switch_flashing_method(&mut self) {
+        let probe_rs_selected = self.is_probe_rs_selected();
+        self.remember_method_selection(probe_rs_selected);
+        self.clear_method_specific_selection(probe_rs_selected);
+
+        if probe_rs_selected {
+            if let Some(i) = self.config.selected_index("probe-rs") {
+                self.config.selected.swap_remove(i);
+            }
+            self.restore_method_selection(false);
+        } else {
+            self.config.select("probe-rs");
+            self.restore_method_selection(true);
         }
     }
 
@@ -117,12 +195,18 @@ impl Repository {
             unreachable!();
         };
 
-        if let Some(i) = self.config.selected_index(&option.name) {
-            if self.config.can_be_disabled(&option.name) {
+        let option_name = option.name.clone();
+        if option_name == "probe-rs" {
+            self.switch_flashing_method();
+            return;
+        }
+
+        if let Some(i) = self.config.selected_index(&option_name) {
+            if self.config.can_be_disabled(&option_name) {
                 self.config.selected.swap_remove(i);
             }
         } else {
-            self.config.select(&option.name.clone());
+            self.config.select(&option_name);
         }
     }
 
@@ -334,6 +418,62 @@ impl App {
             .iter()
             .map(|idx| self.repository.config.flat_options[*idx].name.clone())
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::Repository;
+    use esp_generate::template::{GeneratorOption, GeneratorOptionItem};
+    use esp_metadata::Chip;
+
+    fn option(name: &str, requires: &[&str]) -> GeneratorOptionItem {
+        GeneratorOptionItem::Option(GeneratorOption {
+            name: name.to_string(),
+            display_name: name.to_string(),
+            selection_group: String::new(),
+            help: String::new(),
+            requires: requires.iter().map(|r| r.to_string()).collect(),
+            chips: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn switching_flashing_method_restores_previous_method_specific_selections() {
+        let options = vec![
+            option("probe-rs", &[]),
+            option("panic-rtt-target", &["probe-rs"]),
+            option("embedded-test", &["probe-rs"]),
+            option("log", &["!probe-rs"]),
+            option("esp-backtrace", &["!probe-rs"]),
+            option("defmt", &[]),
+        ];
+
+        let mut repository = Repository::new(
+            Chip::Esp32,
+            options,
+            &[
+                "probe-rs".to_string(),
+                "panic-rtt-target".to_string(),
+                "defmt".to_string(),
+            ],
+        );
+
+        repository.switch_flashing_method();
+        assert!(!repository.config.is_selected("probe-rs"));
+        assert!(!repository.config.is_selected("panic-rtt-target"));
+        assert!(repository.config.is_selected("defmt"));
+
+        repository.config.select("log");
+        repository.switch_flashing_method();
+        assert!(repository.config.is_selected("probe-rs"));
+        assert!(repository.config.is_selected("panic-rtt-target"));
+        assert!(!repository.config.is_selected("log"));
+        assert!(repository.config.is_selected("defmt"));
+
+        repository.switch_flashing_method();
+        assert!(!repository.config.is_selected("probe-rs"));
+        assert!(repository.config.is_selected("log"));
     }
 }
 

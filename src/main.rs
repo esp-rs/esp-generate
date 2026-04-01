@@ -533,7 +533,9 @@ fn main() -> Result<()> {
         Chip::Esp32 => "board-esp32-devkit-c-v4",
         Chip::Esp32c2 => "",
         Chip::Esp32c3 => "board-esp32-c3-devkitm-1",
+        Chip::Esp32c5 => "",
         Chip::Esp32c6 => "board-esp32-c6-devkitc-1",
+        Chip::Esp32c61 => "",
         Chip::Esp32h2 => "board-esp32-h2-devkitm-1",
         Chip::Esp32s2 => "board-esp32-s2-devkitm-1",
         Chip::Esp32s3 => "board-esp32-s3-devkitc-1",
@@ -545,7 +547,9 @@ fn main() -> Result<()> {
         Chip::Esp32 => 98768,
         Chip::Esp32c2 => 66416, // 0x3fcdeb70 -0x3fcce800
         Chip::Esp32c3 => 66320, // 0x3fcde710 - 3fcce400
+        Chip::Esp32c5 => 65536, // 0x4085e5a0 - 0x4084e5a0
         Chip::Esp32c6 => 65536, // 0x4087e610 - 0x4086e610
+        Chip::Esp32c61 => 65536, // 0x4084ea70 - 0x4083ea70
         Chip::Esp32h2 => 69392, // 0x4084fee0 - 0x4083efd0
         Chip::Esp32s2 => 139264,
         Chip::Esp32s3 => 73744, // 0x3FCED710 - 0x3FCDB700

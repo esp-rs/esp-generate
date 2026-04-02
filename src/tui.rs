@@ -1,19 +1,42 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use std::io;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
+use env_logger::{Builder, Env, Logger};
 use esp_generate::{
     append_list_as_sentence,
     config::{flatten_options, ActiveConfiguration, Relationships},
     template::GeneratorOptionItem,
 };
 use esp_metadata::Chip;
+use log::{Level, LevelFilter, Log, Metadata, Record, SetLoggerError};
 use ratatui::crossterm::{
     event::{Event, KeyCode, KeyEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
 };
 use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
+
+static DEFER_WARNS: AtomicBool = AtomicBool::new(false);
+static WARN_BUFFER: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Initializes and binds the global logger with default `env_logger` settings, wrapped into [DeferringLogger], 
+/// so `log::warn!` can be deferred while the TUI is active.
+pub fn setup_logger() -> Result<(), SetLoggerError> {
+    let logger = Builder::from_env(Env::default().default_filter_or(LevelFilter::Info.as_str()))
+        .format_target(false)
+        .build();
+
+    let max_level = logger.filter();
+    let result = log::set_boxed_logger(Box::new(DeferringLogger { inner: logger }));
+    if result.is_ok() {
+        // `Builder::init()` sets this, it `log::warn!` is off otherwise.
+        log::set_max_level(max_level);
+    }
+    result
+}
 
 pub struct Repository {
     pub config: ActiveConfiguration,
@@ -317,13 +340,62 @@ pub fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     io::stdout().execute(EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(io::stdout());
     let terminal = Terminal::new(backend)?;
+    enable_deferred_logging();
     Ok(terminal)
 }
 
 pub fn restore_terminal() -> Result<()> {
     disable_raw_mode()?;
     io::stdout().execute(LeaveAlternateScreen)?;
+    flush_deferred_logs();
     Ok(())
+}
+
+/// Enable routing `log::warn!` into a buffer instead of stderr.
+fn enable_deferred_logging() {
+    let mut guard = WARN_BUFFER.lock().unwrap();
+    guard.clear();
+    DEFER_WARNS.store(true, Ordering::Relaxed);
+}
+
+/// Emits buffered warnings, then disables deferred logging.
+fn flush_deferred_logs() {
+    let mut guard = WARN_BUFFER.lock().unwrap();
+    DEFER_WARNS.store(false, Ordering::Relaxed);
+    let msgs = std::mem::take(&mut *guard);
+    drop(guard);
+
+    for msg in msgs {
+        log::warn!("{msg}");
+    }
+}
+
+struct DeferringLogger {
+    inner: Logger,
+}
+
+impl Log for DeferringLogger {
+    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
+        self.inner.enabled(metadata)
+    }
+
+    fn log(&self, record: &Record<'_>) {
+        if DEFER_WARNS.load(Ordering::Relaxed)
+            && record.level() == Level::Warn
+            && self.inner.matches(record)
+        {
+            WARN_BUFFER
+                .lock()
+                .unwrap()
+                .push(format!("{}", record.args()));
+            return;
+        }
+        self.inner.log(record);
+    }
+
+    fn flush(&self) {
+        self.inner.flush();
+    }
 }
 
 struct UiElements {

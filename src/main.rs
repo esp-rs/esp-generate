@@ -1,6 +1,5 @@
 use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
-use env_logger::{Builder, Env};
 use esp_generate::template::{GeneratorOption, GeneratorOptionItem, Template};
 use esp_generate::{
     append_list_as_sentence,
@@ -306,10 +305,7 @@ fn setup_args_interactive(args: &mut Args) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    // Set up logging.
-    Builder::from_env(Env::default().default_filter_or(log::LevelFilter::Info.as_str()))
-        .format_target(false)
-        .init();
+    tui::setup_logger().expect("logger should only be initialized once");
 
     let mut args = Args::parse();
 

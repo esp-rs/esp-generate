@@ -243,19 +243,19 @@ impl Repository {
         };
 
         let option_name = option.name.clone();
+        if self.can_switch_method_option(&option_name) {
+            self.switch_method_option(&option_name);
+            return;
+        }
+
         let is_active = self.config.is_option_active(option);
         if !is_active {
-            if self.can_switch_method_option(&option_name) {
-                self.switch_method_option(&option_name);
-            }
             return;
         }
 
         if let Some(i) = self.config.selected_index(&option_name) {
             if self.config.can_be_disabled(&option_name) {
                 self.config.selected.swap_remove(i);
-            } else if self.can_switch_method_option(&option_name) {
-                self.switch_method_option(&option_name);
             }
         } else {
             self.config.select(&option_name);
@@ -524,6 +524,26 @@ mod test {
         assert!(repository.config.is_selected("defmt"));
 
         repository.switch_method_option("method");
+        assert!(!repository.config.is_selected("method"));
+        assert!(repository.config.is_selected("method-unselected-a"));
+    }
+
+    #[test]
+    fn switching_back_without_new_intermediate_selections_restores_previous_side() {
+        let options = vec![
+            option("method", &[]),
+            option("method-selected-a", &["method"]),
+            option("method-unselected-a", &["!method"]),
+        ];
+
+        let mut repository =
+            Repository::new(Chip::Esp32, options, &["method-unselected-a".to_string()]);
+
+        repository.toggle_current(0);
+        assert!(repository.config.is_selected("method"));
+        assert!(!repository.config.is_selected("method-unselected-a"));
+
+        repository.toggle_current(0);
         assert!(!repository.config.is_selected("method"));
         assert!(repository.config.is_selected("method-unselected-a"));
     }

@@ -22,7 +22,7 @@ use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 static DEFER_WARNS: AtomicBool = AtomicBool::new(false);
 static WARN_BUFFER: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
-/// Initializes and binds the global logger with default `env_logger` settings, wrapped into [DeferringLogger], 
+/// Initializes and binds the global logger with default `env_logger` settings, wrapped into [DeferringLogger],
 /// so `log::warn!` can be deferred while the TUI is active.
 pub fn setup_logger() -> Result<(), SetLoggerError> {
     let logger = Builder::from_env(Env::default().default_filter_or(LevelFilter::Info.as_str()))
@@ -678,10 +678,7 @@ impl App {
         Ok(AppResult::Continue)
     }
 
-    pub fn draw<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<()>
-    where
-        <B as ratatui::backend::Backend>::Error: Send + Sync + 'static,
-    {
+    pub fn draw(&mut self, terminal: &mut Terminal<impl Backend>) -> Result<()> {
         terminal.draw(|f| {
             f.render_widget(self, f.area());
         })?;

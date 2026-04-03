@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - esp-generate now recommends probe-rs version 0.31.0 or newer (#296)
 - The default panic handler has been updated to print the panic info using the configured log method (#307)
 - The generated project no longer includes default optimization settings (#310)
+- Downgrade `ratatui` (#316)
 
 ### Fixed
 

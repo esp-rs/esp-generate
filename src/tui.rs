@@ -1,8 +1,8 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use std::io;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 
 use env_logger::{Builder, Env, Logger};
 use esp_generate::{
@@ -64,26 +64,6 @@ impl Repository {
         }
     }
 
-    fn option_requires(
-        option: &esp_generate::template::GeneratorOption,
-        requirement: &str,
-    ) -> bool {
-        option.requires.iter().any(|r| r == requirement)
-    }
-
-    fn option_is_method_specific_for_state(
-        option: &esp_generate::template::GeneratorOption,
-        method_option: &str,
-        method_option_selected: bool,
-    ) -> bool {
-        if method_option_selected {
-            Self::option_requires(option, method_option)
-        } else {
-            let requirement = format!("!{method_option}");
-            Self::option_requires(option, &requirement)
-        }
-    }
-
     fn remember_method_selection(&mut self, method_option: &str, method_option_selected: bool) {
         let snapshot: Vec<String> = self
             .config
@@ -91,7 +71,7 @@ impl Repository {
             .iter()
             .map(|idx| &self.config.flat_options[*idx])
             .filter(|option| {
-                Self::option_is_method_specific_for_state(
+                ActiveConfiguration::option_is_method_specific_for_state(
                     option,
                     method_option,
                     method_option_selected,
@@ -116,7 +96,7 @@ impl Repository {
     ) {
         self.config.selected.retain(|idx| {
             let option = &self.config.flat_options[*idx];
-            !Self::option_is_method_specific_for_state(
+            !ActiveConfiguration::option_is_method_specific_for_state(
                 option,
                 method_option,
                 method_option_selected,
@@ -140,26 +120,6 @@ impl Repository {
         for option_name in to_restore {
             self.config.select(&option_name);
         }
-    }
-
-    fn can_switch_method_option(&self, method_option: &str) -> bool {
-        let mut has_selected_side = false;
-        let mut has_unselected_side = false;
-
-        let negated = format!("!{method_option}");
-        for option in &self.config.flat_options {
-            if Self::option_requires(option, method_option) {
-                has_selected_side = true;
-            }
-            if Self::option_requires(option, &negated) {
-                has_unselected_side = true;
-            }
-            if has_selected_side && has_unselected_side {
-                return true;
-            }
-        }
-
-        false
     }
 
     fn switch_method_option(&mut self, method_option: &str) {
@@ -246,7 +206,8 @@ impl Repository {
         match item {
             GeneratorOptionItem::Category(_) => self.config.is_active(item),
             GeneratorOptionItem::Option(option) => {
-                self.config.is_option_active(option) || self.can_switch_method_option(&option.name)
+                self.config.is_option_active(option)
+                    || self.config.can_switch_method_option(&option.name)
             }
         }
     }
@@ -266,7 +227,7 @@ impl Repository {
         };
 
         let option_name = option.name.clone();
-        if self.can_switch_method_option(&option_name) {
+        if self.config.can_switch_method_option(&option_name) {
             self.switch_method_option(&option_name);
             return;
         }
@@ -801,7 +762,13 @@ impl App {
         let mut relationships = self.repository.config.collect_relationships(option);
 
         if let GeneratorOptionItem::Option(option) = option {
-            if self.repository.can_switch_method_option(&option.name) {
+            // Switchable method options are actionable even with opposite-side selections,
+            // so showing `Disabled by` here would be misleading.
+            if self
+                .repository
+                .config
+                .can_switch_method_option(&option.name)
+            {
                 relationships.disabled_by.clear();
             }
         }

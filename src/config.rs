@@ -25,6 +25,43 @@ pub fn flatten_options(options: &[GeneratorOptionItem]) -> Vec<GeneratorOption> 
 }
 
 impl ActiveConfiguration {
+    fn option_requires(option: &GeneratorOption, requirement: &str) -> bool {
+        option.requires.iter().any(|r| r == requirement)
+    }
+
+    pub fn option_is_method_specific_for_state(
+        option: &GeneratorOption,
+        method_option: &str,
+        method_option_selected: bool,
+    ) -> bool {
+        if method_option_selected {
+            Self::option_requires(option, method_option)
+        } else {
+            let requirement = format!("!{method_option}");
+            Self::option_requires(option, &requirement)
+        }
+    }
+
+    pub fn can_switch_method_option(&self, method_option: &str) -> bool {
+        let mut has_selected_side = false;
+        let mut has_unselected_side = false;
+
+        let negated = format!("!{method_option}");
+        for option in &self.flat_options {
+            if Self::option_requires(option, method_option) {
+                has_selected_side = true;
+            }
+            if Self::option_requires(option, &negated) {
+                has_unselected_side = true;
+            }
+            if has_selected_side && has_unselected_side {
+                return true;
+            }
+        }
+
+        false
+    }
+
     pub fn is_group_selected(&self, group: &str) -> bool {
         self.selected
             .iter()

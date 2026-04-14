@@ -1,20 +1,21 @@
 use anyhow::Result;
+use std::collections::HashMap;
 use std::io;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 
 use env_logger::{Builder, Env, Logger};
 use esp_generate::{
     append_list_as_sentence,
-    config::{ActiveConfiguration, Relationships, flatten_options},
+    config::{flatten_options, ActiveConfiguration, Relationships},
     template::GeneratorOptionItem,
 };
 use esp_metadata::Chip;
 use log::{Level, LevelFilter, Log, Metadata, Record, SetLoggerError};
 use ratatui::crossterm::{
-    ExecutableCommand,
     event::{Event, KeyCode, KeyEventKind},
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    ExecutableCommand,
 };
 use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 
@@ -40,6 +41,8 @@ pub fn setup_logger() -> Result<(), SetLoggerError> {
 pub struct Repository {
     pub config: ActiveConfiguration,
     path: Vec<usize>,
+    method_option_selected: HashMap<String, Vec<String>>,
+    method_option_unselected: HashMap<String, Vec<String>>,
 }
 
 impl Repository {
@@ -56,7 +59,83 @@ impl Repository {
                 options,
             },
             path: Vec::new(),
+            method_option_selected: HashMap::new(),
+            method_option_unselected: HashMap::new(),
         }
+    }
+
+    fn remember_method_selection(&mut self, method_option: &str, method_option_selected: bool) {
+        let snapshot: Vec<String> = self
+            .config
+            .selected
+            .iter()
+            .map(|idx| &self.config.flat_options[*idx])
+            .filter(|option| {
+                ActiveConfiguration::option_is_method_specific_for_state(
+                    option,
+                    method_option,
+                    method_option_selected,
+                )
+            })
+            .map(|option| option.name.clone())
+            .collect();
+
+        if method_option_selected {
+            self.method_option_selected
+                .insert(method_option.to_string(), snapshot);
+        } else {
+            self.method_option_unselected
+                .insert(method_option.to_string(), snapshot);
+        }
+    }
+
+    fn clear_method_specific_selection(
+        &mut self,
+        method_option: &str,
+        method_option_selected: bool,
+    ) {
+        self.config.selected.retain(|idx| {
+            let option = &self.config.flat_options[*idx];
+            !ActiveConfiguration::option_is_method_specific_for_state(
+                option,
+                method_option,
+                method_option_selected,
+            )
+        });
+    }
+
+    fn restore_method_selection(&mut self, method_option: &str, method_option_selected: bool) {
+        let to_restore = if method_option_selected {
+            self.method_option_selected
+                .get(method_option)
+                .cloned()
+                .unwrap_or_default()
+        } else {
+            self.method_option_unselected
+                .get(method_option)
+                .cloned()
+                .unwrap_or_default()
+        };
+
+        for option_name in to_restore {
+            self.config.select(&option_name);
+        }
+    }
+
+    fn switch_method_option(&mut self, method_option: &str) {
+        let currently_selected = self.config.is_selected(method_option);
+        self.remember_method_selection(method_option, currently_selected);
+        self.clear_method_specific_selection(method_option, currently_selected);
+
+        if currently_selected {
+            if let Some(i) = self.config.selected_index(method_option) {
+                self.config.selected.swap_remove(i);
+            }
+        } else {
+            self.config.select(method_option);
+        }
+
+        self.restore_method_selection(method_option, !currently_selected);
     }
 
     /// Returns the *explicitly* selected toolchain, if there is any
@@ -123,6 +202,16 @@ impl Repository {
         true
     }
 
+    fn is_item_actionable(&self, item: &GeneratorOptionItem) -> bool {
+        match item {
+            GeneratorOptionItem::Category(_) => self.config.is_active(item),
+            GeneratorOptionItem::Option(option) => {
+                self.config.is_option_active(option)
+                    || self.config.can_switch_method_option(&option.name)
+            }
+        }
+    }
+
     fn enter_group(&mut self, index: usize) {
         self.path.push(index);
     }
@@ -131,21 +220,29 @@ impl Repository {
         if !self.current_level_is_active() {
             return;
         }
-        if !self.config.is_active(&self.current_level()[index]) {
-            return;
-        }
 
         let GeneratorOptionItem::Option(ref option) = self.current_level()[index] else {
             ratatui::restore();
             unreachable!();
         };
 
-        if let Some(i) = self.config.selected_index(&option.name) {
-            if self.config.can_be_disabled(&option.name) {
+        let option_name = option.name.clone();
+        if self.config.can_switch_method_option(&option_name) {
+            self.switch_method_option(&option_name);
+            return;
+        }
+
+        let is_active = self.config.is_option_active(option);
+        if !is_active {
+            return;
+        }
+
+        if let Some(i) = self.config.selected_index(&option_name) {
+            if self.config.can_be_disabled(&option_name) {
                 self.config.selected.swap_remove(i);
             }
         } else {
-            self.config.select(&option.name.clone());
+            self.config.select(&option_name);
         }
     }
 
@@ -185,7 +282,7 @@ impl Repository {
                 // reserve indicator spacing; saturating_sub keeps padding non-negative so narrow widths don't overflow
                 let padding = (width as usize).saturating_sub(v.title().len() + 4);
                 (
-                    level_active && self.config.is_active(v),
+                    level_active && self.is_item_actionable(v),
                     format!(
                         " {} {}{:>padding$}",
                         indicator,
@@ -409,6 +506,82 @@ impl App {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use super::Repository;
+    use esp_generate::template::{GeneratorOption, GeneratorOptionItem};
+    use esp_metadata::Chip;
+
+    fn option(name: &str, requires: &[&str]) -> GeneratorOptionItem {
+        GeneratorOptionItem::Option(GeneratorOption {
+            name: name.to_string(),
+            display_name: name.to_string(),
+            selection_group: String::new(),
+            help: String::new(),
+            requires: requires.iter().map(|r| r.to_string()).collect(),
+            chips: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn switching_method_option_restores_previous_method_specific_selections() {
+        let options = vec![
+            option("method", &[]),
+            option("method-selected-a", &["method"]),
+            option("method-selected-b", &["method"]),
+            option("method-unselected-a", &["!method"]),
+            option("method-unselected-b", &["!method"]),
+            option("defmt", &[]),
+        ];
+
+        let mut repository = Repository::new(
+            Chip::Esp32,
+            options,
+            &[
+                "method".to_string(),
+                "method-selected-a".to_string(),
+                "defmt".to_string(),
+            ],
+        );
+
+        repository.switch_method_option("method");
+        assert!(!repository.config.is_selected("method"));
+        assert!(!repository.config.is_selected("method-selected-a"));
+        assert!(repository.config.is_selected("defmt"));
+
+        repository.config.select("method-unselected-a");
+        repository.switch_method_option("method");
+        assert!(repository.config.is_selected("method"));
+        assert!(repository.config.is_selected("method-selected-a"));
+        assert!(!repository.config.is_selected("method-unselected-a"));
+        assert!(repository.config.is_selected("defmt"));
+
+        repository.switch_method_option("method");
+        assert!(!repository.config.is_selected("method"));
+        assert!(repository.config.is_selected("method-unselected-a"));
+    }
+
+    #[test]
+    fn switching_back_without_new_intermediate_selections_restores_previous_side() {
+        let options = vec![
+            option("method", &[]),
+            option("method-selected-a", &["method"]),
+            option("method-unselected-a", &["!method"]),
+        ];
+
+        let mut repository =
+            Repository::new(Chip::Esp32, options, &["method-unselected-a".to_string()]);
+
+        repository.toggle_current(0);
+        assert!(repository.config.is_selected("method"));
+        assert!(!repository.config.is_selected("method-unselected-a"));
+
+        repository.toggle_current(0);
+        assert!(!repository.config.is_selected("method"));
+        assert!(repository.config.is_selected("method-unselected-a"));
+    }
+}
+
 impl App {
     pub fn handle_event(&mut self, event: Event) -> Result<AppResult> {
         if let Event::Key(key) = event {
@@ -560,7 +733,7 @@ impl App {
                         .get(idx.min(items.len() - 1))
                 }) {
                 self.repository.current_level_is_active()
-                    && self.repository.config.is_active(current)
+                    && self.repository.is_item_actionable(current)
             } else {
                 false
             };
@@ -586,11 +759,25 @@ impl App {
             .min(self.repository.current_level().len() - 1);
         let option = &self.repository.current_level()[selected];
 
+        let mut relationships = self.repository.config.collect_relationships(option);
+
+        if let GeneratorOptionItem::Option(option) = option {
+            // Switchable method options are actionable even with opposite-side selections,
+            // so showing `Disabled by` here would be misleading.
+            if self
+                .repository
+                .config
+                .can_switch_method_option(&option.name)
+            {
+                relationships.disabled_by.clear();
+            }
+        }
+
         let Relationships {
             requires,
             required_by,
             disabled_by,
-        } = self.repository.config.collect_relationships(option);
+        } = relationships;
 
         let help_text = option.help();
         let help_text = append_list_as_sentence(help_text, "Requires", &requires);

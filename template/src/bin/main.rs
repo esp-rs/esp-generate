@@ -122,15 +122,14 @@ fn main() -> ! {
         esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
     //ENDIF
-    let radio_init = esp_radio::init().expect("Failed to initialize Wi-Fi/BLE controller");
     //ENDIF
     //IF option("wifi")
     let (mut _wifi_controller, _interfaces) =
-        esp_radio::wifi::new(&radio_init, peripherals.WIFI, Default::default())
+        esp_radio::wifi::new(peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
     //ENDIF
     //IF option("ble-bleps")
-    let _connector = BleConnector::new(&radio_init, peripherals.BT, Default::default());
+    let _connector = BleConnector::new(peripherals.BT, Default::default());
     //ENDIF
 
     loop {

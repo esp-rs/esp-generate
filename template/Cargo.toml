@@ -21,7 +21,7 @@ test = false
 #ENDIF
 
 [dependencies]
-esp-hal = { git = "https://github.com/esp-rs/esp-hal", branch = "main", package = "esp-hal", features = [
+esp-hal = { git = "https://github.com/esp-rs/esp-hal", rev = "1169328", package = "esp-hal", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("unstable-hal")
@@ -36,7 +36,7 @@ esp-hal = { git = "https://github.com/esp-rs/esp-hal", branch = "main", package 
 ] }
 
 #IF option("embassy") || option("wifi") || option("ble-bleps") || option("ble-trouble")
-esp-rtos = { git = "https://github.com/esp-rs/esp-hal", branch = "main", package = "esp-rtos", features = [
+esp-rtos = { git = "https://github.com/esp-rs/esp-hal", rev = "1169328", package = "esp-rtos", features = [
     #IF option("wifi") || option("ble-bleps") || option("ble-trouble")
     "esp-radio",
     #ENDIF
@@ -57,7 +57,7 @@ esp-rtos = { git = "https://github.com/esp-rs/esp-hal", branch = "main", package
 ]}
 #ENDIF
 
-esp-bootloader-esp-idf = { git = "https://github.com/esp-rs/esp-hal", branch = "main", package = "esp-bootloader-esp-idf", features = [
+esp-bootloader-esp-idf = { git = "https://github.com/esp-rs/esp-hal", rev = "1169328", package = "esp-bootloader-esp-idf", features = [
     #IF option("defmt")
     #+"defmt",
     #ENDIF
@@ -81,7 +81,7 @@ rtt-target = { version = "0.6.2", features = ["defmt"] }
 #+rtt-target = "0.6.2"
 #ENDIF defmt
 #ELSE probe-rs
-esp-println = { git = "https://github.com/esp-rs/esp-hal", branch = "main", package = "esp-println", features = [
+esp-println = { git = "https://github.com/esp-rs/esp-hal", rev = "1169328", package = "esp-println", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("defmt")
@@ -94,7 +94,7 @@ esp-println = { git = "https://github.com/esp-rs/esp-hal", branch = "main", pack
 #ENDIF probe-rs
 #ENDIF log-frontend || panic-handler || probe-rs
 #IF option("esp-backtrace")
-esp-backtrace = { git = "https://github.com/esp-rs/esp-hal", branch = "main", package = "esp-backtrace", features = [
+esp-backtrace = { git = "https://github.com/esp-rs/esp-hal", rev = "1169328", package = "esp-backtrace", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     "panic-handler",
@@ -113,9 +113,9 @@ panic-rtt-target = "0.2.0"
 #ENDIF esp-backtrace
 #IF option("alloc")
 #IF option("defmt")
-#+esp-alloc = { git = "https://github.com/esp-rs/esp-hal", branch = "main", package = "esp-alloc", features = ["defmt"] }
+#+esp-alloc = { git = "https://github.com/esp-rs/esp-hal", rev = "1169328", package = "esp-alloc", features = ["defmt"] }
 #ELSE
-esp-alloc = { git = "https://github.com/esp-rs/esp-hal", branch = "main", package = "esp-alloc" }
+esp-alloc = { git = "https://github.com/esp-rs/esp-hal", rev = "1169328", package = "esp-alloc" }
 #ENDIF defmt
 #ENDIF alloc
 #IF option("wifi") || option("ble-bleps") || option("ble-trouble")
@@ -166,12 +166,11 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
     #ENDIF
 ] }
 #ENDIF wifi
-esp-radio = { git = "https://github.com/esp-rs/esp-hal", branch = "main", package = "esp-radio", features = [
+esp-radio = { git = "https://github.com/esp-rs/esp-hal", rev = "1169328", package = "esp-radio", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("wifi")
     "wifi",
-    "smoltcp",
     #ENDIF
     #IF option("ble-bleps") || option("ble-trouble")
     "ble",
@@ -194,8 +193,8 @@ esp-radio = { git = "https://github.com/esp-rs/esp-hal", branch = "main", packag
 #+bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
 #ENDIF
 #IF option("ble-trouble")
-#+trouble-host = { version = "0.5.0", features = ["gatt"] }
-#+bt-hci = "0.6.0"
+#+trouble-host = { version = "0.6.0", features = ["gatt"] }
+#+bt-hci = "0.8.0"
 #ENDIF
 #ENDIF wifi || ble || ble-trouble
 #IF option("embassy")
@@ -223,7 +222,7 @@ critical-section = "1.2.0"
 
 #IF option("embedded-test")
 [dev-dependencies]
-embedded-test = { git = "https://github.com/probe-rs/embedded-test", branch = "master", features = [
+embedded-test = { git = "https://github.com/probe-rs/embedded-test", rev = "bb99a65", features = [
     #IF option("xtensa")
     "xtensa-semihosting",
     #ENDIF

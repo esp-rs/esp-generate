@@ -132,23 +132,20 @@ async fn main(spawner: Spawner) -> ! {
     rprintln!("Embassy initialized!");
     //ENDIF
 
-    //IF option("ble-trouble") || option("ble-bleps") || option("wifi")
-    let radio_init = esp_radio::init().expect("Failed to initialize Wi-Fi/BLE controller");
-    //ENDIF
     //IF option("wifi")
     let (mut _wifi_controller, _interfaces) =
-        esp_radio::wifi::new(&radio_init, peripherals.WIFI, Default::default())
+        esp_radio::wifi::new(peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
     //ENDIF
     //IF option("ble-trouble")
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
-    let transport = BleConnector::new(&radio_init, peripherals.BT, Default::default()).unwrap();
+    let transport = BleConnector::new(peripherals.BT, Default::default()).unwrap();
     let ble_controller = ExternalController::<_, 1>::new(transport);
     let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
         HostResources::new();
     let _stack = trouble_host::new(ble_controller, &mut resources);
     //ELIF option("ble-bleps")
-    let _connector = BleConnector::new(&radio_init, peripherals.BT, Default::default());
+    let _connector = BleConnector::new(peripherals.BT, Default::default());
     //ENDIF
 
     // TODO: Spawn some tasks

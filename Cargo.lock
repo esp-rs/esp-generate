@@ -527,7 +527,7 @@ dependencies = [
 [[package]]
 name = "esp-metadata"
 version = "0.10.0"
-source = "git+https://github.com/esp-rs/esp-hal?branch=main#116932835740acfc54ab2ae88eff2c5c34cb51ae"
+source = "git+https://github.com/esp-rs/esp-hal?rev=1169328#116932835740acfc54ab2ae88eff2c5c34cb51ae"
 dependencies = [
  "anyhow",
  "basic-toml",

@@ -8,7 +8,7 @@ publish = false
 anyhow       = "1.0.100"
 clap         = { version = "4.5.49", features = ["derive"] }
 env_logger   = "0.11.8"
-esp-metadata = { git = "https://github.com/esp-rs/esp-hal", rev = "1169328", package = "esp-metadata", features = ["clap"] }
+esp-metadata = { git = "https://github.com/esp-rs/esp-hal", rev = "cfbfda5", package = "esp-metadata", features = ["clap"] }
 esp-generate = { path = "..", default-features = false }
 log          = "0.4.28"
 tempfile     = "3.23.0"

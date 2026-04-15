@@ -7,14 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Preserve per-method flashing options when switching probe-rs and espflash (#312)
-- Add module selector (#289)
-
 ### Added
 
 - VSCode debugger launch configuration now sets `verifyBeforeFlashing` to `true` (#290)
 - esp-generate adds the selected template parameters to the generated code (#293)
 - Added `explain` and `list-options` subcommands (#293)
+- Add module selector (#289)
+- Add C5 and C61 support (#314)
+
 
 ### Changed
 
@@ -22,11 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The default panic handler has been updated to print the panic info using the configured log method (#307)
 - The generated project no longer includes default optimization settings (#310)
 - Downgrade `ratatui` (#316)
+- Updated for esp-hal@1.1 and esp-radio@1.0-beta.0 (#314)
 
 ### Fixed
 
 - Fix IDE settings and checks when using `-a/--name` (#302)
 - Fix UI-breaking warnings (#315)
+- Preserve per-method flashing options when switching probe-rs and espflash (#312)
 
 ### Removed
 

@@ -118,13 +118,9 @@ async fn main(spawner: Spawner) -> ! {
     //ENDIF alloc
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    //IF option("esp32") || option("esp32s2") || option("esp32s3")
-    esp_rtos::start(timg0.timer0);
-    //ELSE
     let sw_interrupt =
         esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
-    //ENDIF
 
     //IF option("defmt") || option("log")
     info!("Embassy initialized!");

@@ -222,12 +222,12 @@ critical-section = "1.2.0"
 
 #IF option("embedded-test")
 [dev-dependencies]
-embedded-test = { git = "https://github.com/probe-rs/embedded-test", rev = "bb99a65", features = [
+embedded-test = { version = "0.7.1", features = [
     #IF option("xtensa")
     "xtensa-semihosting",
     #ENDIF
     #IF option("embassy")
-    "embassy",
+    "embassy-010",
     "external-executor",
     #ENDIF
     #IF option("defmt")

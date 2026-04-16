@@ -21,13 +21,9 @@ mod tests {
         let peripherals = esp_hal::init(esp_hal::Config::default());
 
         let timg0 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG0);
-        //IF option("esp32") || option("esp32s2") || option("esp32s3")
-        esp_rtos::start(timg0.timer0);
-        //ELSE
         let sw_interrupt =
             esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
         esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
-        //ENDIF
 
         //IF option("defmt")
         rtt_target::rtt_init_defmt!();

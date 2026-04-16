@@ -32,7 +32,9 @@ options:
       - esp32
       - esp32c2
       - esp32c3
+      - esp32c5
       - esp32c6
+      - esp32c61
       - esp32s2
       - esp32s3
 
@@ -48,7 +50,9 @@ options:
       - esp32
       - esp32c2
       - esp32c3
+      - esp32c5
       - esp32c6
+      - esp32c61
       - esp32h2
       - esp32s3
 
@@ -65,7 +69,9 @@ options:
       - esp32
       - esp32c2
       - esp32c3
+      - esp32c5
       - esp32c6
+      - esp32c61
       - esp32h2
       - esp32s3
 
@@ -90,7 +96,9 @@ options:
       monitor, and it can also be used to interactively debug an application, or run tests on the
       hardware. Semihosting or RTT-based technologies like defmt-rtt require probe-rs.
     chips:
+      - esp32c5
       - esp32c6
+      - esp32c61
       - esp32h2
       - esp32s3
 

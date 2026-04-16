@@ -21,7 +21,7 @@ test = false
 #ENDIF
 
 [dependencies]
-esp-hal = { version = "~1.0", features = [
+esp-hal = { version = "~1.1.0-rc.0", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("unstable-hal")
@@ -36,7 +36,7 @@ esp-hal = { version = "~1.0", features = [
 ] }
 
 #IF option("embassy") || option("wifi") || option("ble-bleps") || option("ble-trouble")
-esp-rtos = { version = "0.2.0", features = [
+esp-rtos = { version = "0.3.0", features = [
     #IF option("wifi") || option("ble-bleps") || option("ble-trouble")
     "esp-radio",
     #ENDIF
@@ -57,7 +57,7 @@ esp-rtos = { version = "0.2.0", features = [
 ]}
 #ENDIF
 
-esp-bootloader-esp-idf = { version = "0.4.0", features = [
+esp-bootloader-esp-idf = { version = "0.5.0", features = [
     #IF option("defmt")
     #+"defmt",
     #ENDIF
@@ -81,7 +81,7 @@ rtt-target = { version = "0.6.2", features = ["defmt"] }
 #+rtt-target = "0.6.2"
 #ENDIF defmt
 #ELSE probe-rs
-esp-println = { version = "0.16.1", features = [
+esp-println = { version = "0.17.0", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("defmt")
@@ -94,7 +94,7 @@ esp-println = { version = "0.16.1", features = [
 #ENDIF probe-rs
 #ENDIF log-frontend || panic-handler || probe-rs
 #IF option("esp-backtrace")
-esp-backtrace = { version = "0.18.1", features = [
+esp-backtrace = { version = "0.19.0", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     "panic-handler",
@@ -113,9 +113,9 @@ panic-rtt-target = "0.2.0"
 #ENDIF esp-backtrace
 #IF option("alloc")
 #IF option("defmt")
-#+esp-alloc = { version = "0.9.0", features = ["defmt"] }
+#+esp-alloc = { version = "0.10.0", features = ["defmt"] }
 #ELSE
-esp-alloc = "0.9.0"
+esp-alloc = "0.10.0"
 #ENDIF defmt
 #ENDIF alloc
 #IF option("wifi") || option("ble-bleps") || option("ble-trouble")
@@ -131,7 +131,7 @@ embedded-io = "0.7.1"
 embedded-io-async = "0.7.0"
 #ENDIF defmt
 #IF option("wifi")
-embassy-net = { version = "0.7.1", features = [
+embassy-net = { version = "0.9.1", features = [
     "tcp",
     "udp",
     "dhcpv4",
@@ -147,7 +147,7 @@ embassy-net = { version = "0.7.1", features = [
 #ENDIF wifi
 #ENDIF embassy
 #IF option("wifi")
-smoltcp = { version = "0.12.0", default-features = false, features = [
+smoltcp = { version = "0.13.0", default-features = false, features = [
     "medium-ethernet",
     "multicast",
     "proto-dhcpv4",
@@ -166,12 +166,11 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
     #ENDIF
 ] }
 #ENDIF wifi
-esp-radio = { version = "0.17.0", features = [
+esp-radio = { version = "0.18.0", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("wifi")
     "wifi",
-    "smoltcp",
     #ENDIF
     #IF option("ble-bleps") || option("ble-trouble")
     "ble",
@@ -194,12 +193,12 @@ esp-radio = { version = "0.17.0", features = [
 #+bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
 #ENDIF
 #IF option("ble-trouble")
-#+trouble-host = { version = "0.5.0", features = ["gatt"] }
-#+bt-hci = "0.6.0"
+#+trouble-host = { version = "0.6.0", features = ["gatt"] }
+#+bt-hci = "0.8.0"
 #ENDIF
 #ENDIF wifi || ble || ble-trouble
 #IF option("embassy")
-embassy-executor = { version = "0.9.1", features = [
+embassy-executor = { version = "0.10.0", features = [
     #IF option("defmt")
     #+"defmt",
     #ENDIF
@@ -223,12 +222,12 @@ critical-section = "1.2.0"
 
 #IF option("embedded-test")
 [dev-dependencies]
-embedded-test = { version = "0.7.0", features = [
+embedded-test = { version = "0.7.1", features = [
     #IF option("xtensa")
     "xtensa-semihosting",
     #ENDIF
     #IF option("embassy")
-    "embassy",
+    "embassy-010",
     "external-executor",
     #ENDIF
     #IF option("defmt")

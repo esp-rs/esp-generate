@@ -3,3 +3,5 @@ src/template_files.rs
 template/Cargo.lock
 /.vscode
 /.zed
+
+xtask/Cargo.lock

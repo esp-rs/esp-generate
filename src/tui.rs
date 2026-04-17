@@ -624,7 +624,10 @@ impl App {
 
                         if self.repository.is_option(selected) {
                             self.repository.toggle_current(selected);
-                        } else if self.repository.current_level()[selected].options().len() > 0 {
+                        } else if !self.repository.current_level()[selected]
+                            .options()
+                            .is_empty()
+                        {
                             self.repository.enter_group(self.selected());
                             self.enter_menu();
                         }

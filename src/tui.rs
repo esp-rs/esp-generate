@@ -1,21 +1,21 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use std::io;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use env_logger::{Builder, Env, Logger};
 use esp_generate::{
     append_list_as_sentence,
-    config::{flatten_options, ActiveConfiguration, Relationships},
+    config::{ActiveConfiguration, Relationships, flatten_options},
     template::GeneratorOptionItem,
 };
 use esp_metadata::Chip;
 use log::{Level, LevelFilter, Log, Metadata, Record, SetLoggerError};
 use ratatui::crossterm::{
-    event::{Event, KeyCode, KeyEventKind},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
+    event::{Event, KeyCode, KeyEventKind},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 
@@ -624,7 +624,7 @@ impl App {
 
                         if self.repository.is_option(selected) {
                             self.repository.toggle_current(selected);
-                        } else {
+                        } else if self.repository.current_level()[selected].options().len() > 0 {
                             self.repository.enter_group(self.selected());
                             self.enter_menu();
                         }

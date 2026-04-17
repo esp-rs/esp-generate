@@ -5,16 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
 ## [Unreleased]
+
+### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [1.3.0-rc.0] - 2026-04-17
 
 ### Added
 
 - VSCode debugger launch configuration now sets `verifyBeforeFlashing` to `true` (#290)
 - esp-generate adds the selected template parameters to the generated code (#293)
-- Added `explain` and `list-options` subcommands (#293)
+- Add `explain` and `list-options` subcommands (#293)
 - Add module selector (#289)
 - Add C5 and C61 support (#314)
-
 
 ### Changed
 
@@ -30,8 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix UI-breaking warnings (#315)
 - Preserve per-method flashing options when switching probe-rs and espflash (#312)
 - Fix crash when trying to enter an empty category (#321)
-
-### Removed
 
 ## [1.2.0] - 2025-01-13
 

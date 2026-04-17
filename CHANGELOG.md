@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix IDE settings and checks when using `-a/--name` (#302)
 - Fix UI-breaking warnings (#315)
 - Preserve per-method flashing options when switching probe-rs and espflash (#312)
+- Fix crash when trying to enter an empty category (#321)
 
 ### Removed
 

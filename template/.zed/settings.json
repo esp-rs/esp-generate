@@ -20,12 +20,6 @@
                         "RUSTUP_TOOLCHAIN": "stable"
                     }
                 },
-                "check": {
-                    "extraEnv": {
-                        //REPLACE esp rust_toolchain
-                        "RUSTUP_TOOLCHAIN": "esp"
-                    }
-                }
                 //ENDIF
             }
         }

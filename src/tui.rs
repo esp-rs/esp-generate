@@ -59,6 +59,43 @@ impl Repository {
         }
     }
 
+    /// Rebuild the options tree for a (possibly different) chip.
+    ///
+    /// The `options` argument is the *fully prepared* tree: the caller is
+    /// responsible for running chip-filtering, module population and toolchain
+    /// population against a pristine template. This keeps `Repository` free of
+    /// chip-specific knowledge — it only owns the mechanical "my tree changed,
+    /// keep my state consistent" primitive.
+    ///
+    /// The menu path is trimmed to the depth that still resolves against the
+    /// new tree rather than reset wholesale, so callers that repopulate a
+    /// single category on the *same* chip (notably the toolchain scan) keep
+    /// their cursor where it is; callers that truly switch chips typically
+    /// want to [`Self::reset_path`] after this.
+    pub fn set_options(&mut self, chip: Chip, options: Vec<GeneratorOptionItem>) {
+        self.config.reset_options(chip, options);
+
+        // Trim the navigation path to whatever still resolves in the new tree.
+        let mut current: &[GeneratorOptionItem] = &self.config.options;
+        let mut valid_depth = 0;
+        for &idx in &self.path {
+            match current.get(idx) {
+                Some(GeneratorOptionItem::Category(category)) => {
+                    valid_depth += 1;
+                    current = category.options.as_slice();
+                }
+                _ => break,
+            }
+        }
+        self.path.truncate(valid_depth);
+    }
+
+    /// Collapse the menu path back to the root. Intended for callers that have
+    /// just switched chip and want the UI to start from a known location.
+    pub fn reset_path(&mut self) {
+        self.path.clear();
+    }
+
     /// Returns the *explicitly* selected toolchain, if there is any
     fn selected_toolchain(&self) -> Option<String> {
         self.config.selected.iter().find_map(|idx| {
@@ -726,6 +763,71 @@ mod test {
             wide_text.contains("will disable: loooooong-one, loooooong-two, loooooong-three"),
             "expected detailed trailer, got: {wide_text:?}"
         );
+    }
+
+    #[test]
+    fn set_options_preserves_survivors_drops_missing_and_cascades() {
+        // Rebuilding the options tree (e.g. on chip switch) must:
+        //   * keep selections whose option name survives in the new tree,
+        //   * drop selections whose option was removed (remap-by-name),
+        //   * cascade out anything whose requirements are now unmet,
+        //   * trim `path` to whatever still resolves in the new tree.
+        let initial = vec![
+            GeneratorOptionItem::Category(esp_generate::template::GeneratorOptionCategory {
+                name: "cat".to_string(),
+                display_name: "cat".to_string(),
+                help: String::new(),
+                requires: Vec::new(),
+                options: vec![
+                    option("survivor", &[]),
+                    option("will-vanish", &[]),
+                    option("dependent", &["will-vanish"]),
+                ],
+            }),
+        ];
+
+        let mut repository = Repository::new(
+            Chip::Esp32,
+            initial,
+            &[
+                "survivor".to_string(),
+                "will-vanish".to_string(),
+                "dependent".to_string(),
+            ],
+        );
+        // Simulate the user having entered the `cat` category.
+        repository.enter_group(0);
+        assert_eq!(repository.path.len(), 1);
+
+        // New tree for a "different chip" — `will-vanish` is gone; the category
+        // itself is preserved so the path stays valid. `dependent` has its
+        // required option removed so it must cascade out.
+        let rebuilt = vec![
+            GeneratorOptionItem::Category(esp_generate::template::GeneratorOptionCategory {
+                name: "cat".to_string(),
+                display_name: "cat".to_string(),
+                help: String::new(),
+                requires: Vec::new(),
+                options: vec![option("survivor", &[]), option("dependent", &["will-vanish"])],
+            }),
+        ];
+
+        repository.set_options(Chip::Esp32c6, rebuilt);
+
+        assert_eq!(repository.config.chip, Chip::Esp32c6);
+        assert!(repository.config.is_selected("survivor"));
+        // Name no longer exists in the new tree: remap-by-name drops it.
+        assert!(!repository.config.is_selected("will-vanish"));
+        // Present but requirement unmet: cascade evicts it.
+        assert!(!repository.config.is_selected("dependent"));
+        // `cat` category still exists at the same index → path is preserved.
+        assert_eq!(repository.path.len(), 1);
+
+        // Now rebuild with the category itself gone: path must be trimmed.
+        let reshaped = vec![option("survivor", &[])];
+        repository.set_options(Chip::Esp32c6, reshaped);
+        assert_eq!(repository.path.len(), 0);
+        assert!(repository.config.is_selected("survivor"));
     }
 }
 

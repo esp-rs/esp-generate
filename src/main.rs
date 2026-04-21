@@ -1,7 +1,6 @@
 use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use esp_generate::Chip;
-use esp_generate::modules::populate_module_category;
 use esp_generate::template::{GeneratorOption, GeneratorOptionItem, Template};
 use esp_generate::{
     append_list_as_sentence,
@@ -376,15 +375,31 @@ fn main() -> Result<()> {
         Some(toolchain::start_toolchain_scan())
     };
 
-    let mut template = TEMPLATE.clone();
-    remove_incompatible_chip_options(chip, &mut template.options);
-    populate_module_category(chip, &mut template.options);
-    process_options(&template, &args)?;
-
     // Stash the toolchain-category placeholder now, before anything mutates it.
     // `populate` is idempotent against this anchor, so repeated population
     // (e.g. after a future chip switch) always starts from a known baseline.
-    let toolchain_category = toolchain::ToolchainCategory::capture(&template.options);
+    let toolchain_category = toolchain::ToolchainCategory::capture(&TEMPLATE.options);
+
+    // Build the initial options tree for the current chip. In headless mode
+    // the toolchain scan never runs, so we seed the toolchain category with
+    // `--toolchain` (if any) up front — otherwise post-build lookups for the
+    // CLI toolchain name would fail.
+    let headless_toolchain: &[String] = match (args.headless, args.toolchain.as_ref()) {
+        (true, Some(tc)) => std::slice::from_ref(tc),
+        _ => &[],
+    };
+    let initial_options =
+        build_options_for_chip(chip, toolchain_category.as_ref(), headless_toolchain);
+
+    // `process_options` validates `--option` against the options tree. We keep
+    // a transient `Template` around for just this call; the authoritative copy
+    // of the tree moves into `Repository` right after.
+    process_options(
+        &Template {
+            options: initial_options.clone(),
+        },
+        &args,
+    )?;
 
     // Initial selection for TUI/headless, including toolchain if provided.
     let mut initial_selected = args.option.clone();
@@ -392,9 +407,12 @@ fn main() -> Result<()> {
         initial_selected.push(tc.clone());
     }
 
-    let mut selected = if !args.headless {
-        let repository = tui::Repository::new(chip, template.options.clone(), &initial_selected);
+    // Single source of truth: `Repository` owns the options tree from here on.
+    // The CLI post-processing code below reads `flat_options` / `options` back
+    // out of it regardless of which branch (TUI or headless) populated them.
+    let repository = tui::Repository::new(chip, initial_options, &initial_selected);
 
+    let (mut selected, flat_options) = if !args.headless {
         let mut app = tui::App::new(repository);
 
         let mut terminal = tui::init_terminal()?;
@@ -429,16 +447,15 @@ fn main() -> Result<()> {
                                 log::warn!("{warning}");
                             }
 
-                            if let Some(category) = toolchain_category.as_ref() {
-                                category.populate(&mut template.options, &filtered.names);
-                                category.populate(
-                                    &mut app.repository.config.options,
-                                    &filtered.names,
-                                );
-                                // `selected` indexes into `flat_options`, which
-                                // `populate` did not touch. Rebuild both.
-                                app.repository.config.rebuild_indices();
-                            }
+                            // Rebuild the repository's options tree in-place.
+                            // `set_options` handles index remapping and cascades
+                            // out any selection whose requirements break.
+                            let new_options = build_options_for_chip(
+                                chip,
+                                toolchain_category.as_ref(),
+                                &filtered.names,
+                            );
+                            app.repository.set_options(chip, new_options);
 
                             toolchains_populated = true;
                         }
@@ -475,16 +492,14 @@ fn main() -> Result<()> {
         tui::restore_terminal()?;
         // done with the TUI
 
-        let Some(selected) = final_selected else {
+        let Some(sel) = final_selected else {
             return Ok(());
         };
 
-        selected
+        (sel, app.repository.config.flat_options)
     } else {
-        initial_selected
+        (initial_selected, repository.config.flat_options)
     };
-
-    let flat_options = flatten_options(&template.options);
     let mut toolchain_replaced = false;
     let selected_options = format!(
         "--chip {}{}",
@@ -505,18 +520,17 @@ fn main() -> Result<()> {
         println!("Selected options: {selected_options}");
     }
 
-    let selected_toolchain = if args.headless {
-        args.toolchain.clone()
-    } else {
-        selected.iter().find_map(|name| {
-            let (_, opt) = find_option(name, &flat_options, chip)?;
-            if opt.selection_group == "toolchain" {
-                Some(name.clone())
-            } else {
-                None
-            }
-        })
-    };
+    // Same lookup for TUI and headless: both branches populated the toolchain
+    // category in `flat_options` (TUI via scan results, headless via the
+    // `--toolchain` CLI hint), so `find_option` resolves in either case.
+    let selected_toolchain = selected.iter().find_map(|name| {
+        let (_, opt) = find_option(name, &flat_options, chip)?;
+        if opt.selection_group == "toolchain" {
+            Some(name.clone())
+        } else {
+            None
+        }
+    });
 
     let selected_module = selected.iter().find_map(|name| {
         let (_, opt) = find_option(name, &flat_options, chip)?;
@@ -693,6 +707,33 @@ fn remove_incompatible_chip_options(chip: Chip, options: &mut Vec<GeneratorOptio
             option.chips.is_empty() || option.chips.contains(&chip)
         }
     });
+}
+
+/// Build a fully-prepared options tree for the given chip off the pristine
+/// [`TEMPLATE`].
+///
+/// Applies, in order:
+///   1. chip-compat pruning (`remove_incompatible_chip_options`),
+///   2. module-category population (`modules::populate_module_category`),
+///   3. toolchain-category population (`ToolchainCategory::populate`), if a
+///      `ToolchainCategory` was captured off the original template.
+///
+/// This is the single place that knows how to turn "chip + current toolchain
+/// list" into a ready-to-use options tree, and it is deliberately cheap enough
+/// to re-run on every chip switch or scan result (no subprocesses; the
+/// toolchain info is already cached in-memory by the caller).
+fn build_options_for_chip(
+    chip: Chip,
+    toolchain_category: Option<&toolchain::ToolchainCategory>,
+    toolchains: &[String],
+) -> Vec<GeneratorOptionItem> {
+    let mut options = TEMPLATE.options.clone();
+    remove_incompatible_chip_options(chip, &mut options);
+    esp_generate::modules::populate_module_category(chip, &mut options);
+    if let Some(category) = toolchain_category {
+        category.populate(&mut options, toolchains);
+    }
+    options
 }
 
 #[derive(Clone, Copy)]

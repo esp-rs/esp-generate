@@ -114,6 +114,33 @@ pub const ESP32C3_MODULES: &[Module] = &[
     },
 ];
 
+pub const ESP32C5_MODULES: &[Module] = &[
+    Module {
+        name: "esp32c5-wroom-1",
+        display_name: "ESP32-C5-WROOM-1/1U (Without PSRAM)",
+        chip: Chip::Esp32c61,
+        remove_pins: &["spi_flash"],
+    },
+    Module {
+        name: "esp32c5-wroom-1-psram",
+        display_name: "ESP32-C5-WROOM-1/1U (8MB PSRAM)",
+        chip: Chip::Esp32c61,
+        remove_pins: &["spi_flash", "spi_psram"],
+    },
+    Module {
+        name: "esp32c5-mini-1",
+        display_name: "ESP32-C5-MINI-1/1U (Without PSRAM)",
+        chip: Chip::Esp32c61,
+        remove_pins: &["spi_flash"],
+    },
+    Module {
+        name: "esp32c5-mini-1-psram",
+        display_name: "ESP32-C5-MINI-1/1U (8MB PSRAM)",
+        chip: Chip::Esp32c61,
+        remove_pins: &["spi_flash", "spi_psram"],
+    },
+];
+
 pub const ESP32C6_MODULES: &[Module] = &[
     Module {
         name: "esp32c6-mini-1",
@@ -129,6 +156,20 @@ pub const ESP32C6_MODULES: &[Module] = &[
     },
 ];
 
+pub const ESP32C61_MODULES: &[Module] = &[
+    Module {
+        name: "esp32c61-wroom-1",
+        display_name: "ESP32-C61-WROOM-1/1U",
+        chip: Chip::Esp32c61,
+        remove_pins: &["spi_flash", "spi_psram"],
+    },
+    Module {
+        name: "esp32c61-mini-1",
+        display_name: "ESP32-C61-MINI-1/1U",
+        chip: Chip::Esp32c61,
+        remove_pins: &["spi_flash"],
+    },
+];
 pub const ESP32H2_MODULES: &[Module] = &[
     Module {
         name: "esp32h2-mini-1",

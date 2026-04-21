@@ -53,6 +53,31 @@ impl ActiveConfiguration {
             .collect();
     }
 
+    /// Swap in a new chip + options tree and keep `selected` / `flat_options`
+    /// consistent.
+    ///
+    /// This is the supported entry point for dynamic chip switching: the caller
+    /// builds the new options tree (chip filter + module population + toolchain
+    /// population) off of the pristine template and hands it over. The rest is
+    /// mechanical:
+    ///   * [`Self::rebuild_indices`] remaps selection indices by option name,
+    ///     silently dropping any name that no longer exists in the new tree;
+    ///   * [`Self::drop_unsatisfied`] then cascades out anything whose
+    ///     requirements are no longer met against the trimmed set (e.g. an
+    ///     option that survived by name but depended on something the chip
+    ///     switch eliminated).
+    ///
+    /// Note: `path` on [`crate::tui::Repository`] is a UI concern and is NOT
+    /// touched here. Callers that change the chip should also either reset or
+    /// clamp the menu path themselves — the category the user was browsing may
+    /// no longer exist.
+    pub fn reset_options(&mut self, chip: Chip, options: Vec<GeneratorOptionItem>) {
+        self.chip = chip;
+        self.options = options;
+        self.rebuild_indices();
+        self.drop_unsatisfied();
+    }
+
     pub fn is_group_selected(&self, group: &str) -> bool {
         self.selected
             .iter()

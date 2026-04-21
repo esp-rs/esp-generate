@@ -147,6 +147,54 @@ impl Repository {
         current
     }
 
+    /// Tree-indices of the items that pass their `compatible` check at the
+    /// current menu level, in their original order.
+    ///
+    /// The menu renders and navigates over this filtered view so that items
+    /// failing their `compatible` constraint are invisible to the user — the
+    /// generalised replacement for the chip-level pruning that used to happen
+    /// at tree-build time. Row indices produced by ratatui's `ListState`
+    /// therefore index into `visible_indices()`, not into `current_level()`,
+    /// and every caller that needs the underlying tree item must translate via
+    /// [`Self::visible_item`].
+    fn visible_indices(&self) -> Vec<usize> {
+        let level = self.current_level();
+        level
+            .iter()
+            .enumerate()
+            .filter(|(_, v)| self.is_item_visible(v))
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    /// Translate a row index (as delivered by the TUI's `ListState`) into the
+    /// underlying item at the current level.
+    pub fn visible_item(&self, row: usize) -> &GeneratorOptionItem {
+        let level = self.current_level();
+        let tree_idx = self.visible_indices()[row];
+        &level[tree_idx]
+    }
+
+    /// Number of items currently visible at this level. The TUI renders
+    /// exactly this many rows.
+    pub fn visible_count(&self) -> usize {
+        self.visible_indices().len()
+    }
+
+    /// An item is visible in the TUI when:
+    ///   * for a plain option: its `compatible` constraint is satisfied —
+    ///     i.e. every referenced selection group has an allowed option active;
+    ///   * for a category: at least one of its children (recursively) is
+    ///     visible. An empty category — real or filtered — is hidden too.
+    fn is_item_visible(&self, item: &GeneratorOptionItem) -> bool {
+        match item {
+            GeneratorOptionItem::Option(option) => self.config.is_option_compatible(option),
+            GeneratorOptionItem::Category(category) => {
+                category.options.iter().any(|child| self.is_item_visible(child))
+            }
+        }
+    }
+
     /// Returns `true` if the current menu level is inside a category called `name`.
     fn is_in_category(&self, name: &str) -> bool {
         if self.path.is_empty() {
@@ -196,16 +244,24 @@ impl Repository {
         }
     }
 
-    fn enter_group(&mut self, index: usize) {
-        self.path.push(index);
+    /// `row` is the index delivered by the TUI's `ListState`, i.e. a position
+    /// inside the filtered visible view. It's translated to the real tree
+    /// index before being pushed onto `path`.
+    fn enter_group(&mut self, row: usize) {
+        let tree_idx = self.visible_indices()[row];
+        self.path.push(tree_idx);
     }
 
-    fn toggle_current(&mut self, index: usize) {
+    /// `row` is a visible-row index (see [`Self::enter_group`]). Options in
+    /// the `chip` selection group behave as a radio — clicking the already-
+    /// selected chip is a no-op; switching chips goes through the usual
+    /// `select_idx` cascade.
+    fn toggle_current(&mut self, row: usize) {
         if !self.current_level_is_active() {
             return;
         }
 
-        let GeneratorOptionItem::Option(ref option) = self.current_level()[index] else {
+        let GeneratorOptionItem::Option(ref option) = *self.visible_item(row) else {
             ratatui::restore();
             unreachable!();
         };
@@ -234,8 +290,9 @@ impl Repository {
         }
     }
 
-    fn is_option(&self, index: usize) -> bool {
-        matches!(self.current_level()[index], GeneratorOptionItem::Option(_))
+    /// `row` is a visible-row index (see [`Self::enter_group`]).
+    fn is_option(&self, row: usize) -> bool {
+        matches!(self.visible_item(row), GeneratorOptionItem::Option(_))
     }
 
     fn up(&mut self) {
@@ -258,10 +315,22 @@ impl Repository {
         let level = self.current_level();
         let level_active = self.current_level_is_active();
 
-        level
+        // Iterate the *visible* view only: items whose `compatible` constraint
+        // currently fails are hidden from the TUI as part of the cascade, and
+        // their stale selections (if any) have already been cleared by
+        // `drop_unsatisfied`. `idx` is the row index handed back to the
+        // `ListState`, which is why every navigation helper translates through
+        // `Self::visible_indices` before touching the real tree.
+        let visible: Vec<(usize, &GeneratorOptionItem)> = level
             .iter()
             .enumerate()
-            .map(|(idx, v)| {
+            .filter(|(_, v)| self.is_item_visible(v))
+            .collect();
+
+        visible
+            .iter()
+            .enumerate()
+            .map(|(idx, &(_, v))| {
                 let is_selected = self
                     .config
                     .selected
@@ -586,6 +655,7 @@ mod test {
     use super::Repository;
     use crate::Chip;
     use esp_generate::template::{GeneratorOption, GeneratorOptionItem};
+    use indexmap::IndexMap;
 
     fn option(name: &str, requires: &[&str]) -> GeneratorOptionItem {
         GeneratorOptionItem::Option(GeneratorOption {
@@ -594,18 +664,27 @@ mod test {
             selection_group: String::new(),
             help: String::new(),
             requires: requires.iter().map(|r| r.to_string()).collect(),
-            chips: Vec::new(),
+            compatible: IndexMap::new(),
         })
     }
 
+    /// Build an option that is only compatible with the given chips. The
+    /// `compatible` map uses the `chip` selection group as its key, which is
+    /// the generalisation of the old `chips: [...]` field — callers still
+    /// just pass a `&[Chip]` for convenience.
     fn option_for_chips(name: &str, requires: &[&str], chips: &[Chip]) -> GeneratorOptionItem {
+        let mut compatible = IndexMap::new();
+        compatible.insert(
+            "chip".to_string(),
+            chips.iter().map(|c| c.to_string()).collect(),
+        );
         GeneratorOptionItem::Option(GeneratorOption {
             name: name.to_string(),
             display_name: name.to_string(),
             selection_group: String::new(),
             help: String::new(),
             requires: requires.iter().map(|r| r.to_string()).collect(),
-            chips: chips.to_vec(),
+            compatible,
         })
     }
 
@@ -618,7 +697,7 @@ mod test {
             selection_group: "chip".to_string(),
             help: String::new(),
             requires: Vec::new(),
-            chips: Vec::new(),
+            compatible: IndexMap::new(),
         })
     }
 
@@ -756,43 +835,83 @@ mod test {
             );
         }
 
-        // Non-toggleable rows must stay silent even when `would_force_deselect`
-        // would otherwise report evictions — a user can't actually toggle the
-        // row, so advertising a phantom cascade is misleading.
+        // Visible-but-non-toggleable rows must stay silent even when
+        // `would_force_deselect` would otherwise report evictions — a user
+        // can't actually toggle the row, so advertising a phantom cascade is
+        // misleading. `unmet-pos` has an unmet positive requirement but its
+        // `compatible` constraint is trivially satisfied, so it still renders.
         //
-        // Two shapes are exercised:
-        //   * `unmet-pos`  — positive requirement not satisfied (`needs-x`).
-        //   * `wrong-chip` — chip-mismatch; `requires: ["!method"]` would still
-        //     return a cascade from the raw predicate, so only the gate keeps
-        //     the row quiet.
+        // (The `compatible` failure case is exercised separately below —
+        // those rows are now HIDDEN from the TUI entirely, not shown silent.)
         let options = vec![
             option("method", &[]),
             option("unmet-pos", &["needs-x", "!method"]),
-            option_for_chips("wrong-chip", &["!method"], &[Chip::Esp32c6]),
         ];
-        let repository =
-            Repository::new(Chip::Esp32, options, &["method".to_string()]);
+        let repository = Repository::new(Chip::Esp32, options, &["method".to_string()]);
 
-        for idx in 1..=2 {
-            let (actionable, line) = repository
-                .current_level_desc(80, &ui, Some(idx))
-                .into_iter()
-                .nth(idx)
-                .unwrap();
-            let text: String = line
-                .spans
-                .iter()
-                .map(|s| s.content.to_string())
-                .collect();
-            assert!(
-                !actionable,
-                "row {idx} must report as non-actionable, got: {text:?}"
-            );
-            assert!(
-                !text.contains("will disable"),
-                "non-toggleable hovered row {idx} must not show the warning, got: {text:?}"
-            );
-        }
+        let (actionable, line) = repository
+            .current_level_desc(80, &ui, Some(1))
+            .into_iter()
+            .nth(1)
+            .unwrap();
+        let text: String = line
+            .spans
+            .iter()
+            .map(|s| s.content.to_string())
+            .collect();
+        assert!(
+            !actionable,
+            "unmet-pos row must report as non-actionable, got: {text:?}"
+        );
+        assert!(
+            !text.contains("will disable"),
+            "non-toggleable hovered row must not show the warning, got: {text:?}"
+        );
+
+        // Incompatible rows are now hidden from the TUI by
+        // `current_level_desc` — they don't even enter the visible list, so
+        // `will disable` is impossible to render. This is the generalised
+        // replacement for the old "chip-mismatch shown as a silent, greyed-out
+        // row" behaviour: `compatible: { chip: [esp32c6] }` with an `esp32`
+        // active in the chip selection group filters the row out outright.
+        let mut wrong_chip_compat = IndexMap::new();
+        wrong_chip_compat.insert("chip".to_string(), vec!["esp32c6".to_string()]);
+        let options = vec![
+            // Stand-in for the runtime chip selector category.
+            chip_group_option(Chip::Esp32),
+            option("method", &[]),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "wrong-chip".to_string(),
+                display_name: "wrong-chip".to_string(),
+                selection_group: String::new(),
+                help: String::new(),
+                requires: vec!["!method".to_string()],
+                compatible: wrong_chip_compat,
+            }),
+        ];
+        let repository = Repository::new(
+            Chip::Esp32,
+            options,
+            &["esp32".to_string(), "method".to_string()],
+        );
+        let rows = repository.current_level_desc(80, &ui, Some(0));
+        assert!(
+            rows.iter()
+                .all(|(_, line)| !line.spans.iter().any(|s| s.content.contains("wrong-chip"))),
+            "incompatible row must be hidden from current_level_desc, got rows: {:?}",
+            rows.iter()
+                .map(|(_, l)| l
+                    .spans
+                    .iter()
+                    .map(|s| s.content.to_string())
+                    .collect::<String>())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            rows.len(),
+            2,
+            "expected the chip-group option and `method` to remain visible"
+        );
     }
 
     #[test]
@@ -1146,10 +1265,7 @@ impl App {
 
                         if self.repository.is_option(selected) {
                             self.repository.toggle_current(selected);
-                        } else if !self.repository.current_level()[selected]
-                            .options()
-                            .is_empty()
-                        {
+                        } else if !self.repository.visible_item(selected).options().is_empty() {
                             self.repository.enter_group(self.selected());
                             self.enter_menu();
                         }
@@ -1255,12 +1371,11 @@ impl App {
         if let Some(current_state) = self.state.last_mut() {
             // Create a List from all list items and highlight the currently selected one
 
-            let current_item_active = if let Some(current) =
-                current_state.selected().and_then(|idx| {
-                    self.repository
-                        .current_level()
-                        .get(idx.min(items.len() - 1))
-                }) {
+            let current_item_active = if items.is_empty() {
+                false
+            } else if let Some(idx) = current_state.selected() {
+                let row = idx.min(items.len() - 1);
+                let current = self.repository.visible_item(row);
                 self.repository.current_level_is_active()
                     && self.repository.is_item_actionable(current)
             } else {
@@ -1283,10 +1398,12 @@ impl App {
     }
 
     fn help_paragraph(&self) -> Option<Paragraph<'_>> {
-        let selected = self
-            .selected()
-            .min(self.repository.current_level().len() - 1);
-        let option = &self.repository.current_level()[selected];
+        let visible_count = self.repository.visible_count();
+        if visible_count == 0 {
+            return None;
+        }
+        let selected = self.selected().min(visible_count - 1);
+        let option = self.repository.visible_item(selected);
 
         let relationships = self.repository.config.collect_relationships(option);
 

@@ -15,7 +15,7 @@ use strum::IntoEnumIterator;
 ///
 /// The entries' `name` is `chip.to_string()` (e.g. `esp32c6`), which matches
 /// what `#IF option("esp32c6")` in template files expects and what
-/// `remove_incompatible_chip_options` compares against.
+/// `compatible: { chip: [...] }` allow-lists compare against.
 pub fn populate_chip_category(options: &mut [GeneratorOptionItem]) {
     for item in options.iter_mut() {
         let GeneratorOptionItem::Category(category) = item else {
@@ -48,6 +48,7 @@ pub fn populate_chip_category(options: &mut [GeneratorOptionItem]) {
 mod test {
     use super::*;
     use esp_generate::template::{GeneratorOption, GeneratorOptionCategory};
+    use indexmap::IndexMap;
 
     fn placeholder_tree() -> Vec<GeneratorOptionItem> {
         vec![GeneratorOptionItem::Category(GeneratorOptionCategory {
@@ -61,7 +62,7 @@ mod test {
                 selection_group: "chip".to_string(),
                 help: String::new(),
                 requires: Vec::new(),
-                chips: Vec::new(),
+                compatible: IndexMap::new(),
             })],
         })]
     }
@@ -92,7 +93,7 @@ mod test {
             };
             assert_eq!(o.selection_group, "chip");
             assert!(
-                o.chips.is_empty(),
+                !o.compatible.contains_key("chip"),
                 "chip-group options must not restrict themselves by chip (they drive the restriction)"
             );
         }

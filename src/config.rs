@@ -192,12 +192,19 @@ impl ActiveConfiguration {
     }
 
     /// Fixpoint loop that evicts selected options whose requirements are no longer
-    /// met. Used after cascading deselection.
+    /// met, or whose `compatible` constraint is no longer satisfied. Used after
+    /// cascading deselection and after any chip / selection-group change that
+    /// might have invalidated compatibility.
     fn drop_unsatisfied(&mut self) {
         loop {
             let victim = self.selected.iter().position(|&idx| {
                 let opt = &self.flat_options[idx];
                 !self.requirements_met(&opt.requires)
+                    || !Self::is_option_compatible_against(
+                        opt,
+                        &self.selected,
+                        &self.flat_options,
+                    )
             });
             match victim {
                 Some(pos) => {
@@ -265,23 +272,6 @@ impl ActiveConfiguration {
                 }
             }
 
-            // Chip-switch preview: if the option being toggled is in the
-            // `chip` selection group, every currently-selected option whose
-            // `chips` filter excludes the new chip would be removed from
-            // the tree outright by `remove_incompatible_chip_options` during
-            // the rebuild. From the user's perspective that's
-            // indistinguishable from a force-deselect, so we report it here
-            // too. Options with an empty `chips` field are chip-agnostic and
-            // stay.
-            if option.selection_group == "chip"
-                && let Ok(target_chip) = option.name.parse::<Chip>()
-            {
-                simulated.retain(|idx| {
-                    let o = &self.flat_options[*idx];
-                    o.chips.is_empty() || o.chips.contains(&target_chip)
-                });
-            }
-
             // Put the option into the simulated set so cascade evaluates it in context.
             if let Some(idx) = option_idx {
                 if !simulated.contains(&idx) {
@@ -290,11 +280,18 @@ impl ActiveConfiguration {
             }
         }
 
-        // Shared cascade: drop anything whose requirements are no longer met.
+        // Shared cascade: drop anything whose requirements are no longer met
+        // or whose `compatible` constraint is no longer satisfied. The latter
+        // is how chip-switch previews show every option that would be pruned
+        // by the new chip — no chip-specific code path needed, since the chip
+        // is just another entry in the `chip` selection group and any option
+        // with `compatible: {chip: [...]}` simply drops out of the simulated
+        // set when the new chip isn't in its allow-list.
         loop {
             let victim = simulated.iter().position(|&idx| {
                 let opt = &self.flat_options[idx];
                 !Self::requirements_met_against(opt, &simulated, &self.flat_options)
+                    || !Self::is_option_compatible_against(opt, &simulated, &self.flat_options)
             });
             match victim {
                 Some(pos) => {
@@ -409,10 +406,44 @@ impl ActiveConfiguration {
         true
     }
 
+    /// Returns whether every `compatible: { group: [...] }` entry on `option`
+    /// is currently satisfied. Absent groups (and the empty map) are trivially
+    /// compatible. For each listed group there must be a selected option whose
+    /// `selection_group` matches the key AND whose `name` is in the allow-list.
+    ///
+    /// This is the generalised replacement for the old `chips:` filter —
+    /// `compatible: { chip: [...] }` is now how a template option expresses
+    /// "I only apply to these chips", driven by the current selection in the
+    /// `chip` selection group.
+    pub fn is_option_compatible(&self, option: &GeneratorOption) -> bool {
+        Self::is_option_compatible_against(option, &self.selected, &self.flat_options)
+    }
+
+    /// Static variant of [`Self::is_option_compatible`] that evaluates against
+    /// an arbitrary selection set. Used by [`Self::would_force_deselect`] to
+    /// simulate the effect of a toggle without mutating `self`.
+    fn is_option_compatible_against(
+        option: &GeneratorOption,
+        selected: &[usize],
+        flat_options: &[GeneratorOption],
+    ) -> bool {
+        for (group, allowed) in &option.compatible {
+            let group_ok = selected.iter().any(|&idx| {
+                let o = &flat_options[idx];
+                o.selection_group == *group && allowed.iter().any(|n| n == &o.name)
+            });
+            if !group_ok {
+                return false;
+            }
+        }
+        true
+    }
+
     /// Strict "is this option consistent with the current selection?" predicate.
     ///
     /// Returns `true` only when:
-    ///   * the option is available for the current chip,
+    ///   * every `compatible` group constraint is satisfied (see
+    ///     [`Self::is_option_compatible`]),
     ///   * every one of its requirements is satisfied (including negative ones), and
     ///   * no other currently-selected option has `!{option.name}` in its `requires`.
     ///
@@ -423,7 +454,7 @@ impl ActiveConfiguration {
     /// conflicts on the understanding that selecting the row will cascade them out
     /// via [`Self::select_idx`].
     pub fn is_option_active(&self, option: &GeneratorOption) -> bool {
-        if !option.chips.is_empty() && !option.chips.contains(&self.chip) {
+        if !self.is_option_compatible(option) {
             return false;
         }
 
@@ -461,7 +492,7 @@ impl ActiveConfiguration {
     /// Callers that care about full self-consistency (CLI validation, xtask
     /// coverage) must use [`Self::is_option_active`] instead.
     pub fn is_option_toggleable(&self, option: &GeneratorOption) -> bool {
-        if !option.chips.is_empty() && !option.chips.contains(&self.chip) {
+        if !self.is_option_compatible(option) {
             return false;
         }
 
@@ -555,20 +586,35 @@ pub struct Relationships<'a> {
     pub disabled_by: Vec<&'a str>,
 }
 
+/// Find an option by name, disambiguating duplicate entries via the `compatible`
+/// constraint on the `chip` selection group.
+///
+/// The template may legitimately carry two options that share a name but target
+/// different chips (e.g. the two `probe-rs` entries with different help text).
+/// We pick the first entry whose `compatible: { chip: [...] }` allow-list
+/// includes the given chip, or — if the entry doesn't constrain `chip` at all —
+/// the first such unconstrained entry.
 pub fn find_option<'c>(
     option: &str,
     options: &'c [GeneratorOption],
     chip: Chip,
 ) -> Option<(usize, &'c GeneratorOption)> {
-    options
-        .iter()
-        .enumerate()
-        .find(|(_, opt)| opt.name == option && (opt.chips.is_empty() || opt.chips.contains(&chip)))
+    let chip_name = chip.to_string();
+    options.iter().enumerate().find(|(_, opt)| {
+        if opt.name != option {
+            return false;
+        }
+        match opt.compatible.get("chip") {
+            None => true,
+            Some(allowed) => allowed.iter().any(|n| n == &chip_name),
+        }
+    })
 }
 
 #[cfg(test)]
 mod test {
     use crate::Chip;
+    use indexmap::IndexMap;
 
     use crate::{
         config::*,
@@ -583,7 +629,7 @@ mod test {
                 display_name: "Foobar".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec!["option2".to_string()],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -591,7 +637,7 @@ mod test {
                 display_name: "Barfoo".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec![],
             }),
         ];
@@ -619,7 +665,7 @@ mod test {
                 display_name: "Foobar".to_string(),
                 selection_group: "group".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -627,7 +673,7 @@ mod test {
                 display_name: "Barfoo".to_string(),
                 selection_group: "group".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -635,7 +681,7 @@ mod test {
                 display_name: "Prevents deselecting option2".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec!["option2".to_string()],
             }),
         ];
@@ -674,7 +720,7 @@ mod test {
                         display_name: "Foobar".to_string(),
                         selection_group: "group".to_string(),
                         help: "".to_string(),
-                        chips: vec![Chip::Esp32],
+                        compatible: IndexMap::new(),
                         requires: vec![],
                     }),
                     GeneratorOptionItem::Option(GeneratorOption {
@@ -682,7 +728,7 @@ mod test {
                         display_name: "Barfoo".to_string(),
                         selection_group: "group".to_string(),
                         help: "".to_string(),
-                        chips: vec![Chip::Esp32],
+                        compatible: IndexMap::new(),
                         requires: vec![],
                     }),
                 ],
@@ -692,7 +738,7 @@ mod test {
                 display_name: "Requires any in group to be selected".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec!["group".to_string()],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -700,7 +746,7 @@ mod test {
                 display_name: "Extra option that depends on something".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec!["option3".to_string()],
             }),
         ];
@@ -739,7 +785,7 @@ mod test {
                 display_name: "Foobar".to_string(),
                 selection_group: "group".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -747,7 +793,7 @@ mod test {
                 display_name: "Barfoo".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec!["group".to_string()],
             }),
         ];
@@ -776,7 +822,7 @@ mod test {
                 display_name: "Foobar".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -784,7 +830,7 @@ mod test {
                 display_name: "Barfoo".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec!["!option1".to_string()],
             }),
         ];
@@ -825,7 +871,7 @@ mod test {
                 display_name: "probe-rs".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -833,7 +879,7 @@ mod test {
                 display_name: "log".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec!["!probe-rs".to_string()],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -841,7 +887,7 @@ mod test {
                 display_name: "embedded-test".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec!["log".to_string()],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -849,7 +895,7 @@ mod test {
                 display_name: "panic-rtt-target".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec!["probe-rs".to_string()],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -857,7 +903,7 @@ mod test {
                 display_name: "wifi".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec![],
             }),
         ];
@@ -913,20 +959,34 @@ mod test {
         // report an empty cascade — toggling it is a no-op, so advertising
         // collateral damage would be a lie.
         //
-        // Fresh config (no prior selections) with three would-be-destructive
-        // rows whose toggle is *not* actionable:
-        //   * chip-mismatch (`chips = [Esp32c6]` on an Esp32 config),
+        // Fresh config with three would-be-destructive rows whose toggle
+        // is *not* actionable:
+        //   * compatibility-mismatch (`compatible: { chip: [Esp32c6] }` with
+        //     an `esp32` selection in the `chip` group),
         //   * unmet positive requirement (`requires: ["missing"]`),
         //   * both of the above.
         // Each of them also carries `!victim`, which — without the guard —
         // `would_force_deselect` would still happily report.
+        let mut wrong_chip_compat = IndexMap::new();
+        wrong_chip_compat.insert("chip".to_string(), vec!["esp32c6".to_string()]);
         let options = vec![
+            // Stand-in for the chip selector the TUI populates at runtime.
+            // `ActiveConfiguration::select` picks this up and now drives every
+            // `compatible: { chip: [...] }` check.
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "esp32".to_string(),
+                display_name: "esp32".to_string(),
+                selection_group: "chip".to_string(),
+                help: "".to_string(),
+                compatible: IndexMap::new(),
+                requires: vec![],
+            }),
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "victim".to_string(),
                 display_name: "victim".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -934,7 +994,7 @@ mod test {
                 display_name: "wrong-chip".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32c6],
+                compatible: wrong_chip_compat,
                 requires: vec!["!victim".to_string()],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -942,7 +1002,7 @@ mod test {
                 display_name: "unmet-pos".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec!["missing".to_string(), "!victim".to_string()],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -950,7 +1010,7 @@ mod test {
                 display_name: "neg-conflict".to_string(),
                 selection_group: "".to_string(),
                 help: "".to_string(),
-                chips: vec![Chip::Esp32],
+                compatible: IndexMap::new(),
                 requires: vec!["!victim".to_string()],
             }),
         ];
@@ -960,6 +1020,7 @@ mod test {
             flat_options: flatten_options(&options),
             options,
         };
+        active.select("esp32");
         active.select("victim");
 
         let wrong_chip = active
@@ -992,5 +1053,79 @@ mod test {
 
     fn empty() -> &'static [usize] {
         &[]
+    }
+
+    #[test]
+    fn compatible_against_non_chip_group_hides_and_cascades() {
+        // Exercise the generalised `compatible` constraint on a group other
+        // than `chip`. A `pretty-logs` option is only compatible when the
+        // active `log-frontend` is `defmt` (not `log`); switching the group
+        // selection must cascade `pretty-logs` out of the selected set, and
+        // `is_option_compatible` must reflect the change.
+        let mut pretty_logs_compat = IndexMap::new();
+        pretty_logs_compat.insert("log-frontend".to_string(), vec!["defmt".to_string()]);
+        let options = vec![
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "defmt".to_string(),
+                display_name: "defmt".to_string(),
+                selection_group: "log-frontend".to_string(),
+                help: "".to_string(),
+                compatible: IndexMap::new(),
+                requires: vec![],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "log".to_string(),
+                display_name: "log".to_string(),
+                selection_group: "log-frontend".to_string(),
+                help: "".to_string(),
+                compatible: IndexMap::new(),
+                requires: vec![],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "pretty-logs".to_string(),
+                display_name: "pretty-logs".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                compatible: pretty_logs_compat,
+                requires: vec![],
+            }),
+        ];
+        let mut active = ActiveConfiguration {
+            chip: Chip::Esp32,
+            selected: vec![],
+            flat_options: flatten_options(&options),
+            options,
+        };
+
+        // Baseline: nothing picked in log-frontend, so `pretty-logs` can't be
+        // compatible and therefore can't be toggled on.
+        let pretty = active
+            .flat_options
+            .iter()
+            .find(|o| o.name == "pretty-logs")
+            .cloned()
+            .unwrap();
+        assert!(!active.is_option_compatible(&pretty));
+        assert!(!active.is_option_toggleable(&pretty));
+
+        // Picking `defmt` satisfies `compatible: { log-frontend: [defmt] }`.
+        active.select("defmt");
+        assert!(active.is_option_compatible(&pretty));
+        assert!(active.is_option_toggleable(&pretty));
+        active.select("pretty-logs");
+        assert!(active.is_selected("pretty-logs"));
+
+        // Switching to `log` (same group) swaps the selection. The cascade
+        // in `drop_unsatisfied` notices `pretty-logs` is no longer compatible
+        // and clears it — exactly the "selected options should be cleared"
+        // half of the `compatible` contract.
+        active.select("log");
+        assert!(active.is_selected("log"));
+        assert!(!active.is_selected("defmt"));
+        assert!(
+            !active.is_selected("pretty-logs"),
+            "pretty-logs must be cleared when log-frontend moves off defmt"
+        );
+        assert!(!active.is_option_compatible(&pretty));
     }
 }

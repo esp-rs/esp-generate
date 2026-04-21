@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Generated projects now keep runtime configuration in `.cargo/esp-config.toml` and include it from `.cargo/config.toml` (#326)
+
 ### Fixed
 
 ### Removed

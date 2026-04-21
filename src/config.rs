@@ -25,6 +25,34 @@ pub fn flatten_options(options: &[GeneratorOptionItem]) -> Vec<GeneratorOption> 
 }
 
 impl ActiveConfiguration {
+    /// Rebuild [`Self::flat_options`] from [`Self::options`] and remap
+    /// [`Self::selected`] by option name.
+    ///
+    /// Must be called whenever `options` is mutated out-of-band — e.g. after
+    /// the toolchain category is (re)populated in response to a scan result or
+    /// a chip switch. `selected` stores indices into `flat_options`, so any
+    /// structural change to the tree invalidates them.
+    ///
+    /// Options whose name is no longer present in the rebuilt flat view are
+    /// silently dropped from `selected`. This is the correct behaviour for a
+    /// chip switch that removes toolchains (or any other category items): the
+    /// cascade logic in `select_idx` / `deselect_idx` runs off indices, not
+    /// names, so leaving dangling indices would be a latent panic.
+    pub fn rebuild_indices(&mut self) {
+        let selected_names: Vec<String> = self
+            .selected
+            .iter()
+            .filter_map(|&idx| self.flat_options.get(idx).map(|o| o.name.clone()))
+            .collect();
+
+        self.flat_options = flatten_options(&self.options);
+
+        self.selected = selected_names
+            .into_iter()
+            .filter_map(|name| self.flat_options.iter().position(|o| o.name == name))
+            .collect();
+    }
+
     pub fn is_group_selected(&self, group: &str) -> bool {
         self.selected
             .iter()

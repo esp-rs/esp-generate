@@ -366,21 +366,25 @@ fn main() -> Result<()> {
 
     let msrv: check::Version = versions.msrv().parse().unwrap();
 
-    // Start toolchain scan as early as we know chip and msrv (TUI only).
+    // Start toolchain scan as early as possible (TUI only). The scan itself is
+    // chip-agnostic — chip/MSRV/CLI hint are applied later by
+    // `toolchain::toolchains_for_chip` against the cached result, which makes
+    // dynamic chip selection possible without re-scanning.
     let mut toolchain_scan = if args.headless {
         None
     } else {
-        Some(toolchain::start_toolchain_scan(
-            chip,
-            args.toolchain.clone(),
-            msrv.clone(),
-        ))
+        Some(toolchain::start_toolchain_scan())
     };
 
     let mut template = TEMPLATE.clone();
     remove_incompatible_chip_options(chip, &mut template.options);
     populate_module_category(chip, &mut template.options);
     process_options(&template, &args)?;
+
+    // Stash the toolchain-category placeholder now, before anything mutates it.
+    // `populate` is idempotent against this anchor, so repeated population
+    // (e.g. after a future chip switch) always starts from a known baseline.
+    let toolchain_category = toolchain::ToolchainCategory::capture(&template.options);
 
     // Initial selection for TUI/headless, including toolchain if provided.
     let mut initial_selected = args.option.clone();
@@ -412,17 +416,29 @@ fn main() -> Result<()> {
                     }
                     Some(Ok(list)) => {
                         if !toolchains_populated {
-                            toolchain::populate_toolchain_category_from_list(
-                                &mut template.options,
-                                &mut Vec::new(),
+                            // Derive a per-chip view from the cached chip-agnostic
+                            // scan. This is pure and cheap, so it can be re-run
+                            // from anywhere once dynamic chip selection lands.
+                            let filtered = toolchain::toolchains_for_chip(
                                 list,
-                            )?;
+                                chip,
+                                &msrv,
+                                args.toolchain.as_deref(),
+                            );
+                            for warning in &filtered.warnings {
+                                log::warn!("{warning}");
+                            }
 
-                            toolchain::populate_toolchain_category_from_list(
-                                &mut app.repository.config.options,
-                                &mut app.repository.config.flat_options,
-                                list,
-                            )?;
+                            if let Some(category) = toolchain_category.as_ref() {
+                                category.populate(&mut template.options, &filtered.names);
+                                category.populate(
+                                    &mut app.repository.config.options,
+                                    &filtered.names,
+                                );
+                                // `selected` indexes into `flat_options`, which
+                                // `populate` did not touch. Rebuild both.
+                                app.repository.config.rebuild_indices();
+                            }
 
                             toolchains_populated = true;
                         }

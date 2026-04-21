@@ -105,14 +105,38 @@ enum SubCommands {
 impl SubCommands {
     fn handle(&self) -> Result<()> {
         fn chip_info_text(options: &[&GeneratorOption], opt: &GeneratorOption) -> String {
-            let mut chips = Vec::new();
+            // Merge the `compatible: { chip: [...] }` allow-lists from every
+            // variant sharing this name (there can be more than one — see the
+            // two `probe-rs` entries in the template). An option that omits
+            // the `chip` entry entirely is considered chip-agnostic, which we
+            // represent by "all chips allowed" so that the final union is a
+            // no-op.
+            let mut chips: Vec<Chip> = Vec::new();
+            let mut all_chip_agnostic = true;
             for option in options.iter().filter(|o| o.name == opt.name) {
-                chips.extend_from_slice(&option.chips);
+                match option.compatible.get("chip") {
+                    None => {
+                        all_chip_agnostic = true;
+                        chips.clear();
+                        chips.extend(Chip::iter());
+                        break;
+                    }
+                    Some(names) => {
+                        all_chip_agnostic = false;
+                        for name in names {
+                            if let Ok(chip) = name.parse::<Chip>()
+                                && !chips.contains(&chip)
+                            {
+                                chips.push(chip);
+                            }
+                        }
+                    }
+                }
             }
 
             let chip_count = Chip::iter().count();
 
-            if chips.is_empty() || chips.len() == chip_count {
+            if all_chip_agnostic || chips.len() == chip_count {
                 String::new()
             } else if chips.len() < chip_count / 2 {
                 format!(
@@ -754,15 +778,31 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn remove_incompatible_chip_options(chip: Chip, options: &mut Vec<GeneratorOptionItem>) {
+/// Prune every option whose `compatible: { chip: [...] }` allow-list excludes
+/// the given chip. Options that don't constrain `chip` (or that don't have a
+/// `compatible` entry at all) are kept. Empty categories are dropped.
+///
+/// This is the generalised replacement for the old `remove_incompatible_chip_options`
+/// pass: compatibility is evaluated from the `compatible` map on
+/// [`GeneratorOption`] against the chip the TUI currently has selected in the
+/// `chip` selection group, instead of the retired `chips: Vec<Chip>` field.
+///
+/// Only the `chip` group is evaluated here because it's the only group whose
+/// selection is already known at tree-build time. Any other `compatible`
+/// constraints are evaluated at runtime by
+/// [`crate::config::ActiveConfiguration::is_option_compatible`] and are
+/// enforced via the cascade in [`drop_unsatisfied`].
+fn prune_chip_incompatible_options(chip: Chip, options: &mut Vec<GeneratorOptionItem>) {
+    let chip_name = chip.to_string();
     options.retain_mut(|opt| match opt {
         GeneratorOptionItem::Category(category) => {
-            remove_incompatible_chip_options(chip, &mut category.options);
+            prune_chip_incompatible_options(chip, &mut category.options);
             !category.options.is_empty()
         }
-        GeneratorOptionItem::Option(option) => {
-            option.chips.is_empty() || option.chips.contains(&chip)
-        }
+        GeneratorOptionItem::Option(option) => match option.compatible.get("chip") {
+            None => true,
+            Some(allowed) => allowed.iter().any(|n| n == &chip_name),
+        },
     });
 }
 
@@ -770,7 +810,7 @@ fn remove_incompatible_chip_options(chip: Chip, options: &mut Vec<GeneratorOptio
 /// [`TEMPLATE`].
 ///
 /// Applies, in order:
-///   1. chip-compat pruning (`remove_incompatible_chip_options`),
+///   1. chip-compat pruning (`prune_chip_incompatible_options`),
 ///   2. module-category population (`modules::populate_module_category`),
 ///   3. toolchain-category population (`ToolchainCategory::populate`), if a
 ///      `ToolchainCategory` was captured off the original template.
@@ -785,7 +825,7 @@ fn build_options_for_chip(
     toolchains: &[String],
 ) -> Vec<GeneratorOptionItem> {
     let mut options = TEMPLATE.options.clone();
-    remove_incompatible_chip_options(chip, &mut options);
+    prune_chip_incompatible_options(chip, &mut options);
     chip_selector::populate_chip_category(&mut options);
     esp_generate::modules::populate_module_category(chip, &mut options);
     if let Some(category) = toolchain_category {
@@ -1001,37 +1041,71 @@ fn process_file(
 
 fn process_options(template: &Template, args: &Args) -> Result<()> {
     let mut success = true;
-    let all_options = template.all_options();
+    // `template.options` is the chip-pruned tree, so its `all_options()` no
+    // longer lists options that are incompatible with the current chip. For
+    // the "Unknown option" vs "Not supported for chip …" distinction we
+    // still need the full, unpruned catalogue — fall back to the pristine
+    // `TEMPLATE` for that.
+    let all_options_full = TEMPLATE.all_options();
 
     let arg_chip = args.chip.unwrap();
 
+    // Seed the simulated selection with the CLI `--option` list plus the
+    // synthetic chip-group entry named after `--chip`. The chip entry is
+    // essential now that chip restrictions live in `compatible: { chip: [...] }`
+    // rather than in a dedicated `chips:` field: without it, every
+    // chip-restricted option would fail `is_option_compatible` and look
+    // "invalid" to the validator.
+    let chip_name = arg_chip.to_string();
     let flat_options = flatten_options(&template.options);
+    let mut selected: Vec<usize> = args
+        .option
+        .iter()
+        .flat_map(|opt_name| flat_options.iter().position(|o| &o.name == opt_name))
+        .collect();
+    if let Some(pos) = flat_options
+        .iter()
+        .position(|o| o.selection_group == "chip" && o.name == chip_name)
+        && !selected.contains(&pos)
+    {
+        selected.push(pos);
+    }
+
     let selected_config = ActiveConfiguration {
         chip: arg_chip,
-        selected: args
-            .option
-            .iter()
-            .flat_map(|opt_name| flat_options.iter().position(|o| &o.name == opt_name))
-            .collect(),
+        selected,
         flat_options,
         options: template.options.clone(),
     };
 
     let mut same_selection_group: HashMap<&str, Vec<&str>> = HashMap::new();
 
-    for option in &selected_config.selected {
-        let option = selected_config.flat_options[*option].name.as_str();
-        // Find the matching option in the template
+    // Iterate the user's CLI `--option` list directly rather than the
+    // resolved indices in `selected_config.selected`: an option that got
+    // pruned out of the chip-specific tree (because it isn't compatible
+    // with `--chip`) never makes it into `flat_options` and would be
+    // silently dropped here otherwise. We still want to surface a proper
+    // "Not supported for chip …" diagnostic in that case.
+    for option in &args.option {
+        let option = option.as_str();
         let mut option_found = false;
         let mut option_found_for_chip = false;
-        for &option_item in all_options.iter().filter(|item| item.name == option) {
-            option_found = true; // The input refers to an existing option.
+        // Existence check uses the pristine template: the chip-pruned view
+        // will have dropped any option whose `compatible: { chip: [...] }`
+        // excludes `--chip`, and we don't want those to masquerade as
+        // "Unknown option".
+        for &option_item in all_options_full.iter().filter(|item| item.name == option) {
+            option_found = true;
 
-            // Check if the chip is supported. If the chip list is empty, all chips are supported.
+            // Check if the chip is supported. An option that doesn't constrain the
+            // `chip` group in its `compatible` map is considered chip-agnostic.
             // We don't immediately fail in case the option is not present for the chip, because
             // it may exist as a separate entry (e.g. with different properties).
-            if !option_item.chips.contains(&arg_chip) && !option_item.chips.is_empty() {
-                continue;
+            if let Some(allowed) = option_item.compatible.get("chip") {
+                let chip_name = arg_chip.to_string();
+                if !allowed.iter().any(|n| n == &chip_name) {
+                    continue;
+                }
             }
 
             option_found_for_chip = true;

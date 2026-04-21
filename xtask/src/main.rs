@@ -11,7 +11,7 @@ use esp_generate::{
     Chip,
     config::{ActiveConfiguration, find_option, flatten_options},
     modules::populate_module_category,
-    template::{GeneratorOptionCategory, GeneratorOptionItem, Template},
+    template::{GeneratorOption, GeneratorOptionCategory, GeneratorOptionItem, Template},
 };
 use itertools::Itertools;
 use log::info;
@@ -20,6 +20,21 @@ use log::info;
 const IGNORED_CATEGORIES: &[&str] = &["editor", "optional", "toolchain"];
 // The module selector generates way too many test cases to check with --all-combinations.
 const IGNORED_CATEGORIES_FULL: &[&str] = &["editor", "optional", "toolchain", "module"];
+
+/// Mirror of `esp_generate::main::prune_chip_incompatible_options`'s predicate:
+/// an option is considered chip-compatible when it either has no `compatible:
+/// { chip: [...] }` constraint at all, or its allow-list contains the given
+/// chip. Other `compatible` entries aren't evaluated here — like the binary,
+/// the xtask only applies chip-based filtering at the tree-shaping layer.
+fn is_chip_compatible(option: &GeneratorOption, chip: Chip) -> bool {
+    match option.compatible.get("chip") {
+        None => true,
+        Some(allowed) => {
+            let chip_name = chip.to_string();
+            allowed.iter().any(|n| n == &chip_name)
+        }
+    }
+}
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -255,7 +270,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
         for option in &category.options {
             match option {
                 GeneratorOptionItem::Option(option) => {
-                    if option.chips.is_empty() || option.chips.contains(&chip) {
+                    if is_chip_compatible(option, chip) {
                         all_options.push(option.name.as_str());
                     }
                 }
@@ -279,7 +294,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
             GeneratorOptionItem::Option(option) => {
                 if option.selection_group == "base-template" {
                     template_selectors.push(Some(option.name.clone()));
-                } else if option.chips.is_empty() || option.chips.contains(&chip) {
+                } else if is_chip_compatible(option, chip) {
                     all_options.push(option.name.as_str());
                 }
             }

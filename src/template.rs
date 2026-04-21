@@ -1,6 +1,16 @@
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
-use crate::Chip;
+/// Map from selection-group name to the subset of options in that group that
+/// are compatible with this item. If any listed group has no current selection
+/// — or its selection is outside the allow-list — the item is considered
+/// incompatible and is hidden from the TUI (and its selection, if any, is
+/// cleared). Absent groups are unconstrained.
+///
+/// This generalises what `chips: [...]` used to express: a chip restriction
+/// is now just a `compatible: { chip: [...] }` entry driven by the `chip`
+/// selection group the TUI populates at runtime.
+pub type CompatibilityRequirements = IndexMap<String, Vec<String>>;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GeneratorOption {
@@ -13,8 +23,10 @@ pub struct GeneratorOption {
     pub help: String,
     #[serde(default)]
     pub requires: Vec<String>,
+    /// Per-selection-group compatibility allow-lists. See
+    /// [`CompatibilityRequirements`].
     #[serde(default)]
-    pub chips: Vec<Chip>,
+    pub compatible: CompatibilityRequirements,
 }
 
 impl GeneratorOption {
@@ -77,10 +89,13 @@ impl GeneratorOptionItem {
         matches!(self, GeneratorOptionItem::Category(_))
     }
 
-    pub fn chips(&self) -> &[Chip] {
+    /// Per-group compatibility allow-list for this item. Categories don't
+    /// currently carry their own compatibility constraints — they derive
+    /// from their children via [`ActiveConfiguration::is_active`].
+    pub fn compatible(&self) -> Option<&CompatibilityRequirements> {
         match self {
-            GeneratorOptionItem::Category(_) => &[],
-            GeneratorOptionItem::Option(option) => option.chips.as_slice(),
+            GeneratorOptionItem::Category(_) => None,
+            GeneratorOptionItem::Option(option) => Some(&option.compatible),
         }
     }
 

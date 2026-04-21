@@ -1,6 +1,16 @@
 #INCLUDEFILE false
 options:
   - !Category
+    name: chip
+    display_name: Chip selection
+    help: Target Espressif chip. Switching chip rebuilds the option tree and drops any options that are incompatible with the new chip.
+    options:
+      - !Option
+        name: PLACEHOLDER
+        display_name: "<dynamic - will be replaced at runtime>"
+        selection_group: chip
+
+  - !Category
     name: module
     display_name: Module/Board selection
     help: Select your specific ESP32 module. This selection is optional, but it will generate code to help you avoid using reserved GPIOs.

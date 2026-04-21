@@ -265,6 +265,23 @@ impl ActiveConfiguration {
                 }
             }
 
+            // Chip-switch preview: if the option being toggled is in the
+            // `chip` selection group, every currently-selected option whose
+            // `chips` filter excludes the new chip would be removed from
+            // the tree outright by `remove_incompatible_chip_options` during
+            // the rebuild. From the user's perspective that's
+            // indistinguishable from a force-deselect, so we report it here
+            // too. Options with an empty `chips` field are chip-agnostic and
+            // stay.
+            if option.selection_group == "chip"
+                && let Ok(target_chip) = option.name.parse::<Chip>()
+            {
+                simulated.retain(|idx| {
+                    let o = &self.flat_options[*idx];
+                    o.chips.is_empty() || o.chips.contains(&target_chip)
+                });
+            }
+
             // Put the option into the simulated set so cascade evaluates it in context.
             if let Some(idx) = option_idx {
                 if !simulated.contains(&idx) {

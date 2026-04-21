@@ -108,6 +108,32 @@ impl Repository {
         })
     }
 
+    /// Returns the chip that is currently ticked in the `chip` selection
+    /// group, if any. The main loop polls this after every event to detect
+    /// user-driven chip switches; disagreement with [`ActiveConfiguration::chip`]
+    /// triggers a full options-tree rebuild.
+    ///
+    /// Returns `None` only in degenerate situations (e.g. tests that build a
+    /// `Repository` without a chip category). Callers should fall back to
+    /// `self.config.chip` in that case.
+    pub fn selected_chip(&self) -> Option<Chip> {
+        self.config.selected.iter().find_map(|idx| {
+            let option = &self.config.flat_options[*idx];
+            if option.selection_group == "chip" {
+                option.name.parse().ok()
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Current depth of the menu navigation path. Used by `App` to keep its
+    /// `ListState` stack synchronized with `Repository::path` after a
+    /// `set_options` may have trimmed the path.
+    pub fn path_len(&self) -> usize {
+        self.path.len()
+    }
+
     fn current_level(&self) -> &[GeneratorOptionItem] {
         let mut current: &[GeneratorOptionItem] = &self.config.options;
 
@@ -185,6 +211,12 @@ impl Repository {
         };
 
         let option_name = option.name.clone();
+        // The chip group behaves like a required radio: there must always be
+        // exactly one chip ticked (the one backing the current options tree),
+        // so clicking the already-selected chip is a no-op instead of a
+        // deselect. Switching to a different chip still works through the
+        // usual selection_group mutex in `select_idx`.
+        let is_chip_group = option.selection_group == "chip";
 
         if let Some(i) = self
             .config
@@ -192,6 +224,9 @@ impl Repository {
             .iter()
             .position(|s| self.config.flat_options[*s].name == option_name)
         {
+            if is_chip_group {
+                return;
+            }
             let idx = self.config.selected[i];
             self.config.deselect_idx(idx);
         } else if self.config.is_option_toggleable(option) {
@@ -501,6 +536,41 @@ impl App {
     pub fn set_toolchains_loading(&mut self, loading: bool) {
         self.toolchains_loading = loading;
     }
+
+    /// Swap the repository's options tree and keep the UI state consistent.
+    ///
+    /// `Repository::set_options` trims the navigation path to whatever still
+    /// resolves in the new tree; we mirror that here on the `ListState` stack.
+    /// When the caller asks for a path reset (the typical chip-switch case),
+    /// we also collapse back to the root menu with a fresh selection at the
+    /// top so the user isn't dropped inside a now-unrelated category.
+    pub fn set_options(
+        &mut self,
+        chip: Chip,
+        options: Vec<GeneratorOptionItem>,
+        reset_path: bool,
+    ) {
+        self.repository.set_options(chip, options);
+        if reset_path {
+            self.repository.reset_path();
+        }
+
+        // The state stack is always `path_len + 1` — one for the root level,
+        // one per entered category. Truncate mirrors the path trim; the min-1
+        // floor guarantees we always have a state for the visible level.
+        let desired = self.repository.path_len() + 1;
+        self.state.truncate(desired.max(1));
+        if self.state.is_empty() {
+            let mut fresh = ListState::default();
+            fresh.select(Some(0));
+            self.state.push(fresh);
+        }
+        if reset_path
+            && let Some(last) = self.state.last_mut()
+        {
+            last.select(Some(0));
+        }
+    }
     pub fn selected_options(&self) -> Vec<String> {
         self.repository
             .config
@@ -536,6 +606,19 @@ mod test {
             help: String::new(),
             requires: requires.iter().map(|r| r.to_string()).collect(),
             chips: chips.to_vec(),
+        })
+    }
+
+    /// Build an option belonging to the `chip` selection group, mirroring what
+    /// the in-tree chip selector category looks like at runtime.
+    fn chip_group_option(chip: Chip) -> GeneratorOptionItem {
+        GeneratorOptionItem::Option(GeneratorOption {
+            name: chip.to_string(),
+            display_name: chip.to_string(),
+            selection_group: "chip".to_string(),
+            help: String::new(),
+            requires: Vec::new(),
+            chips: Vec::new(),
         })
     }
 
@@ -828,6 +911,196 @@ mod test {
         repository.set_options(Chip::Esp32c6, reshaped);
         assert_eq!(repository.path.len(), 0);
         assert!(repository.config.is_selected("survivor"));
+    }
+
+    #[test]
+    fn selected_chip_reports_chip_group_selection() {
+        // `selected_chip` is the bridge the main loop uses to notice user-driven
+        // chip switches. It must return the chip whose group entry is currently
+        // ticked, regardless of what `config.chip` says (divergence is the
+        // whole point — that's how we detect a pending switch), and `None`
+        // when no chip-group option is present in the tree at all.
+        let options = vec![
+            chip_group_option(Chip::Esp32),
+            chip_group_option(Chip::Esp32c6),
+            option("alloc", &[]),
+        ];
+
+        let repository = Repository::new(
+            Chip::Esp32,
+            options,
+            &["esp32c6".to_string(), "alloc".to_string()],
+        );
+
+        // config.chip still says Esp32 (the tree hasn't been rebuilt yet) but
+        // the user has ticked `esp32c6` in the chip group — the main loop
+        // picks this up and triggers the rebuild.
+        assert_eq!(repository.config.chip, Chip::Esp32);
+        assert_eq!(repository.selected_chip(), Some(Chip::Esp32c6));
+
+        // A tree without a chip category means no chip group selection —
+        // falls back to `None`, which the main loop maps to `config.chip`.
+        let no_chip_group = Repository::new(Chip::Esp32, vec![option("alloc", &[])], &[]);
+        assert_eq!(no_chip_group.selected_chip(), None);
+    }
+
+    #[test]
+    fn toggle_chip_group_is_a_radio_not_a_toggle() {
+        // The chip selection group is a *required* radio: clicking the
+        // currently-selected chip must be a no-op (there is no "no chip"
+        // state the options tree can be in). Clicking a different chip
+        // swaps via the normal selection_group mutex in `select_idx`.
+        let options = vec![
+            chip_group_option(Chip::Esp32),
+            chip_group_option(Chip::Esp32c6),
+        ];
+        let mut repository =
+            Repository::new(Chip::Esp32, options, &["esp32".to_string()]);
+
+        repository.toggle_current(0);
+        assert!(
+            repository.config.is_selected("esp32"),
+            "clicking the already-selected chip must be a no-op"
+        );
+
+        repository.toggle_current(1);
+        assert!(
+            repository.config.is_selected("esp32c6"),
+            "clicking a different chip must swap the selection"
+        );
+        assert!(
+            !repository.config.is_selected("esp32"),
+            "same-group mutex must deselect the previous chip"
+        );
+    }
+
+    #[test]
+    fn chip_switch_preview_lists_incompatible_options() {
+        // Hovering a different chip must preview the full blast radius of
+        // the impending switch, not just the same-group eviction of the
+        // current chip entry. Anything whose `chips` filter excludes the
+        // target chip would be removed from the tree by
+        // `remove_incompatible_chip_options` on rebuild — from the user's
+        // perspective that's a force-deselect, so it belongs in the
+        // "will disable" trailer.
+        let options = vec![
+            chip_group_option(Chip::Esp32),
+            chip_group_option(Chip::Esp32c6),
+            // Chip-specific options selected on the current chip.
+            option_for_chips("wroom", &[], &[Chip::Esp32]),
+            option_for_chips("another-esp32-only", &[], &[Chip::Esp32]),
+            // Chip-agnostic: must NOT appear in the preview.
+            option("alloc", &[]),
+            // Cascade target: requires `wroom`, which the switch drops, so
+            // this must be listed too (indirect fallout).
+            option("depends-on-wroom", &["wroom"]),
+        ];
+
+        let repository = Repository::new(
+            Chip::Esp32,
+            options,
+            &[
+                "esp32".to_string(),
+                "wroom".to_string(),
+                "another-esp32-only".to_string(),
+                "alloc".to_string(),
+                "depends-on-wroom".to_string(),
+            ],
+        );
+
+        // Look up the esp32c6 chip-group option as a plain `GeneratorOption`
+        // — `would_force_deselect` takes the unwrapped leaf.
+        let esp32c6 = match &repository.current_level()[1] {
+            GeneratorOptionItem::Option(o) => o.clone(),
+            _ => panic!("expected chip-group option"),
+        };
+
+        let evicted = repository.config.would_force_deselect(&esp32c6);
+
+        // Chip-incompatible options appear directly.
+        assert!(
+            evicted.iter().any(|n| n == "wroom"),
+            "expected `wroom` in preview, got: {evicted:?}"
+        );
+        assert!(
+            evicted.iter().any(|n| n == "another-esp32-only"),
+            "expected `another-esp32-only` in preview, got: {evicted:?}"
+        );
+        // The chip-group sibling (the currently selected chip) appears too —
+        // that's the same-group mutex kicking in.
+        assert!(
+            evicted.iter().any(|n| n == "esp32"),
+            "expected the old chip entry in preview, got: {evicted:?}"
+        );
+        // Indirect fallout via cascade.
+        assert!(
+            evicted.iter().any(|n| n == "depends-on-wroom"),
+            "expected cascade victim `depends-on-wroom` in preview, got: {evicted:?}"
+        );
+        // Chip-agnostic options survive the switch.
+        assert!(
+            !evicted.iter().any(|n| n == "alloc"),
+            "chip-agnostic options must not be listed, got: {evicted:?}"
+        );
+    }
+
+    #[test]
+    fn chip_switch_via_set_options_drops_incompatible_survivors() {
+        // Simulates what main.rs does when the user picks a different chip
+        // in the TUI: build a fresh tree for the new chip (which drops
+        // options tagged for other chips) and feed it through `set_options`.
+        //
+        // The `chips`-based filter is structural: incompatible options are
+        // *removed* from the new tree, so `rebuild_indices` drops them by
+        // name on the way through. This is exactly what we want — options
+        // the user had selected but that don't exist on the new chip simply
+        // vanish from `selected`.
+        let initial = vec![
+            chip_group_option(Chip::Esp32),
+            chip_group_option(Chip::Esp32c6),
+            // Only valid on the first chip.
+            option_for_chips("only-on-esp32", &[], &[Chip::Esp32]),
+            // Valid on both — should survive the switch.
+            option_for_chips("shared", &[], &[Chip::Esp32, Chip::Esp32c6]),
+        ];
+
+        let mut repository = Repository::new(
+            Chip::Esp32,
+            initial,
+            &[
+                "esp32".to_string(),
+                "only-on-esp32".to_string(),
+                "shared".to_string(),
+            ],
+        );
+
+        // Rebuild for the new chip as if `build_options_for_chip(Esp32c6, …)`
+        // had been called: `only-on-esp32` is gone, the chip group still
+        // carries both entries (it's chip-agnostic), and the user has now
+        // ticked `esp32c6`.
+        let rebuilt = vec![
+            chip_group_option(Chip::Esp32),
+            chip_group_option(Chip::Esp32c6),
+            option_for_chips("shared", &[], &[Chip::Esp32, Chip::Esp32c6]),
+        ];
+        // Before applying `set_options`, mimic what `toggle_current` would
+        // have done: swap the chip-group pick on the *old* tree. This is the
+        // state the main loop sees when it reads `selected_chip()` and
+        // triggers the rebuild.
+        repository.toggle_current(1);
+        assert_eq!(repository.selected_chip(), Some(Chip::Esp32c6));
+
+        repository.set_options(Chip::Esp32c6, rebuilt);
+
+        assert_eq!(repository.config.chip, Chip::Esp32c6);
+        assert!(repository.config.is_selected("esp32c6"));
+        assert!(!repository.config.is_selected("esp32"));
+        assert!(repository.config.is_selected("shared"));
+        // Chip-filtered out of the tree entirely; rebuild-by-name drops it.
+        assert!(!repository.config.is_selected("only-on-esp32"));
+        // And `selected_chip()` now agrees with `config.chip` — no more
+        // pending switch.
+        assert_eq!(repository.selected_chip(), Some(repository.config.chip));
     }
 }
 

@@ -99,6 +99,11 @@ impl ActiveConfiguration {
             return;
         }
 
+        // If the option is already selected, leave state as-is.
+        if self.selected.contains(&idx) {
+            return;
+        }
+
         // Swap out same-group siblings (the existing "radio-button" behaviour).
         if !Self::deselect_group(&mut self.selected, &self.flat_options, &o.selection_group) {
             return;
@@ -660,7 +665,10 @@ mod test {
         active.select("option1");
         let opt2 = active.flat_options[1].clone();
         assert!(active.is_option_active(&opt2));
-        assert_eq!(active.would_force_deselect(&opt2), vec!["option1".to_string()]);
+        assert_eq!(
+            active.would_force_deselect(&opt2),
+            vec!["option1".to_string()]
+        );
 
         active.select("option2");
         assert!(active.is_selected("option2"));

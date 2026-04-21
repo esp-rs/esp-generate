@@ -25,43 +25,6 @@ pub fn flatten_options(options: &[GeneratorOptionItem]) -> Vec<GeneratorOption> 
 }
 
 impl ActiveConfiguration {
-    fn option_requires(option: &GeneratorOption, requirement: &str) -> bool {
-        option.requires.iter().any(|r| r == requirement)
-    }
-
-    pub fn option_is_method_specific_for_state(
-        option: &GeneratorOption,
-        method_option: &str,
-        method_option_selected: bool,
-    ) -> bool {
-        if method_option_selected {
-            Self::option_requires(option, method_option)
-        } else {
-            let requirement = format!("!{method_option}");
-            Self::option_requires(option, &requirement)
-        }
-    }
-
-    pub fn can_switch_method_option(&self, method_option: &str) -> bool {
-        let mut has_selected_side = false;
-        let mut has_unselected_side = false;
-
-        let negated = format!("!{method_option}");
-        for option in &self.flat_options {
-            if Self::option_requires(option, method_option) {
-                has_selected_side = true;
-            }
-            if Self::option_requires(option, &negated) {
-                has_unselected_side = true;
-            }
-            if has_selected_side && has_unselected_side {
-                return true;
-            }
-        }
-
-        false
-    }
-
     pub fn is_group_selected(&self, group: &str) -> bool {
         self.selected
             .iter()
@@ -110,15 +73,191 @@ impl ActiveConfiguration {
         self.select_idx(index);
     }
 
+    /// Selects the option at `idx`.
+    ///
+    /// Negative requirements (`!X`) on this option force-deselect `X` if it's currently
+    /// selected. The deselection cascades: anything whose requirements are no longer
+    /// met is dropped as well (there is no save/restore mechanism; swapped-out options
+    /// simply disappear until the user re-enables them).
+    ///
+    /// Positive requirements remain hard gates — if any of them is unmet the call is
+    /// a no-op.
     pub fn select_idx(&mut self, idx: usize) {
-        let o = &self.flat_options[idx];
-        if !self.is_option_active(o) {
+        let o = self.flat_options[idx].clone();
+
+        // Positive requirements can't be materialised, so they still gate selection.
+        for req in &o.requires {
+            if req.starts_with('!') {
+                continue;
+            }
+            if self.is_selected(req) {
+                continue;
+            }
+            if Self::group_exists(req, &self.flat_options) && self.is_group_selected(req) {
+                continue;
+            }
             return;
         }
+
+        // Swap out same-group siblings (the existing "radio-button" behaviour).
         if !Self::deselect_group(&mut self.selected, &self.flat_options, &o.selection_group) {
             return;
         }
+
+        // Force-deselect anything directly forbidden by a `!X` requirement.
+        for req in &o.requires {
+            let Some(disables) = req.strip_prefix('!') else {
+                continue;
+            };
+            if let Some(pos) = self.selected_index(disables) {
+                self.selected.swap_remove(pos);
+            }
+        }
+
         self.selected.push(idx);
+
+        // Cascade: drop anything whose requirements broke as a side effect.
+        self.drop_unsatisfied();
+    }
+
+    /// Deselects the option at `idx`, then cascades: any remaining selection whose
+    /// requirements were propped up by the one we just removed is dropped too. This is
+    /// the counterpart to [`Self::select_idx`]'s cascade, and gives the user a
+    /// predictable "clear, don't save" experience when toggling off an option that
+    /// others depend on (e.g. toggling probe-rs off clears panic-rtt-target).
+    pub fn deselect_idx(&mut self, idx: usize) {
+        let Some(pos) = self.selected.iter().position(|&s| s == idx) else {
+            return;
+        };
+        self.selected.swap_remove(pos);
+        self.drop_unsatisfied();
+    }
+
+    /// Fixpoint loop that evicts selected options whose requirements are no longer
+    /// met. Used after cascading deselection.
+    fn drop_unsatisfied(&mut self) {
+        loop {
+            let victim = self.selected.iter().position(|&idx| {
+                let opt = &self.flat_options[idx];
+                !self.requirements_met(&opt.requires)
+            });
+            match victim {
+                Some(pos) => {
+                    self.selected.swap_remove(pos);
+                }
+                None => return,
+            }
+        }
+    }
+
+    /// Returns the names of currently-selected options that would be force-deselected
+    /// (directly or via cascade) if the user toggled the given option. Empty when
+    /// toggling would be non-destructive.
+    ///
+    /// Symmetric: works whether the option is currently selected (simulates deselect,
+    /// reports cascade) or not (simulates select, reports same-group siblings,
+    /// negative-requirement targets, and cascade). The option being toggled is never
+    /// itself reported — only collateral damage.
+    pub fn would_force_deselect(&self, option: &GeneratorOption) -> Vec<String> {
+        let option_idx = find_option(&option.name, &self.flat_options, self.chip).map(|(i, _)| i);
+
+        let mut simulated = self.selected.clone();
+        let currently_selected = option_idx
+            .map(|idx| simulated.contains(&idx))
+            .unwrap_or(false);
+
+        if currently_selected {
+            // Simulated deselect: remove the option, then let cascade evict dependents.
+            if let Some(idx) = option_idx {
+                if let Some(pos) = simulated.iter().position(|&i| i == idx) {
+                    simulated.swap_remove(pos);
+                }
+            }
+        } else {
+            // Simulated select: kick same-group siblings…
+            if !option.selection_group.is_empty() {
+                simulated.retain(|idx| {
+                    let o = &self.flat_options[*idx];
+                    o.selection_group != option.selection_group
+                });
+            }
+
+            // …and anything directly named by a `!X` requirement.
+            for req in &option.requires {
+                let Some(disables) = req.strip_prefix('!') else {
+                    continue;
+                };
+                if let Some(pos) = simulated
+                    .iter()
+                    .position(|&i| self.flat_options[i].name == disables)
+                {
+                    simulated.swap_remove(pos);
+                }
+            }
+
+            // Put the option into the simulated set so cascade evaluates it in context.
+            if let Some(idx) = option_idx {
+                if !simulated.contains(&idx) {
+                    simulated.push(idx);
+                }
+            }
+        }
+
+        // Shared cascade: drop anything whose requirements are no longer met.
+        loop {
+            let victim = simulated.iter().position(|&idx| {
+                let opt = &self.flat_options[idx];
+                !Self::requirements_met_against(opt, &simulated, &self.flat_options)
+            });
+            match victim {
+                Some(pos) => {
+                    simulated.swap_remove(pos);
+                }
+                None => break,
+            }
+        }
+
+        // Collateral = things that were selected but aren't in the simulated set
+        // (excluding the option itself, which is the user's direct action).
+        self.selected
+            .iter()
+            .copied()
+            .filter(|idx| !simulated.contains(idx) && Some(*idx) != option_idx)
+            .map(|idx| self.flat_options[idx].name.clone())
+            .collect()
+    }
+
+    /// Static helper: evaluate `option.requires` against an arbitrary selected set.
+    fn requirements_met_against(
+        option: &GeneratorOption,
+        selected: &[usize],
+        flat_options: &[GeneratorOption],
+    ) -> bool {
+        for requirement in &option.requires {
+            let (key, expected) = if let Some(rest) = requirement.strip_prefix('!') {
+                (rest, false)
+            } else {
+                (requirement.as_str(), true)
+            };
+
+            let is_selected = selected.iter().any(|s| flat_options[*s].name == key);
+            if is_selected == expected {
+                continue;
+            }
+
+            let is_group = flat_options.iter().any(|o| o.selection_group == key);
+            if is_group {
+                let group_selected = selected
+                    .iter()
+                    .any(|s| flat_options[*s].selection_group == key);
+                if group_selected == expected {
+                    continue;
+                }
+            }
+
+            return false;
+        }
+        true
     }
 
     /// Returns whether an item is active (can be selected).
@@ -178,32 +317,27 @@ impl ActiveConfiguration {
 
     /// Returns whether an option is active (can be selected).
     ///
-    /// This involves checking if the option is available for the current chip, if it's not
-    /// disabled by any other selected option, and if all its requirements are met.
+    /// An option is active when it is available for the current chip and all its
+    /// *positive* requirements are met. Negative requirements (`!X`) never block
+    /// selection — selecting the option will force-deselect `X` and anything that
+    /// cascades from that. Use [`Self::would_force_deselect`] to know what would be
+    /// evicted before committing.
     pub fn is_option_active(&self, option: &GeneratorOption) -> bool {
         if !option.chips.is_empty() && !option.chips.contains(&self.chip) {
             return false;
         }
 
-        // Are this option's requirements met?
-        if !self.requirements_met(&option.requires) {
-            return false;
-        }
-
-        // Does any of the enabled options have a requirement against this one?
-        for selected in self.selected.iter().copied() {
-            let Some(selected_option) = self.flat_options.get(selected) else {
-                ratatui::restore();
-                panic!("selected option not found: {selected}");
-            };
-
-            for requirement in selected_option.requires.iter() {
-                if let Some(requirement) = requirement.strip_prefix('!') {
-                    if requirement == option.name {
-                        return false;
-                    }
-                }
+        for req in &option.requires {
+            if req.starts_with('!') {
+                continue;
             }
+            if self.is_selected(req) {
+                continue;
+            }
+            if Self::group_exists(req, &self.flat_options) && self.is_group_selected(req) {
+                continue;
+            }
+            return false;
         }
 
         true
@@ -494,12 +628,15 @@ mod test {
     }
 
     #[test]
-    fn requiring_not_option_only_rejects_existing_group() {
+    fn negative_requirement_force_deselects_instead_of_blocking() {
+        // option2 requires `!option1`. option1 is selected. option2 must be *active*
+        // (negative requirements no longer block selection) and selecting it must
+        // clear option1 rather than save it somewhere for later.
         let options = vec![
             GeneratorOptionItem::Option(GeneratorOption {
                 name: "option1".to_string(),
                 display_name: "Foobar".to_string(),
-                selection_group: "group".to_string(),
+                selection_group: "".to_string(),
                 help: "".to_string(),
                 chips: vec![Chip::Esp32],
                 requires: vec![],
@@ -521,8 +658,112 @@ mod test {
         };
 
         active.select("option1");
-        let (_, opt2) = find_option("option2", &active.flat_options, Chip::Esp32).unwrap();
-        assert!(!active.is_option_active(opt2));
+        let opt2 = active.flat_options[1].clone();
+        assert!(active.is_option_active(&opt2));
+        assert_eq!(active.would_force_deselect(&opt2), vec!["option1".to_string()]);
+
+        active.select("option2");
+        assert!(active.is_selected("option2"));
+        assert!(!active.is_selected("option1"));
+    }
+
+    #[test]
+    fn select_cascade_evicts_dependents_of_deselected_option() {
+        // Real-world analogue: selecting `probe-rs` must clear `log` (which has
+        // `!probe-rs`) and `embedded-test` (which requires `log`). Nothing is
+        // remembered — if the user toggles probe-rs back off they start from
+        // scratch. Symmetrically, once probe-rs *is* selected, deselecting it must
+        // cascade out anything requiring it (here, `panic-rtt-target`) and the
+        // warning predicate must list those dependents.
+        let options = vec![
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "probe-rs".to_string(),
+                display_name: "probe-rs".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec![],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "log".to_string(),
+                display_name: "log".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec!["!probe-rs".to_string()],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "embedded-test".to_string(),
+                display_name: "embedded-test".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec!["log".to_string()],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "panic-rtt-target".to_string(),
+                display_name: "panic-rtt-target".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec!["probe-rs".to_string()],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "wifi".to_string(),
+                display_name: "wifi".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec![],
+            }),
+        ];
+        let mut active = ActiveConfiguration {
+            chip: Chip::Esp32,
+            selected: vec![],
+            flat_options: flatten_options(&options),
+            options,
+        };
+
+        active.select("log");
+        active.select("embedded-test");
+        active.select("wifi");
+
+        // Select side: hovering `probe-rs` while `log`/`embedded-test` are on
+        // reports both as going away; actually selecting it does the cascade.
+        let probe_rs = active.flat_options[0].clone();
+        let mut evicted = active.would_force_deselect(&probe_rs);
+        evicted.sort();
+        assert_eq!(
+            evicted,
+            vec!["embedded-test".to_string(), "log".to_string()]
+        );
+
+        active.select("probe-rs");
+        assert!(active.is_selected("probe-rs"));
+        assert!(!active.is_selected("log"));
+        assert!(!active.is_selected("embedded-test"));
+        assert!(active.is_selected("wifi"));
+
+        // Deselect side: with probe-rs on, add `panic-rtt-target` (requires
+        // probe-rs). Hovering probe-rs must now list panic-rtt-target in the
+        // warning; `deselect_idx` does the same cascade.
+        active.select("panic-rtt-target");
+        let probe_rs = active.flat_options[0].clone();
+        let mut evicted = active.would_force_deselect(&probe_rs);
+        evicted.sort();
+        assert_eq!(evicted, vec!["panic-rtt-target".to_string()]);
+        assert!(!evicted.contains(&"probe-rs".to_string())); // never itself
+        assert!(!evicted.contains(&"wifi".to_string())); // unrelated stays
+
+        let (probe_rs_flat_idx, _) =
+            find_option("probe-rs", &active.flat_options, Chip::Esp32).unwrap();
+        active.deselect_idx(probe_rs_flat_idx);
+        assert!(!active.is_selected("probe-rs"));
+        assert!(!active.is_selected("panic-rtt-target"));
+        // Previously-cleared `!probe-rs` options are NOT resurrected.
+        assert!(!active.is_selected("log"));
+        assert!(!active.is_selected("embedded-test"));
+        assert!(active.is_selected("wifi"));
     }
 
     fn empty() -> &'static [usize] {

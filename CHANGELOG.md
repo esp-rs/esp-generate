@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Reverted: Preserve per-method flashing options when switching probe-rs and espflash (#327)
+- Flashing options are now cleared when selecting a different flashing method (#327)
+
 ### Fixed
 
 ### Removed

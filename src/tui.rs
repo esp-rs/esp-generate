@@ -218,10 +218,17 @@ impl Repository {
                 let padding = (width as usize).saturating_sub(v.title().len() + 4);
 
                 let is_hovered = hovered == Some(idx);
+                let is_actionable = self.is_item_actionable(v);
                 // Symmetric: whether the row is selected or not, toggling it may
                 // force-deselect others — always ask the config what would happen.
+                // Gated on `is_actionable` so rows the user can't actually toggle
+                // (chip-mismatch or unmet positive requirements) don't advertise a
+                // phantom cascade. Rows with only a negative-requirement conflict
+                // remain actionable (that's the whole point of the warning).
                 let warning_part: Option<String> = match v {
-                    GeneratorOptionItem::Option(option) if is_hovered && level_active => {
+                    GeneratorOptionItem::Option(option)
+                        if is_hovered && level_active && is_actionable =>
+                    {
                         let evicted = self.config.would_force_deselect(option);
                         if evicted.is_empty() {
                             None
@@ -247,10 +254,7 @@ impl Repository {
                     spans.push(Span::styled(warning, style.force_deselect_style));
                 }
 
-                (
-                    level_active && self.is_item_actionable(v),
-                    Line::from(spans),
-                )
+                (level_active && is_actionable, Line::from(spans))
             })
             .collect()
     }
@@ -487,6 +491,17 @@ mod test {
         })
     }
 
+    fn option_for_chips(name: &str, requires: &[&str], chips: &[Chip]) -> GeneratorOptionItem {
+        GeneratorOptionItem::Option(GeneratorOption {
+            name: name.to_string(),
+            display_name: name.to_string(),
+            selection_group: String::new(),
+            help: String::new(),
+            requires: requires.iter().map(|r| r.to_string()).collect(),
+            chips: chips.to_vec(),
+        })
+    }
+
     /// `UiElements` without any ratatui styling — keeps assertions about row text
     /// simple and independent of the themes `FANCY` / `FALLBACK` use.
     fn plain_ui() -> super::UiElements {
@@ -618,6 +633,44 @@ mod test {
             assert!(
                 !text.contains("will disable"),
                 "no row must show the warning when hover is non-destructive, got: {text:?}"
+            );
+        }
+
+        // Non-toggleable rows must stay silent even when `would_force_deselect`
+        // would otherwise report evictions — a user can't actually toggle the
+        // row, so advertising a phantom cascade is misleading.
+        //
+        // Two shapes are exercised:
+        //   * `unmet-pos`  — positive requirement not satisfied (`needs-x`).
+        //   * `wrong-chip` — chip-mismatch; `requires: ["!method"]` would still
+        //     return a cascade from the raw predicate, so only the gate keeps
+        //     the row quiet.
+        let options = vec![
+            option("method", &[]),
+            option("unmet-pos", &["needs-x", "!method"]),
+            option_for_chips("wrong-chip", &["!method"], &[Chip::Esp32c6]),
+        ];
+        let repository =
+            Repository::new(Chip::Esp32, options, &["method".to_string()]);
+
+        for idx in 1..=2 {
+            let (actionable, line) = repository
+                .current_level_desc(80, &ui, Some(idx))
+                .into_iter()
+                .nth(idx)
+                .unwrap();
+            let text: String = line
+                .spans
+                .iter()
+                .map(|s| s.content.to_string())
+                .collect();
+            assert!(
+                !actionable,
+                "row {idx} must report as non-actionable, got: {text:?}"
+            );
+            assert!(
+                !text.contains("will disable"),
+                "non-toggleable hovered row {idx} must not show the warning, got: {text:?}"
             );
         }
     }

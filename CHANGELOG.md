@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Chip selector has been moved to the TUI. (#328)
 - The chip needs to be specified as `-o <chip>` instead of `--chip <chip>` when using CLI (#328)
+- Generated projects now keep runtime configuration in `.cargo/esp-config.toml` and include it from `.cargo/config.toml` (#326)
 
 ### Fixed
 

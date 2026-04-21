@@ -265,9 +265,16 @@ impl ActiveConfiguration {
         true
     }
 
-    /// Returns whether an item is active (can be selected).
+    /// Returns whether an item is toggleable in the UI.
     ///
-    /// This function is different from `is_option_active` in that it handles categories as well.
+    /// For a category, the category's own requirements must be met (strict) *and* at
+    /// least one descendant must itself be toggleable; for a leaf option this uses
+    /// [`Self::is_option_toggleable`], i.e. an option with an unmet `!X` is still
+    /// considered reachable because selecting it would cascade `X` out.
+    ///
+    /// This is the TUI-facing predicate. For strict validation (e.g. the CLI
+    /// checking whether a user's selection set is self-consistent), use
+    /// [`Self::is_option_active`] directly.
     pub fn is_active(&self, item: &GeneratorOptionItem) -> bool {
         match item {
             GeneratorOptionItem::Category(category) => {
@@ -281,7 +288,7 @@ impl ActiveConfiguration {
                 }
                 false
             }
-            GeneratorOptionItem::Option(option) => self.is_option_active(option),
+            GeneratorOptionItem::Option(option) => self.is_option_toggleable(option),
         }
     }
 
@@ -320,14 +327,58 @@ impl ActiveConfiguration {
         true
     }
 
-    /// Returns whether an option is active (can be selected).
+    /// Strict "is this option consistent with the current selection?" predicate.
     ///
-    /// An option is active when it is available for the current chip and all its
-    /// *positive* requirements are met. Negative requirements (`!X`) never block
-    /// selection — selecting the option will force-deselect `X` and anything that
-    /// cascades from that. Use [`Self::would_force_deselect`] to know what would be
-    /// evicted before committing.
+    /// Returns `true` only when:
+    ///   * the option is available for the current chip,
+    ///   * every one of its requirements is satisfied (including negative ones), and
+    ///   * no other currently-selected option has `!{option.name}` in its `requires`.
+    ///
+    /// This is the right check for validation: the CLI (`esp-generate --headless -o …`)
+    /// and the xtask regression harness rely on it to reject inconsistent selection
+    /// sets. It is *not* the right check for "can the user click this row in the TUI"
+    /// — that's [`Self::is_option_toggleable`], which permits negative-requirement
+    /// conflicts on the understanding that selecting the row will cascade them out
+    /// via [`Self::select_idx`].
     pub fn is_option_active(&self, option: &GeneratorOption) -> bool {
+        if !option.chips.is_empty() && !option.chips.contains(&self.chip) {
+            return false;
+        }
+
+        if !self.requirements_met(&option.requires) {
+            return false;
+        }
+
+        for selected in self.selected.iter().copied() {
+            let Some(selected_option) = self.flat_options.get(selected) else {
+                ratatui::restore();
+                panic!("selected option not found: {selected}");
+            };
+
+            for requirement in selected_option.requires.iter() {
+                if let Some(requirement) = requirement.strip_prefix('!') {
+                    if requirement == option.name {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        true
+    }
+
+    /// Permissive "can the user toggle this row in the TUI?" predicate.
+    ///
+    /// Returns `true` when the option is available for the current chip and every
+    /// *positive* requirement is met. Negative requirements (`!X`) are intentionally
+    /// ignored here: the TUI treats them as force-deselect hints, not gates.
+    /// Selecting a row in this state routes through [`Self::select_idx`], which
+    /// cascades the negative-requirement targets (and their dependents) out; use
+    /// [`Self::would_force_deselect`] to preview that cascade.
+    ///
+    /// Callers that care about full self-consistency (CLI validation, xtask
+    /// coverage) must use [`Self::is_option_active`] instead.
+    pub fn is_option_toggleable(&self, option: &GeneratorOption) -> bool {
         if !option.chips.is_empty() && !option.chips.contains(&self.chip) {
             return false;
         }
@@ -664,7 +715,10 @@ mod test {
 
         active.select("option1");
         let opt2 = active.flat_options[1].clone();
-        assert!(active.is_option_active(&opt2));
+        // Strict validation (CLI/xtask): selection set is inconsistent → false.
+        assert!(!active.is_option_active(&opt2));
+        // TUI predicate: row is toggleable, selecting it will cascade `option1` out.
+        assert!(active.is_option_toggleable(&opt2));
         assert_eq!(
             active.would_force_deselect(&opt2),
             vec!["option1".to_string()]

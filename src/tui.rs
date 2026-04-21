@@ -126,7 +126,10 @@ impl Repository {
     fn is_item_actionable(&self, item: &GeneratorOptionItem) -> bool {
         match item {
             GeneratorOptionItem::Category(_) => self.config.is_active(item),
-            GeneratorOptionItem::Option(option) => self.config.is_option_active(option),
+            // Permissive: negative-requirement conflicts are treated as force-deselect
+            // hints, not gates. `toggle_current` routes through `select_idx`, which
+            // cascades them out.
+            GeneratorOptionItem::Option(option) => self.config.is_option_toggleable(option),
         }
     }
 
@@ -154,7 +157,7 @@ impl Repository {
         {
             let idx = self.config.selected[i];
             self.config.deselect_idx(idx);
-        } else if self.config.is_option_active(option) {
+        } else if self.config.is_option_toggleable(option) {
             self.config.select(&option_name);
         }
     }

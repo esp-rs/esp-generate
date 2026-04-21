@@ -1,0 +1,7 @@
+# Keep user/runtime configuration values in this file.
+[env]
+#IF option("defmt")
+DEFMT_LOG="info"
+#ELIF option("log")
+ESP_LOG="info"
+#ENDIF

@@ -163,14 +163,26 @@ impl ActiveConfiguration {
     /// reports cascade) or not (simulates select, reports same-group siblings,
     /// negative-requirement targets, and cascade). The option being toggled is never
     /// itself reported — only collateral damage.
+    ///
+    /// Defensive short-circuit: if the option is currently unselected and cannot
+    /// actually be toggled on (chip-mismatch or an unmet *positive* requirement),
+    /// the toggle would be a no-op, so we return an empty list. We gate on
+    /// [`Self::is_option_toggleable`] rather than the strict [`Self::is_option_active`]
+    /// on purpose — a row whose only conflict is a negative requirement *is*
+    /// toggleable (selecting it cascades the conflict out), and its cascade is
+    /// exactly what callers want reported.
     pub fn would_force_deselect(&self, option: &GeneratorOption) -> Vec<String> {
         let option_idx = find_option(&option.name, &self.flat_options, self.chip).map(|(i, _)| i);
 
-        let mut simulated = self.selected.clone();
         let currently_selected = option_idx
-            .map(|idx| simulated.contains(&idx))
+            .map(|idx| self.selected.contains(&idx))
             .unwrap_or(false);
 
+        if !currently_selected && !self.is_option_toggleable(option) {
+            return Vec::new();
+        }
+
+        let mut simulated = self.selected.clone();
         if currently_selected {
             // Simulated deselect: remove the option, then let cascade evict dependents.
             if let Some(idx) = option_idx {
@@ -826,6 +838,86 @@ mod test {
         assert!(!active.is_selected("log"));
         assert!(!active.is_selected("embedded-test"));
         assert!(active.is_selected("wifi"));
+
+        // Short-circuit: an unselected option that isn't actually toggleable must
+        // report an empty cascade — toggling it is a no-op, so advertising
+        // collateral damage would be a lie.
+        //
+        // Fresh config (no prior selections) with three would-be-destructive
+        // rows whose toggle is *not* actionable:
+        //   * chip-mismatch (`chips = [Esp32c6]` on an Esp32 config),
+        //   * unmet positive requirement (`requires: ["missing"]`),
+        //   * both of the above.
+        // Each of them also carries `!victim`, which — without the guard —
+        // `would_force_deselect` would still happily report.
+        let options = vec![
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "victim".to_string(),
+                display_name: "victim".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec![],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "wrong-chip".to_string(),
+                display_name: "wrong-chip".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32c6],
+                requires: vec!["!victim".to_string()],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "unmet-pos".to_string(),
+                display_name: "unmet-pos".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec!["missing".to_string(), "!victim".to_string()],
+            }),
+            GeneratorOptionItem::Option(GeneratorOption {
+                name: "neg-conflict".to_string(),
+                display_name: "neg-conflict".to_string(),
+                selection_group: "".to_string(),
+                help: "".to_string(),
+                chips: vec![Chip::Esp32],
+                requires: vec!["!victim".to_string()],
+            }),
+        ];
+        let mut active = ActiveConfiguration {
+            chip: Chip::Esp32,
+            selected: vec![],
+            flat_options: flatten_options(&options),
+            options,
+        };
+        active.select("victim");
+
+        let wrong_chip = active
+            .flat_options
+            .iter()
+            .find(|o| o.name == "wrong-chip")
+            .cloned()
+            .unwrap();
+        let unmet_pos = active
+            .flat_options
+            .iter()
+            .find(|o| o.name == "unmet-pos")
+            .cloned()
+            .unwrap();
+        let neg_conflict = active
+            .flat_options
+            .iter()
+            .find(|o| o.name == "neg-conflict")
+            .cloned()
+            .unwrap();
+
+        assert!(active.would_force_deselect(&wrong_chip).is_empty());
+        assert!(active.would_force_deselect(&unmet_pos).is_empty());
+        // Negative-only conflict is still actionable — the cascade must be reported.
+        assert_eq!(
+            active.would_force_deselect(&neg_conflict),
+            vec!["victim".to_string()]
+        );
     }
 
     fn empty() -> &'static [usize] {

@@ -11,6 +11,7 @@ use esp_generate::{
     Chip,
     config::{ActiveConfiguration, find_option, flatten_options},
     template::{GeneratorOption, GeneratorOptionCategory, GeneratorOptionItem, Template},
+    template_files::TEMPLATE_FILES,
 };
 use itertools::Itertools;
 use log::info;
@@ -253,8 +254,20 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
         IGNORED_CATEGORIES
     };
 
-    let options = include_str!("../../template/template.yaml");
-    let template = serde_yaml::from_str::<Template>(options)?;
+    // Reuse the same bundled file table the binary uses so `!Include`
+    // expansion resolves identically here (and so xtask doesn't depend on
+    // its own relative path to the `template/` directory).
+    let root_yaml = TEMPLATE_FILES
+        .iter()
+        .find_map(|(k, v)| (*k == "template.yaml").then_some(*v))
+        .ok_or_else(|| anyhow::anyhow!("bundled templates missing template.yaml"))?;
+    let template = Template::load(root_yaml, |path| {
+        TEMPLATE_FILES
+            .iter()
+            .find_map(|(k, v)| (*k == path).then(|| v.to_string()))
+    })
+    .map_err(|e| anyhow::anyhow!("failed to load bundled template: {e}"))?;
+
     let flat_options = flatten_options(&template.options);
 
     // Locate the flat index of the `chip`-group entry for the target chip.

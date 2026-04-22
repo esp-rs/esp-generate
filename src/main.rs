@@ -123,59 +123,92 @@ enum SubCommands {
 
 impl SubCommands {
     fn handle(&self) -> Result<()> {
-        fn chip_info_text(options: &[&GeneratorOption], opt: &GeneratorOption) -> String {
-            // Merge the `compatible: { chip: [...] }` allow-lists from every
-            // variant sharing this name (there can be more than one — see the
-            // two `probe-rs` entries in the template). An option that omits
-            // the `chip` entry entirely is considered chip-agnostic, which we
-            // represent by "all chips allowed" so that the final union is a
-            // no-op.
-            let mut chips: Vec<Chip> = Vec::new();
-            let mut all_chip_agnostic = true;
-            for option in options.iter().filter(|o| o.name == opt.name) {
-                match option.compatible.get("chip") {
-                    None => {
-                        all_chip_agnostic = true;
-                        chips.clear();
-                        chips.extend(Chip::iter());
-                        break;
-                    }
-                    Some(names) => {
-                        all_chip_agnostic = false;
-                        for name in names {
-                            if let Ok(chip) = name.parse::<Chip>()
-                                && !chips.contains(&chip)
-                            {
-                                chips.push(chip);
-                            }
-                        }
+        fn compatibility_info_text(
+            options: &[&GeneratorOption],
+            opt: &GeneratorOption,
+        ) -> String {
+            // Collect every `compatible` group key used by any variant sharing
+            // this option's name (there can be more than one variant — see the
+            // duplicate `probe-rs` entries in the template). Order is stable:
+            // first appearance wins, so the rendered sentences line up with
+            // the YAML.
+            let variants: Vec<&GeneratorOption> = options
+                .iter()
+                .copied()
+                .filter(|o| o.name == opt.name)
+                .collect();
+
+            let mut groups: Vec<&str> = Vec::new();
+            for v in &variants {
+                for key in v.compatible.keys() {
+                    if !groups.contains(&key.as_str()) {
+                        groups.push(key.as_str());
                     }
                 }
             }
 
-            let chip_count = Chip::iter().count();
+            let mut sentences: Vec<String> = Vec::new();
+            for group in groups {
+                // Union the allow-list across variants. If any variant doesn't
+                // constrain this group, the name is effectively unconstrained
+                // for that group — mirrors the "first matching variant wins"
+                // semantics `find_option` uses at runtime — so we emit no
+                // sentence for it.
+                let mut allowed: Vec<String> = Vec::new();
+                let mut unconstrained = false;
+                for v in &variants {
+                    match v.compatible.get(group) {
+                        None => {
+                            unconstrained = true;
+                            break;
+                        }
+                        Some(names) => {
+                            for n in names {
+                                if !allowed.contains(n) {
+                                    allowed.push(n.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                if unconstrained {
+                    continue;
+                }
 
-            if all_chip_agnostic || chips.len() == chip_count {
-                String::new()
-            } else if chips.len() < chip_count / 2 {
-                format!(
-                    "Only available on {}.",
-                    chips
+                // Enumerate the full membership of the selection group from
+                // the template itself, deduplicated by option name. This is
+                // the generalisation of the old `Chip::iter().count()` — any
+                // group whose options are authored in YAML (chip, module,
+                // log-frontend, …) supplies its own denominator.
+                let mut total: Vec<&str> = Vec::new();
+                for o in options.iter().filter(|o| o.selection_group == group) {
+                    if !total.contains(&o.name.as_str()) {
+                        total.push(o.name.as_str());
+                    }
+                }
+
+                // Nothing useful to say when the option is compatible with
+                // every member of the group (or the group is empty — which
+                // only happens for malformed templates, but we degrade
+                // silently rather than emit a confusing sentence).
+                if total.is_empty() || allowed.len() >= total.len() {
+                    continue;
+                }
+
+                let sentence = if allowed.len() < total.len() / 2 {
+                    format!("Compatible with {group}: {}.", allowed.join(", "))
+                } else {
+                    let excluded: Vec<&str> = total
                         .iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            } else {
-                format!(
-                    "Not available on {}.",
-                    Chip::iter()
-                        .filter(|c| !chips.contains(c))
-                        .map(|c| c.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
+                        .copied()
+                        .filter(|n| !allowed.iter().any(|a| a == n))
+                        .collect();
+                    format!("Not compatible with {group}: {}.", excluded.join(", "))
+                };
+                sentences.push(sentence);
             }
+
+            sentences.join(" ")
         }
 
         let all_options = TEMPLATE.all_options();
@@ -219,10 +252,10 @@ impl SubCommands {
                             help_text.push_str(&readable.collect::<Vec<String>>().join(", "));
                             help_text.push('.');
                         }
-                        let chip_info = chip_info_text(&all_options, option);
-                        if !chip_info.is_empty() {
+                        let compat_info = compatibility_info_text(&all_options, option);
+                        if !compat_info.is_empty() {
                             help_text.push(' ');
-                            help_text.push_str(&chip_info);
+                            help_text.push_str(&compat_info);
                         }
                         println!("    {}: {help_text}", option.name);
                     }
@@ -260,9 +293,9 @@ impl SubCommands {
                             }
                         }
                     }
-                    let chip_info = chip_info_text(&all_options, option);
-                    if !chip_info.is_empty() {
-                        println!("{}", chip_info);
+                    let compat_info = compatibility_info_text(&all_options, option);
+                    if !compat_info.is_empty() {
+                        println!("{}", compat_info);
                     }
                 } else {
                     println!("Unknown option: {}", option);

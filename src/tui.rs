@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::collections::HashMap;
 use std::io;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -41,8 +40,6 @@ pub fn setup_logger() -> Result<(), SetLoggerError> {
 pub struct Repository {
     pub config: ActiveConfiguration,
     path: Vec<usize>,
-    method_option_selected: HashMap<String, Vec<String>>,
-    method_option_unselected: HashMap<String, Vec<String>>,
 }
 
 impl Repository {
@@ -59,83 +56,7 @@ impl Repository {
                 options,
             },
             path: Vec::new(),
-            method_option_selected: HashMap::new(),
-            method_option_unselected: HashMap::new(),
         }
-    }
-
-    fn remember_method_selection(&mut self, method_option: &str, method_option_selected: bool) {
-        let snapshot: Vec<String> = self
-            .config
-            .selected
-            .iter()
-            .map(|idx| &self.config.flat_options[*idx])
-            .filter(|option| {
-                ActiveConfiguration::option_is_method_specific_for_state(
-                    option,
-                    method_option,
-                    method_option_selected,
-                )
-            })
-            .map(|option| option.name.clone())
-            .collect();
-
-        if method_option_selected {
-            self.method_option_selected
-                .insert(method_option.to_string(), snapshot);
-        } else {
-            self.method_option_unselected
-                .insert(method_option.to_string(), snapshot);
-        }
-    }
-
-    fn clear_method_specific_selection(
-        &mut self,
-        method_option: &str,
-        method_option_selected: bool,
-    ) {
-        self.config.selected.retain(|idx| {
-            let option = &self.config.flat_options[*idx];
-            !ActiveConfiguration::option_is_method_specific_for_state(
-                option,
-                method_option,
-                method_option_selected,
-            )
-        });
-    }
-
-    fn restore_method_selection(&mut self, method_option: &str, method_option_selected: bool) {
-        let to_restore = if method_option_selected {
-            self.method_option_selected
-                .get(method_option)
-                .cloned()
-                .unwrap_or_default()
-        } else {
-            self.method_option_unselected
-                .get(method_option)
-                .cloned()
-                .unwrap_or_default()
-        };
-
-        for option_name in to_restore {
-            self.config.select(&option_name);
-        }
-    }
-
-    fn switch_method_option(&mut self, method_option: &str) {
-        let currently_selected = self.config.is_selected(method_option);
-        self.remember_method_selection(method_option, currently_selected);
-        self.clear_method_specific_selection(method_option, currently_selected);
-
-        if currently_selected {
-            if let Some(i) = self.config.selected_index(method_option) {
-                self.config.selected.swap_remove(i);
-            }
-        } else {
-            self.config.select(method_option);
-        }
-
-        self.restore_method_selection(method_option, !currently_selected);
     }
 
     /// Returns the *explicitly* selected toolchain, if there is any
@@ -205,10 +126,10 @@ impl Repository {
     fn is_item_actionable(&self, item: &GeneratorOptionItem) -> bool {
         match item {
             GeneratorOptionItem::Category(_) => self.config.is_active(item),
-            GeneratorOptionItem::Option(option) => {
-                self.config.is_option_active(option)
-                    || self.config.can_switch_method_option(&option.name)
-            }
+            // Permissive: negative-requirement conflicts are treated as force-deselect
+            // hints, not gates. `toggle_current` routes through `select_idx`, which
+            // cascades them out.
+            GeneratorOptionItem::Option(option) => self.config.is_option_toggleable(option),
         }
     }
 
@@ -227,21 +148,16 @@ impl Repository {
         };
 
         let option_name = option.name.clone();
-        if self.config.can_switch_method_option(&option_name) {
-            self.switch_method_option(&option_name);
-            return;
-        }
 
-        let is_active = self.config.is_option_active(option);
-        if !is_active {
-            return;
-        }
-
-        if let Some(i) = self.config.selected_index(&option_name) {
-            if self.config.can_be_disabled(&option_name) {
-                self.config.selected.swap_remove(i);
-            }
-        } else {
+        if let Some(i) = self
+            .config
+            .selected
+            .iter()
+            .position(|s| self.config.flat_options[*s].name == option_name)
+        {
+            let idx = self.config.selected[i];
+            self.config.deselect_idx(idx);
+        } else if self.config.is_option_toggleable(option) {
             self.config.select(&option_name);
         }
     }
@@ -254,43 +170,91 @@ impl Repository {
         self.path.pop();
     }
 
-    fn current_level_desc(&self, width: u16, style: &UiElements) -> Vec<(bool, String)> {
+    /// Builds the visible list rows.
+    ///
+    /// `hovered` is the index of the currently highlighted row (what the cursor is
+    /// on). Only that row gets the "will disable: …" warning trailer (styled yellow)
+    /// when a selection there would force-deselect something; every other row keeps
+    /// its normal right-aligned name. This keeps the list quiet and surfaces the
+    /// side-effect info only when the user is actually considering the action.
+    fn current_level_desc(
+        &self,
+        width: u16,
+        style: &UiElements,
+        hovered: Option<usize>,
+    ) -> Vec<(bool, Line<'static>)> {
         let level = self.current_level();
         let level_active = self.current_level_is_active();
 
         level
             .iter()
-            .map(|v| {
-                let name = if let GeneratorOptionItem::Option(_) = v {
-                    v.name()
-                } else {
-                    ""
-                };
-                let indicator = if self
+            .enumerate()
+            .map(|(idx, v)| {
+                let is_selected = self
                     .config
                     .selected
                     .iter()
                     .any(|o| self.config.flat_options[*o].name == v.name())
-                    && level_active
-                {
+                    && level_active;
+                let indicator = if is_selected {
                     style.selected
                 } else if v.is_category() {
                     style.category
                 } else {
                     style.unselected
                 };
+
+                // The option's internal name is always shown on the right; only the
+                // hovered row additionally appends a yellow " - will disable: …"
+                // clause when selecting it would force-deselect something. When the
+                // detailed list wouldn't fit, the clause degrades to
+                // " - will disable N" (count) before any actual truncation kicks in.
+                let name_part: String = match v {
+                    GeneratorOptionItem::Option(_) => v.name().to_string(),
+                    GeneratorOptionItem::Category(_) => String::new(),
+                };
+
                 // reserve indicator spacing; saturating_sub keeps padding non-negative so narrow widths don't overflow
                 let padding = (width as usize).saturating_sub(v.title().len() + 4);
-                (
-                    level_active && self.is_item_actionable(v),
-                    format!(
-                        " {} {}{:>padding$}",
-                        indicator,
-                        v.title(),
-                        name,
-                        padding = padding,
-                    ),
-                )
+
+                let is_hovered = hovered == Some(idx);
+                let is_actionable = self.is_item_actionable(v);
+                // Symmetric: whether the row is selected or not, toggling it may
+                // force-deselect others — always ask the config what would happen.
+                // Gated on `is_actionable` so rows the user can't actually toggle
+                // (chip-mismatch or unmet positive requirements) don't advertise a
+                // phantom cascade. Rows with only a negative-requirement conflict
+                // remain actionable (that's the whole point of the warning).
+                let warning_part: Option<String> = match v {
+                    GeneratorOptionItem::Option(option)
+                        if is_hovered && level_active && is_actionable =>
+                    {
+                        let evicted = self.config.would_force_deselect(option);
+                        if evicted.is_empty() {
+                            None
+                        } else {
+                            let detailed = format!(" - will disable: {}", evicted.join(", "));
+                            let budget = padding.saturating_sub(name_part.len());
+                            if detailed.len() <= budget {
+                                Some(detailed)
+                            } else {
+                                Some(format!(" - will disable {}", evicted.len()))
+                            }
+                        }
+                    }
+                    _ => None,
+                };
+
+                let trailer_len = name_part.len() + warning_part.as_deref().map_or(0, str::len);
+                let lead = format!(" {} {}", indicator, v.title());
+                let pad = " ".repeat(padding.saturating_sub(trailer_len));
+
+                let mut spans = vec![Span::raw(lead), Span::raw(pad), Span::raw(name_part)];
+                if let Some(warning) = warning_part {
+                    spans.push(Span::styled(warning, style.force_deselect_style));
+                }
+
+                (level_active && is_actionable, Line::from(spans))
             })
             .collect()
     }
@@ -363,6 +327,8 @@ struct UiElements {
     selected: &'static str,
     unselected: &'static str,
     category: &'static str,
+    /// Style applied to the " - will disable …" hover clause.
+    force_deselect_style: Style,
 }
 
 struct Colors {
@@ -419,11 +385,13 @@ impl UiElements {
         selected: "✅",
         unselected: "  ",
         category: "▶️",
+        force_deselect_style: Style::new().fg(Color::Yellow),
     };
     const FALLBACK: Self = Self {
         selected: "*",
         unselected: " ",
         category: ">",
+        force_deselect_style: Style::new().fg(Color::Yellow),
     };
 }
 
@@ -523,12 +491,36 @@ mod test {
         })
     }
 
+    fn option_for_chips(name: &str, requires: &[&str], chips: &[Chip]) -> GeneratorOptionItem {
+        GeneratorOptionItem::Option(GeneratorOption {
+            name: name.to_string(),
+            display_name: name.to_string(),
+            selection_group: String::new(),
+            help: String::new(),
+            requires: requires.iter().map(|r| r.to_string()).collect(),
+            chips: chips.to_vec(),
+        })
+    }
+
+    /// `UiElements` without any ratatui styling — keeps assertions about row text
+    /// simple and independent of the themes `FANCY` / `FALLBACK` use.
+    fn plain_ui() -> super::UiElements {
+        super::UiElements {
+            selected: "*",
+            unselected: " ",
+            category: ">",
+            force_deselect_style: ratatui::style::Style::new(),
+        }
+    }
+
     #[test]
-    fn switching_method_option_restores_previous_method_specific_selections() {
+    fn toggling_method_clears_other_side_without_restoring_on_toggle_back() {
+        // Mirrors the espflash ↔ probe-rs scenario: selecting `method` kicks out all
+        // options that depend on `!method`. Toggling `method` back off must NOT
+        // resurrect them — the old save/restore behaviour is gone on purpose.
         let options = vec![
             option("method", &[]),
             option("method-selected-a", &["method"]),
-            option("method-selected-b", &["method"]),
             option("method-unselected-a", &["!method"]),
             option("method-unselected-b", &["!method"]),
             option("defmt", &[]),
@@ -538,47 +530,202 @@ mod test {
             Chip::Esp32,
             options,
             &[
-                "method".to_string(),
-                "method-selected-a".to_string(),
+                "method-unselected-a".to_string(),
+                "method-unselected-b".to_string(),
                 "defmt".to_string(),
             ],
         );
 
-        repository.switch_method_option("method");
+        repository.toggle_current(0);
+        assert!(repository.config.is_selected("method"));
+        assert!(!repository.config.is_selected("method-unselected-a"));
+        assert!(!repository.config.is_selected("method-unselected-b"));
+        assert!(repository.config.is_selected("defmt"));
+
+        repository.config.select("method-selected-a");
+
+        repository.toggle_current(0);
         assert!(!repository.config.is_selected("method"));
         assert!(!repository.config.is_selected("method-selected-a"));
-        assert!(repository.config.is_selected("defmt"));
-
-        repository.config.select("method-unselected-a");
-        repository.switch_method_option("method");
-        assert!(repository.config.is_selected("method"));
-        assert!(repository.config.is_selected("method-selected-a"));
+        // None of the previously-cleared `!method` options come back.
         assert!(!repository.config.is_selected("method-unselected-a"));
+        assert!(!repository.config.is_selected("method-unselected-b"));
         assert!(repository.config.is_selected("defmt"));
-
-        repository.switch_method_option("method");
-        assert!(!repository.config.is_selected("method"));
-        assert!(repository.config.is_selected("method-unselected-a"));
     }
 
     #[test]
-    fn switching_back_without_new_intermediate_selections_restores_previous_side() {
+    fn force_deselect_trailer_appears_only_on_hovered_row() {
+        // The "will disable …" trailer must:
+        //  * only show on the hovered row (keeps the list quiet),
+        //  * live in its own span so the theme can style it,
+        //  * appear for BOTH directions — selecting a row that force-deselects
+        //    others, and deselecting a selected row whose dependents cascade.
         let options = vec![
             option("method", &[]),
-            option("method-selected-a", &["method"]),
             option("method-unselected-a", &["!method"]),
+            option("dependent", &["method"]),
         ];
 
-        let mut repository =
-            Repository::new(Chip::Esp32, options, &["method-unselected-a".to_string()]);
+        let repository = Repository::new(
+            Chip::Esp32,
+            options,
+            &[
+                "method".to_string(),
+                "dependent".to_string(),
+            ],
+        );
 
-        repository.toggle_current(0);
-        assert!(repository.config.is_selected("method"));
-        assert!(!repository.config.is_selected("method-unselected-a"));
+        let ui = plain_ui();
 
-        repository.toggle_current(0);
-        assert!(!repository.config.is_selected("method"));
-        assert!(repository.config.is_selected("method-unselected-a"));
+        let row_text = |idx: usize, hover: Option<usize>| -> String {
+            repository
+                .current_level_desc(80, &ui, hover)
+                .into_iter()
+                .nth(idx)
+                .map(|(_, line)| {
+                    line.spans
+                        .iter()
+                        .map(|s| s.content.to_string())
+                        .collect::<String>()
+                })
+                .unwrap()
+        };
+
+        // Deselect-side: hovering the already-selected `method` warns that
+        // toggling it off would cascade out `dependent`.
+        let method_hover = row_text(0, Some(0));
+        assert!(
+            method_hover.contains("method")
+                && method_hover.contains("- will disable: dependent"),
+            "expected deselect-side warning on selected hovered row, got: {method_hover:?}"
+        );
+
+        // Select-side: hovering unselected `method-unselected-a` warns that
+        // selecting it would kick out `method` (and, via cascade, `dependent`).
+        let unselected_hover = row_text(1, Some(1));
+        assert!(
+            unselected_hover.contains("method-unselected-a")
+                && unselected_hover.contains("- will disable:")
+                && unselected_hover.contains("method")
+                && unselected_hover.contains("dependent"),
+            "expected select-side warning on hovered row, got: {unselected_hover:?}"
+        );
+
+        // The warning must live in its own span (so the theme can style it) and
+        // must not include the option name that was printed before it.
+        let hover_line = repository
+            .current_level_desc(80, &ui, Some(1))
+            .into_iter()
+            .nth(1)
+            .map(|(_, line)| line)
+            .unwrap();
+        let warning_span = hover_line
+            .spans
+            .iter()
+            .find(|s| s.content.contains("will disable"))
+            .expect("warning span");
+        assert!(!warning_span.content.contains("method-unselected-a "));
+
+        // Hovering a row whose toggle is non-destructive means nothing on any
+        // row can carry the warning.
+        for idx in 0..3 {
+            let text = row_text(idx, Some(2 /* `dependent` — non-destructive */));
+            assert!(
+                !text.contains("will disable"),
+                "no row must show the warning when hover is non-destructive, got: {text:?}"
+            );
+        }
+
+        // Non-toggleable rows must stay silent even when `would_force_deselect`
+        // would otherwise report evictions — a user can't actually toggle the
+        // row, so advertising a phantom cascade is misleading.
+        //
+        // Two shapes are exercised:
+        //   * `unmet-pos`  — positive requirement not satisfied (`needs-x`).
+        //   * `wrong-chip` — chip-mismatch; `requires: ["!method"]` would still
+        //     return a cascade from the raw predicate, so only the gate keeps
+        //     the row quiet.
+        let options = vec![
+            option("method", &[]),
+            option("unmet-pos", &["needs-x", "!method"]),
+            option_for_chips("wrong-chip", &["!method"], &[Chip::Esp32c6]),
+        ];
+        let repository =
+            Repository::new(Chip::Esp32, options, &["method".to_string()]);
+
+        for idx in 1..=2 {
+            let (actionable, line) = repository
+                .current_level_desc(80, &ui, Some(idx))
+                .into_iter()
+                .nth(idx)
+                .unwrap();
+            let text: String = line
+                .spans
+                .iter()
+                .map(|s| s.content.to_string())
+                .collect();
+            assert!(
+                !actionable,
+                "row {idx} must report as non-actionable, got: {text:?}"
+            );
+            assert!(
+                !text.contains("will disable"),
+                "non-toggleable hovered row {idx} must not show the warning, got: {text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn force_deselect_trailer_collapses_to_count_when_too_wide() {
+        // With several long-named options being evicted and a narrow row, the
+        // detailed list must collapse to "will disable N" rather than overflow /
+        // truncate the text.
+        let options = vec![
+            option("m", &[]),
+            option("loooooong-one", &["!m"]),
+            option("loooooong-two", &["!m"]),
+            option("loooooong-three", &["!m"]),
+        ];
+
+        let repository = Repository::new(
+            Chip::Esp32,
+            options,
+            &[
+                "loooooong-one".to_string(),
+                "loooooong-two".to_string(),
+                "loooooong-three".to_string(),
+            ],
+        );
+
+        let ui = plain_ui();
+
+        // Narrow width — the detailed trailer won't fit.
+        let narrow = repository
+            .current_level_desc(40, &ui, Some(0))
+            .into_iter()
+            .map(|(_, line)| line)
+            .collect::<Vec<_>>();
+        let narrow_text: String = narrow[0].spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(
+            narrow_text.contains("will disable 3"),
+            "expected count fallback, got: {narrow_text:?}"
+        );
+        assert!(
+            !narrow_text.contains("will disable:"),
+            "detailed list must not be present when it doesn't fit, got: {narrow_text:?}"
+        );
+
+        // Wide enough — the detailed list must be shown.
+        let wide = repository
+            .current_level_desc(200, &ui, Some(0))
+            .into_iter()
+            .map(|(_, line)| line)
+            .collect::<Vec<_>>();
+        let wide_text: String = wide[0].spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(
+            wide_text.contains("will disable: loooooong-one, loooooong-two, loooooong-three"),
+            "expected detailed trailer, got: {wide_text:?}"
+        );
     }
 }
 
@@ -709,13 +856,17 @@ impl App {
         // We can render the header in outer_area.
         outer_block.render(outer_area, buf);
 
-        // Iterate through all elements in the `items` and stylize them.
+        // The hovered index is what ratatui's ListState reports as selected; rows
+        // build their "will disable …" trailer only for this row so the list stays
+        // quiet otherwise.
+        let hovered = self.state.last().and_then(|s| s.selected());
+
         let items: Vec<ListItem> = self
             .repository
-            .current_level_desc(area.width, &self.ui_elements)
+            .current_level_desc(area.width, &self.ui_elements, hovered)
             .into_iter()
-            .map(|(enabled, value)| {
-                ListItem::new(value).style(if enabled {
+            .map(|(enabled, line)| {
+                ListItem::new(line).style(if enabled {
                     Style::default()
                 } else {
                     Style::default().fg(self.colors.disabled_style_fg)
@@ -762,30 +913,21 @@ impl App {
             .min(self.repository.current_level().len() - 1);
         let option = &self.repository.current_level()[selected];
 
-        let mut relationships = self.repository.config.collect_relationships(option);
+        let relationships = self.repository.config.collect_relationships(option);
 
-        if let GeneratorOptionItem::Option(option) = option {
-            // Switchable method options are actionable even with opposite-side selections,
-            // so showing `Disabled by` here would be misleading.
-            if self
-                .repository
-                .config
-                .can_switch_method_option(&option.name)
-            {
-                relationships.disabled_by.clear();
-            }
-        }
-
+        // `disabled_by` used to explain why an option could not be toggled; now that
+        // every option with its positive requirements satisfied is selectable (and the
+        // right-side row trailer lists what a selection would kick out), surfacing it
+        // here would be redundant and confusing.
         let Relationships {
             requires,
             required_by,
-            disabled_by,
+            disabled_by: _,
         } = relationships;
 
         let help_text = option.help();
         let help_text = append_list_as_sentence(help_text, "Requires", &requires);
         let help_text = append_list_as_sentence(&help_text, "Required by", &required_by);
-        let help_text = append_list_as_sentence(&help_text, "Disabled by", &disabled_by);
 
         if help_text.is_empty() {
             return None;

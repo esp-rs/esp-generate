@@ -250,3 +250,13 @@ codegen-units = 1       # LLVM can perform better optimizations using a single t
 debug = 2               # prefer slower builds but better debugging experience
 lto = 'fat'
 opt-level = 's'
+
+
+[patch.crates-io]
+esp-hal = { git = "https://github.com/esp-rs/esp-hal", rev = "784372b" }
+esp-rtos = { git = "https://github.com/esp-rs/esp-hal", rev = "784372b" }
+esp-bootloader-esp-idf = { git = "https://github.com/esp-rs/esp-hal", rev = "784372b" }
+esp-println = { git = "https://github.com/esp-rs/esp-hal", rev = "784372b" }
+esp-backtrace = { git = "https://github.com/esp-rs/esp-hal", rev = "784372b" }
+esp-alloc = { git = "https://github.com/esp-rs/esp-hal", rev = "784372b" }
+esp-radio = { git = "https://github.com/esp-rs/esp-hal", rev = "784372b" }

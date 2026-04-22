@@ -97,8 +97,8 @@ pub fn validate_chip_category(options: &[GeneratorOptionItem]) -> Result<(), Str
 ///      single group.
 ///   4. Every option's `compatible.chip` allow-list contains only chips
 ///      that actually exist in the [`Chip`] enum — otherwise
-///      `prune_chip_incompatible_options` would silently drop the option
-///      on every chip, making it unreachable.
+///      `prune_incompatible_options` would silently drop the option on
+///      every chip, making it unreachable.
 ///   5. Names are unique (duplicate names would confuse
 ///      `find_option`-based lookups).
 ///

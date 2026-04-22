@@ -1207,7 +1207,7 @@ mod test {
             ],
         );
 
-        // Rebuild for the new chip as if `build_options_for_chip(Esp32c6, …)`
+        // Rebuild for the new chip as if `build_options({chip: "esp32c6"}, …)`
         // had been called: `only-on-esp32` is gone, the chip group still
         // carries both entries (it's chip-agnostic), and the user has now
         // ticked `esp32c6`.

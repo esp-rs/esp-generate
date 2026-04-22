@@ -180,16 +180,27 @@ fn active_rustup_toolchain() -> Option<String> {
 /// exclusion of generic toolchains, and CLI-toolchain sort/validation — so
 /// that the cached scan data stays untouched across chip switches.
 ///
+/// When `chip` is `None` every scanned toolchain is returned unfiltered;
+/// the per-chip gates run again on the next rebuild once a chip is picked.
+///
 /// Previously-fatal CLI-toolchain mismatches are now returned as warnings:
 /// the caller decides whether to promote them (headless) or surface them in
 /// the TUI footer. Dynamic chip switching requires this: a chip switch that
 /// invalidates the CLI toolchain must not be unrecoverable.
 pub fn toolchains_for_chip(
     all: &[ToolchainInfo],
-    chip: Chip,
+    chip: Option<Chip>,
     msrv: &check::Version,
     cli_hint: Option<&str>,
 ) -> FilteredToolchains {
+    let Some(chip) = chip else {
+        let names: Vec<String> = all.iter().map(|tc| tc.name.clone()).collect();
+        return FilteredToolchains {
+            names,
+            warnings: Vec::new(),
+        };
+    };
+
     let target = chip.metadata().target().to_string();
 
     let mut names: Vec<String> = all

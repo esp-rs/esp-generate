@@ -21,11 +21,11 @@ const IGNORED_CATEGORIES: &[&str] = &["chip", "editor", "optional", "toolchain"]
 // The module selector generates way too many test cases to check with --all-combinations.
 const IGNORED_CATEGORIES_FULL: &[&str] = &["chip", "editor", "optional", "toolchain", "module"];
 
-/// Mirror of `esp_generate::main::prune_chip_incompatible_options`'s predicate:
-/// an option is considered chip-compatible when it either has no `compatible:
+/// Minimal chip-compat predicate for the xtask's test-case fanout: an
+/// option is considered chip-compatible when it either has no `compatible:
 /// { chip: [...] }` constraint at all, or its allow-list contains the given
-/// chip. Other `compatible` entries aren't evaluated here — like the binary,
-/// the xtask only applies chip-based filtering at the tree-shaping layer.
+/// chip. Other `compatible` entries aren't evaluated here — the xtask only
+/// needs chip-based filtering to seed its per-chip test matrix.
 fn is_chip_compatible(option: &GeneratorOption, chip: Chip) -> bool {
     match option.compatible.get("chip") {
         None => true,

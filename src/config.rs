@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::template::{GeneratorOption, GeneratorOptionItem};
 
@@ -93,30 +93,23 @@ impl ActiveConfiguration {
             .collect()
     }
 
-    /// Snapshot the currently-selected option (if any) for every selection
-    /// group referenced by some option's `compatible` map. The main loop
-    /// compares successive snapshots to decide when the options tree needs
-    /// a rebuild. Groups with no current selection map to an empty string.
-    pub fn compatibility_signature(&self) -> HashMap<String, String> {
-        let mut groups: HashSet<&str> = HashSet::new();
-        for opt in &self.flat_options {
-            for key in opt.compatible.keys() {
-                groups.insert(key.as_str());
-            }
-        }
-
+    /// For each group in `groups`, the currently-selected option name (or
+    /// empty string if none). `groups` must be collected from the pristine
+    /// template so that selections for groups whose dependants have been
+    /// pruned still show up.
+    pub fn compatibility_signature(&self, groups: &[String]) -> HashMap<String, String> {
         groups
-            .into_iter()
+            .iter()
             .map(|group| {
                 let selected = self
                     .selected
                     .iter()
                     .find_map(|&idx| {
                         let o = &self.flat_options[idx];
-                        (o.selection_group == group).then(|| o.name.clone())
+                        (&o.selection_group == group).then(|| o.name.clone())
                     })
                     .unwrap_or_default();
-                (group.to_string(), selected)
+                (group.clone(), selected)
             })
             .collect()
     }
@@ -632,10 +625,9 @@ pub struct Relationships<'a> {
 /// Find an option by name.
 ///
 /// The template may carry multiple entries that share a name but differ by
-/// their `compatible: { chip: [...] }` constraint. `options` is expected to
-/// have already been pruned for the active chip (see
-/// `build_options_for_chip` in `main`), so at most one entry per name should
-/// survive and a simple name match is enough.
+/// their `compatible` constraints. `options` is expected to have already been
+/// pruned for the active selections (see `build_options` in `main`), so at
+/// most one entry per name should survive and a simple name match is enough.
 pub fn find_option<'c>(
     option: &str,
     options: &'c [GeneratorOption],

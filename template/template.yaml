@@ -190,8 +190,14 @@ options:
         display_name: Add settings for Helix Editor
 
       - !Option
-        name: neovim
+        name: neovim-classic
+        selection_group: neovim
         display_name: Add settings for Neovim
+
+      - !Option
+        name: neovim-rustaceanvim
+        selection_group: neovim
+        display_name: Add settings for Neovim (with rustaceanvim)
 
       - !Option
         name: vscode

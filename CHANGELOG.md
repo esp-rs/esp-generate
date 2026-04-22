@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed neovim config (#332)
+
 ### Removed
 
 ## [1.3.0-rc.0] - 2026-04-17

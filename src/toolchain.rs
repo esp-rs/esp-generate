@@ -101,7 +101,7 @@ fn scan_installed_toolchains() -> Result<Vec<ToolchainInfo>> {
 
     for line in stdout.lines() {
         // rustup prints things like: "stable-x86_64-unknown-linux-gnu (active, default)"
-        if let Some(name) = line.trim().split_whitespace().next()
+        if let Some(name) = line.split_whitespace().next()
             && let Some(info) = inspect_toolchain(name)
         {
             available.push(info);

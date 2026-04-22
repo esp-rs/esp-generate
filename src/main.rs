@@ -1041,12 +1041,22 @@ fn process_file(
 
 fn process_options(template: &Template, args: &Args) -> Result<()> {
     let mut success = true;
-    // `template.options` is the chip-pruned tree, so its `all_options()` no
-    // longer lists options that are incompatible with the current chip. For
-    // the "Unknown option" vs "Not supported for chip …" distinction we
-    // still need the full, unpruned catalogue — fall back to the pristine
-    // `TEMPLATE` for that.
-    let all_options_full = TEMPLATE.all_options();
+    // Two option catalogues, with complementary coverage:
+    //   - `populated_options` is the chip-pruned, post-`build_options_for_chip`
+    //     view: it DOES know about dynamically-populated entries (each
+    //     supported chip in the `chip` category, each module for the current
+    //     chip in the `module` category), but it has already been filtered
+    //     down to options compatible with `--chip`.
+    //   - `pristine_options` is the raw template: it lists every
+    //     chip-restricted option (so we can tell "pruned by chip" apart from
+    //     "unknown name"), but the `chip` and `module` categories still hold
+    //     only their literal `PLACEHOLDER` !Option.
+    // Options are looked up in the populated view first — anything present
+    // there is definitionally chip-compatible — and we only consult the
+    // pristine catalogue as a fallback so that chip-pruned names surface as
+    // "Not supported for chip …" rather than "Unknown option".
+    let populated_options = template.all_options();
+    let pristine_options = TEMPLATE.all_options();
 
     let arg_chip = args.chip.unwrap();
 
@@ -1090,24 +1100,13 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
         let option = option.as_str();
         let mut option_found = false;
         let mut option_found_for_chip = false;
-        // Existence check uses the pristine template: the chip-pruned view
-        // will have dropped any option whose `compatible: { chip: [...] }`
-        // excludes `--chip`, and we don't want those to masquerade as
-        // "Unknown option".
-        for &option_item in all_options_full.iter().filter(|item| item.name == option) {
+
+        // Primary lookup: the populated, chip-pruned view. Any match here is
+        // automatically both "known" and "compatible with --chip", and — for
+        // dynamically-populated names (chip/module entries) — this is the
+        // only view that actually lists them by name.
+        for &option_item in populated_options.iter().filter(|item| item.name == option) {
             option_found = true;
-
-            // Check if the chip is supported. An option that doesn't constrain the
-            // `chip` group in its `compatible` map is considered chip-agnostic.
-            // We don't immediately fail in case the option is not present for the chip, because
-            // it may exist as a separate entry (e.g. with different properties).
-            if let Some(allowed) = option_item.compatible.get("chip") {
-                let chip_name = arg_chip.to_string();
-                if !allowed.iter().any(|n| n == &chip_name) {
-                    continue;
-                }
-            }
-
             option_found_for_chip = true;
 
             // Is the option allowed to be selected?
@@ -1151,6 +1150,26 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
 
             for disabled in disabled_by {
                 log::error!("Option '{}' is disabled by {}", option_item.name, disabled);
+            }
+        }
+
+        // Fallback lookup: consult the pristine template only if the
+        // populated view didn't know the name, so that static options pruned
+        // out by chip compatibility are reported as "Not supported for chip
+        // …" rather than "Unknown option". Dynamic (chip/module) names never
+        // appear here — but they'll always be found in the populated view
+        // above, so we don't need to special-case them.
+        if !option_found {
+            for &option_item in pristine_options.iter().filter(|item| item.name == option) {
+                option_found = true;
+
+                if let Some(allowed) = option_item.compatible.get("chip") {
+                    let chip_name = arg_chip.to_string();
+                    if !allowed.iter().any(|n| n == &chip_name) {
+                        continue;
+                    }
+                }
+                option_found_for_chip = true;
             }
         }
 

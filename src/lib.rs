@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::modules::Module;
 
 pub mod cargo;
+pub mod chip_selector;
 pub mod config;
 pub mod modules;
 pub mod template;

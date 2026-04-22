@@ -1,6 +1,7 @@
-use esp_generate::Chip;
-use esp_generate::template::GeneratorOptionItem;
 use strum::IntoEnumIterator;
+
+use crate::Chip;
+use crate::template::GeneratorOptionItem;
 
 /// Populates the `chip` category in the template options with one entry per
 /// supported [`Chip`], all sharing the `chip` selection group so only one can
@@ -47,7 +48,7 @@ pub fn populate_chip_category(options: &mut [GeneratorOptionItem]) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use esp_generate::template::{GeneratorOption, GeneratorOptionCategory};
+    use crate::template::{GeneratorOption, GeneratorOptionCategory};
     use indexmap::IndexMap;
 
     fn placeholder_tree() -> Vec<GeneratorOptionItem> {

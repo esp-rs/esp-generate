@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Reverted: Preserve per-method flashing options when switching probe-rs and espflash (#327)
 - Flashing options are now cleared when selecting a different flashing method (#327)
+- Chip selector has been moved to the TUI. (#5933)
 
 ### Fixed
 

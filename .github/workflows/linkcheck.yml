@@ -46,7 +46,7 @@ jobs:
 
       - name: Generate a sample project
         run: |
-          cargo run --release --quiet --no-default-features -- --headless --chip=esp32c6 --output-path=. test-project
+          cargo run --release --quiet --no-default-features -- --headless --output-path=. -o esp32c6 test-project
 
       - name: Check links in generated project
         uses: lycheeverse/lychee-action@v2

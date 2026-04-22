@@ -49,10 +49,6 @@ struct Args {
     /// Name of the project to generate
     name: Option<String>,
 
-    /// Chip to target
-    #[arg(short, long)]
-    chip: Option<Chip>,
-
     /// Run in headless mode (i.e. do not use the TUI)
     #[arg(long)]
     headless: bool,
@@ -158,6 +154,22 @@ impl SubCommands {
             }
         }
 
+        // Populate the `chip` category so chips show up under their real
+        // names (`esp32c6` etc.) rather than the static `PLACEHOLDER` entry
+        // that ships in the YAML. The chip is a valid `-o` target now, so
+        // `list-options`/`explain` must be able to describe it.
+        //
+        // `module` and `toolchain` are intentionally *not* populated here:
+        // modules are chip-specific (so a chip-agnostic listing has nothing
+        // useful to say) and toolchains are discovered from the user's
+        // rustup install at runtime. Those two groups are filtered out of
+        // the listing below instead.
+        let mut populated_options = TEMPLATE.options.clone();
+        esp_generate::chip_selector::populate_chip_category(&mut populated_options);
+        let populated = Template {
+            options: populated_options,
+        };
+
         match self {
             SubCommands::ListOptions => {
                 println!(
@@ -165,10 +177,12 @@ impl SubCommands {
                 );
                 let mut groups = IndexMap::new();
                 let mut seen = HashSet::new();
-                let all_options = TEMPLATE.all_options();
-                for (index, option) in all_options.iter().enumerate().filter(|(_, o)| {
-                    !["toolchain", "module", "chip"].contains(&o.selection_group.as_str())
-                }) {
+                let all_options = populated.all_options();
+                for (index, option) in all_options
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, o)| !["toolchain", "module"].contains(&o.selection_group.as_str()))
+                {
                     let group = groups.entry(&option.selection_group).or_insert(Vec::new());
 
                     if seen.insert(&option.name) {
@@ -204,7 +218,7 @@ impl SubCommands {
                 Ok(())
             }
             SubCommands::Explain { option } => {
-                let all_options = TEMPLATE.all_options();
+                let all_options = populated.all_options();
                 if let Some(option) = all_options.iter().find(|o| &o.name == option) {
                     println!(
                         "Option: {}\n\n{}{}",
@@ -290,14 +304,26 @@ fn about() -> String {
     about
 }
 
+/// Scan the user's `-o`/`--option` list for an entry that names a [`Chip`]
+/// variant. The chip is no longer a first-class CLI flag; it travels with the
+/// rest of the generation options, so `-o esp32c6` both picks the target and
+/// ticks the matching entry in the `chip` selection group.
+///
+/// Returns the first match. If the user passes multiple chip options (which
+/// is meaningless since they share a selection group), the conflict is
+/// surfaced later by [`process_options`] via the `same_selection_group` check.
+fn chip_from_options(options: &[String]) -> Option<Chip> {
+    options.iter().find_map(|opt| opt.parse::<Chip>().ok())
+}
+
 fn setup_args_interactive(args: &mut Args) -> Result<()> {
     if args.headless {
         let mut missing = String::from(
             "You are in headless mode, but esp-generate needs more information to generate your project.",
         );
-        if args.chip.is_none() {
+        if chip_from_options(&args.option).is_none() {
             missing.push_str(
-                "\nThe target chip is missing. Add --chip <your-chip-name> to the command.",
+                "\nThe target chip is missing. Add `-o <your-chip-name>` (e.g. `-o esp32c6`) to the command.",
             );
         }
         if args.name.is_none() {
@@ -307,11 +333,11 @@ fn setup_args_interactive(args: &mut Args) -> Result<()> {
         bail!("{missing}");
     }
 
-    // The chip is no longer prompted for up front: the TUI exposes it as a
+    // The chip is not prompted for up front: the TUI exposes it as a
     // first-class selection group ("chip" category), so users can pick — and
-    // switch — the target chip interactively. When `--chip` is omitted we just
-    // seed the TUI with a reasonable default; the user can change it from the
-    // first menu level.
+    // switch — the target chip interactively. When no chip is passed on the
+    // command line we just seed the TUI with a reasonable default; the user
+    // can change it from the first menu level.
 
     if args.name.is_none() {
         let project_name = Text::new("Enter project name:")
@@ -341,25 +367,24 @@ fn main() -> Result<()> {
         check_for_update(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
     }
 
-    // Run the interactive TUI only if chip or name is missing
-    if args.chip.is_none() || args.name.is_none() {
+    // Run the interactive TUI only if chip or name is missing. Both checks
+    // happen against the `-o` list (chip is just another option now) plus
+    // `args.name` — headless mode is rejected inside `setup_args_interactive`
+    // if either piece is still missing.
+    if chip_from_options(&args.option).is_none() || args.name.is_none() {
         setup_args_interactive(&mut args)?;
     }
 
-    // In TUI mode the chip is a normal selection group now — if the user
-    // didn't pass `--chip`, just seed the session with the first chip variant
-    // and let them switch from the TUI. Headless mode still requires an
-    // explicit `--chip`, which `setup_args_interactive` enforces.
-    if args.chip.is_none() {
-        args.chip = Some(
-            Chip::iter()
-                .next()
-                .expect("at least one chip variant must exist"),
-        );
-    }
-    // Initial chip — may be replaced after the TUI closes if the user picked
-    // a different one from the in-TUI chip selector.
-    let mut chip = args.chip.unwrap();
+    // In TUI mode the chip is a normal selection group — if the user didn't
+    // pass one via `-o`, just seed the session with the first chip variant
+    // and let them switch from the TUI. Headless mode has already been
+    // rejected above if the user didn't provide a chip, so the `unwrap_or`
+    // branch only runs in the TUI path.
+    let mut chip = chip_from_options(&args.option).unwrap_or_else(|| {
+        Chip::iter()
+            .next()
+            .expect("at least one chip variant must exist")
+    });
 
     let name = args.name.clone().unwrap();
 
@@ -432,15 +457,19 @@ fn main() -> Result<()> {
             options: initial_options.clone(),
         },
         &args,
+        chip,
     )?;
 
     // Initial selection for TUI/headless, including toolchain if provided.
-    // The chip name goes in too so that the `chip` selection group starts with
-    // the user-requested (or defaulted) chip ticked — otherwise the chip
-    // category would render with nothing selected, and the TUI chip-switch
-    // detector would immediately force a spurious rebuild.
+    // Users passing a chip via `-o` already have it in `args.option`; only
+    // append the (defaulted) chip when it isn't already present, so the
+    // `chip` selection group starts with the right entry ticked without
+    // creating a duplicate selected index.
     let mut initial_selected = args.option.clone();
-    initial_selected.push(chip.to_string());
+    let chip_name = chip.to_string();
+    if !initial_selected.iter().any(|o| o == &chip_name) {
+        initial_selected.push(chip_name);
+    }
     if let Some(ref tc) = args.toolchain {
         initial_selected.push(tc.clone());
     }
@@ -513,8 +542,7 @@ fn main() -> Result<()> {
             let tree_chip = app.repository.config.chip;
             let desired_chip = app.repository.selected_chip().unwrap_or(tree_chip);
             let chip_changed = desired_chip != tree_chip;
-            let needs_initial_populate =
-                scan_finished && populated_for_chip != Some(desired_chip);
+            let needs_initial_populate = scan_finished && populated_for_chip != Some(desired_chip);
 
             if chip_changed || needs_initial_populate {
                 let filtered = toolchain::toolchains_for_chip(
@@ -573,18 +601,10 @@ fn main() -> Result<()> {
         (initial_selected, repository.config.flat_options)
     };
     let mut toolchain_replaced = false;
-    // The chip group option name (e.g. "esp32c6") is in `selected` thanks to
-    // the in-TUI chip selector, but it's already represented by `--chip` in
-    // the command-line prefix. Skip it here so the regenerated command has
-    // no redundant `-o esp32c6`.
-    let chip_name = chip.to_string();
-    let selected_options = format!(
-        "--chip {}{}",
-        chip,
-        selected.iter().fold(String::new(), |mut acc, s| {
-            if s == &chip_name {
-                return acc;
-            }
+
+    let selected_options = selected
+        .iter()
+        .fold(String::new(), |mut acc, s| {
             if Some(s) == args.toolchain.as_ref() && !toolchain_replaced {
                 acc.push_str(" --toolchain ");
                 // Just in case someone decides to call their toolchain `defmt`, make sure we only replace it once
@@ -595,7 +615,8 @@ fn main() -> Result<()> {
             acc.push_str(s);
             acc
         })
-    );
+        .trim_start()
+        .to_string();
     if !args.headless {
         println!("Selected options: {selected_options}");
     }
@@ -1038,18 +1059,18 @@ fn process_file(
     Some(res)
 }
 
-fn process_options(template: &Template, args: &Args) -> Result<()> {
+fn process_options(template: &Template, args: &Args, chip: Chip) -> Result<()> {
     let mut success = true;
     // Two option catalogues, with complementary coverage:
     //   - `populated_options` is the chip-pruned, post-`build_options_for_chip`
     //     view: it DOES know about dynamically-populated entries (each
     //     supported chip in the `chip` category, each module for the current
     //     chip in the `module` category), but it has already been filtered
-    //     down to options compatible with `--chip`.
+    //     down to options compatible with the selected chip.
     //   - `pristine_options` is the raw template: it lists every
     //     chip-restricted option (so we can tell "pruned by chip" apart from
-    //     "unknown name"), but the `chip` and `module` categories still hold
-    //     only their literal `PLACEHOLDER` !Option.
+    //     "unknown name"), but the `module` category still holds only its
+    //     literal `PLACEHOLDER` !Option.
     // Options are looked up in the populated view first — anything present
     // there is definitionally chip-compatible — and we only consult the
     // pristine catalogue as a fallback so that chip-pruned names surface as
@@ -1057,15 +1078,13 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
     let populated_options = template.all_options();
     let pristine_options = TEMPLATE.all_options();
 
-    let arg_chip = args.chip.unwrap();
-
-    // Seed the simulated selection with the CLI `--option` list plus the
-    // synthetic chip-group entry named after `--chip`. The chip entry is
-    // essential now that chip restrictions live in `compatible: { chip: [...] }`
-    // rather than in a dedicated `chips:` field: without it, every
-    // chip-restricted option would fail `is_option_compatible` and look
-    // "invalid" to the validator.
-    let chip_name = arg_chip.to_string();
+    // Seed the simulated selection with the CLI `-o` list. The chip entry —
+    // now just another `-o` option — is already in `args.option` if the user
+    // asked for it; if they didn't (TUI default path), add it synthetically
+    // so that option-level `compatible: { chip: [...] }` constraints are
+    // satisfied during validation. Without it, every chip-restricted option
+    // would fail `is_option_compatible` and look "invalid" to the validator.
+    let chip_name = chip.to_string();
     let flat_options = flatten_options(&template.options);
     let mut selected: Vec<usize> = args
         .option
@@ -1081,7 +1100,7 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
     }
 
     let selected_config = ActiveConfiguration {
-        chip: arg_chip,
+        chip,
         selected,
         flat_options,
         options: template.options.clone(),
@@ -1089,10 +1108,10 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
 
     let mut same_selection_group: HashMap<&str, Vec<&str>> = HashMap::new();
 
-    // Iterate the user's CLI `--option` list directly rather than the
-    // resolved indices in `selected_config.selected`: an option that got
-    // pruned out of the chip-specific tree (because it isn't compatible
-    // with `--chip`) never makes it into `flat_options` and would be
+    // Iterate the user's CLI `-o` list directly rather than the resolved
+    // indices in `selected_config.selected`: an option that got pruned out
+    // of the chip-specific tree (because it isn't compatible with the
+    // selected chip) never makes it into `flat_options` and would be
     // silently dropped here otherwise. We still want to surface a proper
     // "Not supported for chip …" diagnostic in that case.
     for option in &args.option {
@@ -1101,9 +1120,9 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
         let mut option_found_for_chip = false;
 
         // Primary lookup: the populated, chip-pruned view. Any match here is
-        // automatically both "known" and "compatible with --chip", and — for
-        // dynamically-populated names (chip/module entries) — this is the
-        // only view that actually lists them by name.
+        // automatically both "known" and "compatible with the selected chip",
+        // and — for dynamically-populated names (module entries) — this is
+        // the only view that actually lists them by name.
         for &option_item in populated_options.iter().filter(|item| item.name == option) {
             option_found = true;
             option_found_for_chip = true;
@@ -1155,7 +1174,7 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
         // Fallback lookup: consult the pristine template only if the
         // populated view didn't know the name, so that static options pruned
         // out by chip compatibility are reported as "Not supported for chip
-        // …" rather than "Unknown option". Dynamic (chip/module) names never
+        // …" rather than "Unknown option". Dynamic (module) names never
         // appear here — but they'll always be found in the populated view
         // above, so we don't need to special-case them.
         if !option_found {
@@ -1163,7 +1182,6 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
                 option_found = true;
 
                 if let Some(allowed) = option_item.compatible.get("chip") {
-                    let chip_name = arg_chip.to_string();
                     if !allowed.iter().any(|n| n == &chip_name) {
                         continue;
                     }
@@ -1176,7 +1194,7 @@ fn process_options(template: &Template, args: &Args) -> Result<()> {
             log::error!("Unknown option '{option}'");
             success = false;
         } else if !option_found_for_chip {
-            log::error!("Option '{option}' is not supported for chip {arg_chip}");
+            log::error!("Option '{option}' is not supported for chip {chip}");
             success = false;
         }
     }

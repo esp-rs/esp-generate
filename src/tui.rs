@@ -68,10 +68,8 @@ impl Repository {
     /// keep my state consistent" primitive.
     ///
     /// The menu path is trimmed to the depth that still resolves against the
-    /// new tree rather than reset wholesale, so callers that repopulate a
-    /// single category on the *same* chip (notably the toolchain scan) keep
-    /// their cursor where it is; callers that truly switch chips typically
-    /// want to [`Self::reset_path`] after this.
+    /// new tree, so categories that vanish drop out while surviving ones keep
+    /// the user's cursor in place.
     pub fn set_options(&mut self, chip: Chip, options: Vec<GeneratorOptionItem>) {
         self.config.reset_options(chip, options);
 
@@ -88,12 +86,6 @@ impl Repository {
             }
         }
         self.path.truncate(valid_depth);
-    }
-
-    /// Collapse the menu path back to the root. Intended for callers that have
-    /// just switched chip and want the UI to start from a known location.
-    pub fn reset_path(&mut self) {
-        self.path.clear();
     }
 
     /// Returns the *explicitly* selected toolchain, if there is any
@@ -633,27 +625,15 @@ impl App {
     ///
     /// `Repository::set_options` trims the navigation path to whatever still
     /// resolves in the new tree; we mirror that here on the `ListState` stack.
-    /// When the caller asks for a path reset (the typical chip-switch case),
-    /// we also collapse back to the root menu with a fresh selection at the
-    /// top so the user isn't dropped inside a now-unrelated category.
-    pub fn set_options(&mut self, chip: Chip, options: Vec<GeneratorOptionItem>, reset_path: bool) {
+    pub fn set_options(&mut self, chip: Chip, options: Vec<GeneratorOptionItem>) {
         self.repository.set_options(chip, options);
-        if reset_path {
-            self.repository.reset_path();
-        }
 
-        // The state stack is always `path_len + 1` — one for the root level,
-        // one per entered category. Truncate mirrors the path trim; the min-1
-        // floor guarantees we always have a state for the visible level.
         let desired = self.repository.path_len() + 1;
         self.state.truncate(desired.max(1));
         if self.state.is_empty() {
             let mut fresh = ListState::default();
             fresh.select(Some(0));
             self.state.push(fresh);
-        }
-        if reset_path && let Some(last) = self.state.last_mut() {
-            last.select(Some(0));
         }
     }
     pub fn selected_options(&self) -> Vec<String> {

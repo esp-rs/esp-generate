@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use crate::Chip;
 
 use crate::template::{GeneratorOption, GeneratorOptionItem};
@@ -95,6 +97,34 @@ impl ActiveConfiguration {
                 })
             })
             .cloned()
+            .collect()
+    }
+
+    /// Snapshot the currently-selected option (if any) for every selection
+    /// group referenced by some option's `compatible` map. The main loop
+    /// compares successive snapshots to decide when the options tree needs
+    /// a rebuild. Groups with no current selection map to an empty string.
+    pub fn compatibility_signature(&self) -> HashMap<String, String> {
+        let mut groups: HashSet<&str> = HashSet::new();
+        for opt in &self.flat_options {
+            for key in opt.compatible.keys() {
+                groups.insert(key.as_str());
+            }
+        }
+
+        groups
+            .into_iter()
+            .map(|group| {
+                let selected = self
+                    .selected
+                    .iter()
+                    .find_map(|&idx| {
+                        let o = &self.flat_options[idx];
+                        (o.selection_group == group).then(|| o.name.clone())
+                    })
+                    .unwrap_or_default();
+                (group.to_string(), selected)
+            })
             .collect()
     }
 

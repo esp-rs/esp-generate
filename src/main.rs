@@ -538,56 +538,59 @@ fn main() -> Result<()> {
         // cache as "no toolchains available" — the toolchain category then
         // keeps its "Scanning installed toolchains…" placeholder.
         let mut cached_toolchains: Vec<toolchain::ToolchainInfo> = Vec::new();
-        // The chip that `app.repository.options` was last built for. `None`
-        // forces the first-ever rebuild regardless of whether the chip has
-        // actually changed — this is how we swap the placeholder toolchain
-        // category out for real entries once the scan completes.
-        let mut populated_for_chip: Option<Chip> = None;
+        // Tracks whether `cached_toolchains` reflects a *completed* scan.
+        let mut scan_finished = toolchain_scan.is_none();
+        // Compatibility-group selections the tree was last built for.
+        let mut populated_compat: Option<HashMap<String, String>> = None;
+        // Whether the last rebuild ran with a completed scan. Flips the
+        // trigger when the scan finishes so the placeholder gets swapped.
+        let mut populated_with_scan = scan_finished;
 
         while running {
             // Toolchain scan in the background. Chip-agnostic on purpose: the
             // cached list is reused across chip switches, and per-chip filtering
             // happens down below in the rebuild block.
             if let Some(scan) = toolchain_scan.as_mut() {
-                let finished = match scan.try_get_toolchain_list() {
-                    None => false,
+                match scan.try_get_toolchain_list() {
+                    None => {
+                        app.set_toolchains_loading(true);
+                    }
                     Some(Ok(list)) => {
-                        cached_toolchains = list.clone();
-                        true
+                        if !scan_finished {
+                            cached_toolchains = list.clone();
+                            scan_finished = true;
+                        }
+                        app.set_toolchains_loading(false);
                     }
                     Some(Err(err)) => {
-                        log::warn!("Toolchain scan failed: {err}");
-                        true
+                        if !scan_finished {
+                            log::warn!("Toolchain scan failed: {err}");
+                            scan_finished = true;
+                        }
+                        app.set_toolchains_loading(false);
                     }
-                };
-
-                app.set_toolchains_loading(!finished);
-                if finished {
-                    // Clear state to rebuild UI with correct toolchain data.
-                    populated_for_chip = None;
-                    // Stop re-checking, scan is a one-shot process.
-                    toolchain_scan = None;
                 }
             }
 
             // Rebuild-on-demand:
-            //   * `selected_chip` diverges from the tree's chip → user picked
-            //     a different chip in the `chip` category; rebuild the whole
-            //     tree for that chip and collapse the menu to the root so the
-            //     user isn't stranded inside a now-irrelevant category.
+            //   * the `compatible` signature changed → some compat-relevant
+            //     option (chip, log-frontend, …) was toggled; rebuild so the
+            //     tree reflects the new constraints.
             //   * scan just finished or we haven't populated yet → rebuild to
             //     swap the toolchain placeholder for real entries.
             // Both paths flow through the same `build_options_for_chip` +
-            // `App::set_options` pair, keeping chip selection and toolchain
-            // repopulation on one code path.
+            // `App::set_options` pair, keeping compat-driven rebuilds and
+            // toolchain refresh on one code path.
+            let current_compat = app.repository.config.compatibility_signature();
+            let signature_changed = populated_compat.as_ref() != Some(&current_compat);
+            let scan_needs_reflecting = scan_finished && !populated_with_scan;
 
-            let scan_finished = toolchain_scan.is_none();
-            let tree_chip = app.repository.config.chip;
-            let desired_chip = app.repository.selected_chip().unwrap_or(tree_chip);
-            let chip_changed = desired_chip != tree_chip;
-            let needs_initial_populate = scan_finished && populated_for_chip != Some(desired_chip);
+            if signature_changed || scan_needs_reflecting {
+                let desired_chip = current_compat
+                    .get("chip")
+                    .and_then(|name| name.parse().ok())
+                    .unwrap_or(app.repository.config.chip);
 
-            if chip_changed || needs_initial_populate {
                 let filtered = toolchain::toolchains_for_chip(
                     &cached_toolchains,
                     desired_chip,
@@ -603,8 +606,9 @@ fn main() -> Result<()> {
                     toolchain_category.as_ref(),
                     &filtered.names,
                 );
-                app.set_options(desired_chip, new_options, chip_changed);
-                populated_for_chip = Some(desired_chip);
+                app.set_options(desired_chip, new_options);
+                populated_compat = Some(app.repository.config.compatibility_signature());
+                populated_with_scan = scan_finished;
             }
 
             // draw a frame

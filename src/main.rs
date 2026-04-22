@@ -34,13 +34,22 @@ mod toolchain;
 mod tui;
 
 static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
-    serde_yaml::from_str(
+    let template: Template = serde_yaml::from_str(
         template_files::TEMPLATE_FILES
             .iter()
             .find_map(|(k, v)| if *k == "template.yaml" { Some(v) } else { None })
             .unwrap(),
     )
-    .unwrap()
+    .unwrap();
+
+    // The chip category is authored in YAML but has to stay in lockstep
+    // with the `Chip` enum (which backs hardware metadata). Catching the
+    // mismatch here, before any TUI or CLI flow starts, turns it into a
+    // loud build-time error rather than a mysterious crash on chip switch.
+    esp_generate::chip_selector::validate_chip_category(&template.options)
+        .expect("invalid `chip` category in bundled template.yaml");
+
+    template
 });
 
 #[derive(Parser, Debug)]
@@ -661,14 +670,11 @@ fn main() -> Result<()> {
         selected.push("toolchain-selected".to_string());
     }
 
-    let wokwi_devkit = chip.wokwi();
-
     let max_dram2 = chip.dram2_region().size();
 
     let mut variables = vec![
         ("project-name".to_string(), name.clone()),
         ("mcu".to_string(), chip.to_string()),
-        ("wokwi-board".to_string(), wokwi_devkit.to_string()),
         (
             "generate-version".to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
@@ -677,6 +683,20 @@ fn main() -> Result<()> {
         ("esp-hal-version-full".to_string(), esp_hal_version_full),
         ("max-dram2-uninit".to_string(), format!("{max_dram2}")),
     ];
+
+    // Merge `sets` entries contributed by the selected options (e.g. the
+    // chip-group option contributes `wokwi-board`). Generator-provided
+    // variables above take precedence — `#REPLACE` lookup is first-match-wins
+    // — so a template author can't accidentally shadow `project-name` /
+    // `mcu` / etc. by declaring them in an option's `sets`.
+    for name in &selected {
+        let Some((_, opt)) = find_option(name, &flat_options, chip) else {
+            continue;
+        };
+        for (key, value) in &opt.sets {
+            variables.push((key.clone(), value.clone()));
+        }
+    }
 
     variables.push((
         "rust_target".to_string(),
@@ -835,6 +855,9 @@ fn prune_chip_incompatible_options(chip: Chip, options: &mut Vec<GeneratorOption
 ///   3. toolchain-category population (`ToolchainCategory::populate`), if a
 ///      `ToolchainCategory` was captured off the original template.
 ///
+/// The `chip` category itself is authored statically in `template.yaml` and
+/// validated once at [`TEMPLATE`] load; no runtime population is needed.
+///
 /// This is the single place that knows how to turn "chip + current toolchain
 /// list" into a ready-to-use options tree, and it is deliberately cheap enough
 /// to re-run on every chip switch or scan result (no subprocesses; the
@@ -846,7 +869,6 @@ fn build_options_for_chip(
 ) -> Vec<GeneratorOptionItem> {
     let mut options = TEMPLATE.options.clone();
     prune_chip_incompatible_options(chip, &mut options);
-    esp_generate::chip_selector::populate_chip_category(&mut options);
     esp_generate::modules::populate_module_category(chip, &mut options);
     if let Some(category) = toolchain_category {
         category.populate(&mut options, toolchains);

@@ -630,6 +630,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec!["option2".to_string()],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -638,6 +639,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec![],
             }),
         ];
@@ -666,6 +668,7 @@ mod test {
                 selection_group: "group".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -674,6 +677,7 @@ mod test {
                 selection_group: "group".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -682,6 +686,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec!["option2".to_string()],
             }),
         ];
@@ -721,6 +726,7 @@ mod test {
                         selection_group: "group".to_string(),
                         help: "".to_string(),
                         compatible: IndexMap::new(),
+                        sets: IndexMap::new(),
                         requires: vec![],
                     }),
                     GeneratorOptionItem::Option(GeneratorOption {
@@ -729,6 +735,7 @@ mod test {
                         selection_group: "group".to_string(),
                         help: "".to_string(),
                         compatible: IndexMap::new(),
+                        sets: IndexMap::new(),
                         requires: vec![],
                     }),
                 ],
@@ -739,6 +746,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec!["group".to_string()],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -747,6 +755,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec!["option3".to_string()],
             }),
         ];
@@ -786,6 +795,7 @@ mod test {
                 selection_group: "group".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -794,6 +804,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec!["group".to_string()],
             }),
         ];
@@ -823,6 +834,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -831,6 +843,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec!["!option1".to_string()],
             }),
         ];
@@ -872,6 +885,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -880,6 +894,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec!["!probe-rs".to_string()],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -888,6 +903,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec!["log".to_string()],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -896,6 +912,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec!["probe-rs".to_string()],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -904,6 +921,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec![],
             }),
         ];
@@ -979,6 +997,7 @@ mod test {
                 selection_group: "chip".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -987,6 +1006,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -995,6 +1015,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: wrong_chip_compat,
+                sets: IndexMap::new(),
                 requires: vec!["!victim".to_string()],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -1003,6 +1024,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec!["missing".to_string(), "!victim".to_string()],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -1011,6 +1033,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec!["!victim".to_string()],
             }),
         ];
@@ -1071,6 +1094,7 @@ mod test {
                 selection_group: "log-frontend".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -1079,6 +1103,7 @@ mod test {
                 selection_group: "log-frontend".to_string(),
                 help: "".to_string(),
                 compatible: IndexMap::new(),
+                sets: IndexMap::new(),
                 requires: vec![],
             }),
             GeneratorOptionItem::Option(GeneratorOption {
@@ -1087,6 +1112,7 @@ mod test {
                 selection_group: "".to_string(),
                 help: "".to_string(),
                 compatible: pretty_logs_compat,
+                sets: IndexMap::new(),
                 requires: vec![],
             }),
         ];

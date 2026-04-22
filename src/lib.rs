@@ -15,6 +15,7 @@ pub mod template;
     Copy,
     PartialEq,
     Eq,
+    Hash,
     Serialize,
     Deserialize,
     clap::ValueEnum,
@@ -47,20 +48,6 @@ impl Chip {
             Chip::Esp32h2 => esp_metadata_generated::Chip::Esp32h2,
             Chip::Esp32s2 => esp_metadata_generated::Chip::Esp32s2,
             Chip::Esp32s3 => esp_metadata_generated::Chip::Esp32s3,
-        }
-    }
-
-    pub fn wokwi(self) -> &'static str {
-        match self {
-            Chip::Esp32 => "board-esp32-devkit-c-v4",
-            Chip::Esp32c2 => "",
-            Chip::Esp32c3 => "board-esp32-c3-devkitm-1",
-            Chip::Esp32c5 => "",
-            Chip::Esp32c6 => "board-esp32-c6-devkitc-1",
-            Chip::Esp32c61 => "",
-            Chip::Esp32h2 => "board-esp32-h2-devkitm-1",
-            Chip::Esp32s2 => "board-esp32-s2-devkitm-1",
-            Chip::Esp32s3 => "board-esp32-s3-devkitc-1",
         }
     }
 

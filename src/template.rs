@@ -191,7 +191,7 @@ impl GeneratorOptionItem {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Template {
     pub options: Vec<GeneratorOptionItem>,
 }
@@ -200,6 +200,109 @@ impl Template {
     pub fn all_options(&self) -> Vec<&GeneratorOption> {
         all_options_in(&self.options)
     }
+
+    /// Parses a bundled [`Template`] from its YAML root document,
+    /// expanding every `!Include <path>` tagged node by looking up
+    /// `<path>` via `loader` and substituting the parsed contents in
+    /// place.
+    ///
+    /// The include mechanism works at the untyped `serde_yaml::Value`
+    /// layer, so it's agnostic to position — an `!Include` can appear
+    /// wherever a full node is otherwise allowed. The typical use is
+    /// swapping in a whole `!Category` block:
+    ///
+    /// ```yaml
+    /// options:
+    ///   - !Include chip.yaml
+    /// ```
+    ///
+    /// The included file is parsed as a standalone YAML document and
+    /// its root node replaces the `!Include` node, so that file's root
+    /// must itself be a complete `!Category` (or whatever shape the
+    /// call-site expects).
+    ///
+    /// Paths passed to `loader` are the raw strings from the tag —
+    /// interpreted by the loader however it sees fit. The bundled-
+    /// template loader treats them as keys into `TEMPLATE_FILES` (i.e.
+    /// paths relative to the `template/` root); a future per-file
+    /// loader could resolve them relative to the including file.
+    ///
+    /// Cycles are detected and rejected rather than blowing the stack.
+    pub fn load<F>(main_yaml: &str, loader: F) -> Result<Self, String>
+    where
+        F: Fn(&str) -> Option<String>,
+    {
+        let mut value: serde_yaml::Value =
+            serde_yaml::from_str(main_yaml).map_err(|e| format!("invalid template YAML: {e}"))?;
+        expand_includes(&mut value, &loader, &mut Vec::new())?;
+        serde_yaml::from_value(value)
+            .map_err(|e| format!("template does not conform to schema: {e}"))
+    }
+}
+
+/// Recursively expand `!Include` tagged nodes in `value` using `loader`.
+/// `stack` carries the include paths currently being expanded, so a file
+/// that (directly or transitively) includes itself is reported rather than
+/// recursed into indefinitely.
+fn expand_includes<F>(
+    value: &mut serde_yaml::Value,
+    loader: &F,
+    stack: &mut Vec<String>,
+) -> Result<(), String>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    use serde_yaml::Value;
+
+    match value {
+        Value::Tagged(tagged) if tagged.tag == "!Include" => {
+            let path = match &tagged.value {
+                Value::String(s) => s.clone(),
+                other => {
+                    return Err(format!(
+                        "!Include expects a string path, got {:?}",
+                        other
+                    ));
+                }
+            };
+
+            if stack.iter().any(|p| p == &path) {
+                let mut chain = stack.clone();
+                chain.push(path);
+                return Err(format!(
+                    "template-include cycle: {}",
+                    chain.join(" -> ")
+                ));
+            }
+
+            let contents = loader(&path)
+                .ok_or_else(|| format!("template include `{path}` not found"))?;
+            let mut inner: Value = serde_yaml::from_str(&contents)
+                .map_err(|e| format!("failed to parse include `{path}`: {e}"))?;
+
+            stack.push(path);
+            expand_includes(&mut inner, loader, stack)?;
+            stack.pop();
+
+            *value = inner;
+        }
+        // Keep walking into other tagged nodes (e.g. `!Category`, `!Option`)
+        // so `!Include` can appear nested inside them, not only at the top.
+        Value::Tagged(tagged) => expand_includes(&mut tagged.value, loader, stack)?,
+        Value::Sequence(seq) => {
+            for v in seq {
+                expand_includes(v, loader, stack)?;
+            }
+        }
+        Value::Mapping(map) => {
+            for (_, v) in map.iter_mut() {
+                expand_includes(v, loader, stack)?;
+            }
+        }
+        _ => {}
+    }
+
+    Ok(())
 }
 
 fn all_options_in(options: &[GeneratorOptionItem]) -> Vec<&GeneratorOption> {
@@ -210,4 +313,82 @@ fn all_options_in(options: &[GeneratorOptionItem]) -> Vec<&GeneratorOption> {
             GeneratorOptionItem::Category(category) => all_options_in(&category.options),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// A minimal two-file template: main references a !Include, the
+    /// included file carries the actual category. After `Template::load`,
+    /// the final tree looks exactly like an inlined template would.
+    #[test]
+    fn include_is_substituted_in_place() {
+        let main = r#"
+options:
+  - !Include category.yaml
+"#;
+        let category = r#"
+!Category
+name: demo
+display_name: Demo
+options:
+  - !Option
+    name: demo-a
+    display_name: Demo A
+"#;
+
+        let template = Template::load(main, |path| {
+            (path == "category.yaml").then(|| category.to_string())
+        })
+        .expect("include should resolve");
+
+        assert_eq!(template.options.len(), 1);
+        match &template.options[0] {
+            GeneratorOptionItem::Category(c) => {
+                assert_eq!(c.name, "demo");
+                assert_eq!(c.options.len(), 1);
+            }
+            other => panic!("expected Category, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn missing_include_is_reported() {
+        let main = r#"
+options:
+  - !Include missing.yaml
+"#;
+        let err = Template::load(main, |_| None).expect_err("should error");
+        assert!(err.contains("missing.yaml"), "{err}");
+    }
+
+    #[test]
+    fn cyclic_include_is_rejected() {
+        let main = r#"
+options:
+  - !Include a.yaml
+"#;
+        let a = r#"
+!Category
+name: a
+display_name: A
+options:
+  - !Include b.yaml
+"#;
+        let b = r#"
+!Category
+name: b
+display_name: B
+options:
+  - !Include a.yaml
+"#;
+        let err = Template::load(main, |path| match path {
+            "a.yaml" => Some(a.to_string()),
+            "b.yaml" => Some(b.to_string()),
+            _ => None,
+        })
+        .expect_err("cycle should be rejected");
+        assert!(err.contains("cycle"), "{err}");
+    }
 }

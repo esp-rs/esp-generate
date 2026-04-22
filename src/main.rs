@@ -26,34 +26,37 @@ use std::{
 use strum::IntoEnumIterator;
 use taplo::formatter::Options;
 
-use crate::template_files::TEMPLATE_FILES;
+use esp_generate::template_files::TEMPLATE_FILES;
 
 mod check;
 mod chip_selector;
-mod template_files;
 mod toolchain;
 mod tui;
 
 static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
-    let template: Template = serde_yaml::from_str(
-        template_files::TEMPLATE_FILES
-            .iter()
-            .find_map(|(k, v)| if *k == "template.yaml" { Some(v) } else { None })
-            .unwrap(),
-    )
-    .unwrap();
+    // Load `template.yaml` as the root and resolve every `!Include <path>`
+    // against the bundled `TEMPLATE_FILES` table. This is the one place
+    // that knows how include paths map onto real files; the rest of the
+    // generator sees an already-flattened tree.
+    let root_yaml = TEMPLATE_FILES
+        .iter()
+        .find_map(|(k, v)| (*k == "template.yaml").then_some(*v))
+        .expect("bundled templates missing template.yaml");
 
-    // The `chip` and `module` categories are authored in YAML but both
-    // have to stay well-formed for the generator to work (chip names must
-    // match the `Chip` enum; module compatibility lists must reference
-    // known chips; every chip needs at least one module, etc.). Catching
-    // mismatches here, before any TUI or CLI flow starts, turns them into
-    // loud startup errors rather than mysterious crashes deep in the
-    // option-tree build.
+    let template = Template::load(root_yaml, |path| {
+        TEMPLATE_FILES
+            .iter()
+            .find_map(|(k, v)| (*k == path).then(|| v.to_string()))
+    })
+    .expect("failed to load bundled template");
+
+    // The `chip` and `module` categories are authored in YAML (in their
+    // own include files now) but both have to stay well-formed for the
+    // generator to work.
     chip_selector::validate_chip_category(&template.options)
-        .expect("invalid `chip` category in bundled template.yaml");
+        .expect("invalid `chip` category in bundled template");
     chip_selector::validate_module_category(&template.options)
-        .expect("invalid `module` category in bundled template.yaml");
+        .expect("invalid `module` category in bundled template");
 
     template
 });
@@ -779,7 +782,7 @@ fn main() -> Result<()> {
     let project_dir = path.join(&name);
     fs::create_dir(&project_dir)?;
 
-    for &(file_path, contents) in template_files::TEMPLATE_FILES.iter() {
+    for &(file_path, contents) in TEMPLATE_FILES.iter() {
         let mut file_path = file_path.to_string();
         if let Some(processed) = process_file(contents, &selected, &variables, &mut file_path) {
             let file_path = project_dir.join(file_path);

@@ -1,0 +1,57 @@
+#INCLUDEFILE false
+
+!Category
+name: chip
+display_name: Chip selection
+help: Target Espressif chip. Switching chip hides options whose `compatible` allow-list
+  excludes the new chip and clears their selection.
+# note that optional/wokwi duplicates compatible chips
+options:
+  - !Option
+    name: esp32
+    display_name: ESP32
+    selection_group: chip
+    sets:
+      wokwi-board: board-esp32-devkit-c-v4
+  - !Option
+    name: esp32c2
+    display_name: ESP32-C2
+    selection_group: chip
+  - !Option
+    name: esp32c3
+    display_name: ESP32-C3
+    selection_group: chip
+    sets:
+      wokwi-board: board-esp32-c3-devkitm-1
+  - !Option
+    name: esp32c5
+    display_name: ESP32-C5
+    selection_group: chip
+  - !Option
+    name: esp32c6
+    display_name: ESP32-C6
+    selection_group: chip
+    sets:
+      wokwi-board: board-esp32-c6-devkitc-1
+  - !Option
+    name: esp32c61
+    display_name: ESP32-C61
+    selection_group: chip
+  - !Option
+    name: esp32h2
+    display_name: ESP32-H2
+    selection_group: chip
+    sets:
+      wokwi-board: board-esp32-h2-devkitm-1
+  - !Option
+    name: esp32s2
+    display_name: ESP32-S2
+    selection_group: chip
+    sets:
+      wokwi-board: board-esp32-s2-devkitm-1
+  - !Option
+    name: esp32s3
+    display_name: ESP32-S3
+    selection_group: chip
+    sets:
+      wokwi-board: board-esp32-s3-devkitc-1

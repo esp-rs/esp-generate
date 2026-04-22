@@ -526,7 +526,6 @@ fn main() -> Result<()> {
             required: TEMPLATE.required.clone(),
         },
         &args,
-        chip,
     )?;
 
     let mut initial_selected = args.option.clone();
@@ -1121,42 +1120,24 @@ fn process_file(
     Some(res)
 }
 
-fn process_options(template: &Template, args: &Args, chip: Option<Chip>) -> Result<()> {
+fn process_options(template: &Template, args: &Args) -> Result<()> {
     let mut success = true;
     // Two option catalogues, with complementary coverage:
-    //   - `populated_options` is the pruned, post-`build_options`
-    //     view: it DOES know about dynamically-populated entries (each
-    //     supported chip in the `chip` category, each module for the current
-    //     chip in the `module` category), but it has already been filtered
-    //     down to options compatible with the selected chip.
-    //   - `pristine_options` is the raw template: it lists every
-    //     chip-restricted option (so we can tell "pruned by chip" apart from
-    //     "unknown name"), but the `module` category still holds only its
-    //     literal `PLACEHOLDER` !Option.
-    // Options are looked up in the populated view first — anything present
-    // there is definitionally chip-compatible — and we only consult the
-    // pristine catalogue as a fallback so that chip-pruned names surface as
-    // "Not supported for chip …" rather than "Unknown option".
+    //   - `populated_options` is the pruned, post-`build_options` view: it
+    //     knows about dynamically-populated entries (module options, etc.)
+    //     but only those compatible with the current selections.
+    //   - `pristine_options` is the raw template: it lists every option
+    //     (including those pruned by `compatible`), so we can tell
+    //     "pruned by selection" apart from "unknown name".
     let populated_options = template.all_options();
     let pristine_options = TEMPLATE.all_options();
 
-    // Seed simulated selection with CLI `-o` plus the chip pick (when set)
-    // so `compatible: { chip: [...] }` constraints can be validated.
-    let chip_name = chip.map(|c| c.to_string());
     let flat_options = flatten_options(&template.options);
-    let mut selected: Vec<usize> = args
+    let selected: Vec<usize> = args
         .option
         .iter()
         .flat_map(|opt_name| flat_options.iter().position(|o| &o.name == opt_name))
         .collect();
-    if let Some(ref name) = chip_name
-        && let Some(pos) = flat_options
-            .iter()
-            .position(|o| o.selection_group == "chip" && &o.name == name)
-        && !selected.contains(&pos)
-    {
-        selected.push(pos);
-    }
 
     let selected_config = ActiveConfiguration {
         selected,
@@ -1166,26 +1147,14 @@ fn process_options(template: &Template, args: &Args, chip: Option<Chip>) -> Resu
 
     let mut same_selection_group: HashMap<&str, Vec<&str>> = HashMap::new();
 
-    // Iterate the user's CLI `-o` list directly rather than the resolved
-    // indices in `selected_config.selected`: an option that got pruned out
-    // of the chip-specific tree (because it isn't compatible with the
-    // selected chip) never makes it into `flat_options` and would be
-    // silently dropped here otherwise. We still want to surface a proper
-    // "Not supported for chip …" diagnostic in that case.
     for option in &args.option {
         let option = option.as_str();
-        let mut option_found = false;
-        let mut option_found_for_chip = false;
+        let mut option_found_populated = false;
+        let mut option_found_pristine = false;
 
-        // Primary lookup: the populated, chip-pruned view. Any match here is
-        // automatically both "known" and "compatible with the selected chip",
-        // and — for dynamically-populated names (module entries) — this is
-        // the only view that actually lists them by name.
         for &option_item in populated_options.iter().filter(|item| item.name == option) {
-            option_found = true;
-            option_found_for_chip = true;
+            option_found_populated = true;
 
-            // Is the option allowed to be selected?
             if selected_config.is_option_active(option_item) {
                 // Even if the option is active, another from the same selection group may be present.
                 // The TUI would deselect the previous option, but when specified from the command line,
@@ -1204,7 +1173,6 @@ fn process_options(template: &Template, args: &Args, chip: Option<Chip>) -> Resu
                 continue;
             }
 
-            // Something is wrong, print the constraints that are not met.
             success = false;
             let o = GeneratorOptionItem::Option(option_item.clone());
             let Relationships {
@@ -1229,40 +1197,28 @@ fn process_options(template: &Template, args: &Args, chip: Option<Chip>) -> Resu
             }
         }
 
-        // Fallback lookup: consult the pristine template only if the
-        // populated view didn't know the name, so that static options pruned
-        // out by chip compatibility are reported as "Not supported for chip
-        // …" rather than "Unknown option". Dynamic (module) names never
-        // appear here — but they'll always be found in the populated view
-        // above, so we don't need to special-case them.
-        if !option_found {
-            for &option_item in pristine_options.iter().filter(|item| item.name == option) {
-                option_found = true;
-
-                if let Some(allowed) = option_item.compatible.get("chip") {
-                    match chip_name.as_deref() {
-                        Some(name) if allowed.iter().any(|n| n == name) => {}
-                        _ => continue,
-                    }
-                }
-                option_found_for_chip = true;
-            }
+        if !option_found_populated {
+            option_found_pristine = pristine_options.iter().any(|item| item.name == option);
         }
 
-        if !option_found {
+        if !option_found_populated && !option_found_pristine {
             log::error!("Unknown option '{option}'");
             success = false;
-        } else if !option_found_for_chip {
-            match chip {
-                Some(c) => {
-                    log::error!("Option '{option}' is not supported for chip {c}");
-                }
-                None => {
-                    log::error!(
-                        "Option '{option}' has a chip-compatibility constraint but no chip was selected"
-                    );
-                }
-            }
+        } else if !option_found_populated {
+            let pristine = pristine_options
+                .iter()
+                .find(|item| item.name == option)
+                .unwrap();
+            let constraints = pristine
+                .compatible
+                .iter()
+                .map(|(group, allowed)| format!("{group} in [{}]", allowed.join(", ")))
+                .collect::<Vec<_>>()
+                .join("; ");
+            log::error!(
+                "Option '{option}' is not compatible with the current selection \
+                 (requires {constraints})"
+            );
             success = false;
         }
     }

@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use esp_generate::Chip;
-use esp_generate::template::{GeneratorOption, GeneratorOptionItem, Template};
+use esp_generate::template::{GeneratorOption, GeneratorOptionItem, SetValue, Template};
 use esp_generate::{
     append_list_as_sentence,
     config::{ActiveConfiguration, Relationships},
@@ -29,6 +29,7 @@ use taplo::formatter::Options;
 use crate::template_files::TEMPLATE_FILES;
 
 mod check;
+mod chip_selector;
 mod template_files;
 mod toolchain;
 mod tui;
@@ -42,12 +43,17 @@ static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
     )
     .unwrap();
 
-    // The chip category is authored in YAML but has to stay in lockstep
-    // with the `Chip` enum (which backs hardware metadata). Catching the
-    // mismatch here, before any TUI or CLI flow starts, turns it into a
-    // loud build-time error rather than a mysterious crash on chip switch.
-    esp_generate::chip_selector::validate_chip_category(&template.options)
+    // The `chip` and `module` categories are authored in YAML but both
+    // have to stay well-formed for the generator to work (chip names must
+    // match the `Chip` enum; module compatibility lists must reference
+    // known chips; every chip needs at least one module, etc.). Catching
+    // mismatches here, before any TUI or CLI flow starts, turns them into
+    // loud startup errors rather than mysterious crashes deep in the
+    // option-tree build.
+    chip_selector::validate_chip_category(&template.options)
         .expect("invalid `chip` category in bundled template.yaml");
+    chip_selector::validate_module_category(&template.options)
+        .expect("invalid `module` category in bundled template.yaml");
 
     template
 });
@@ -684,17 +690,24 @@ fn main() -> Result<()> {
         ("max-dram2-uninit".to_string(), format!("{max_dram2}")),
     ];
 
-    // Merge `sets` entries contributed by the selected options (e.g. the
-    // chip-group option contributes `wokwi-board`). Generator-provided
+    // Merge scalar `sets` entries contributed by the selected options (e.g.
+    // the chip-group option contributes `wokwi-board`). Generator-provided
     // variables above take precedence — `#REPLACE` lookup is first-match-wins
     // — so a template author can't accidentally shadow `project-name` /
     // `mcu` / etc. by declaring them in an option's `sets`.
+    //
+    // List-valued entries (e.g. `remove_pins`) aren't substitutable text and
+    // are consumed directly by the code-generation paths that know what to
+    // do with them (see the pin-reservation block below), so they're
+    // deliberately skipped here instead of being joined into a string.
     for name in &selected {
         let Some((_, opt)) = find_option(name, &flat_options, chip) else {
             continue;
         };
         for (key, value) in &opt.sets {
-            variables.push((key.clone(), value.clone()));
+            if let Some(scalar) = value.as_scalar() {
+                variables.push((key.clone(), scalar.to_string()));
+            }
         }
     }
 
@@ -710,12 +723,20 @@ fn main() -> Result<()> {
     let mut reserved_gpio_code = String::new();
 
     if let Some(ref module_name) = selected_module {
-        if let Some(module) = chip.module_by_name(module_name) {
+        if let Some((_, module_option)) = find_option(module_name, &flat_options, chip) {
+            // The module option carries its limitation tags as a list-valued
+            // `sets` entry; a missing entry means "no pins to reserve", not
+            // an error — e.g. a chip-specific module with nothing special
+            // about its wiring.
+            let remove_pins = module_option
+                .sets
+                .get("remove_pins")
+                .and_then(SetValue::as_list)
+                .unwrap_or(&[]);
             let restricted_pins = chip.pins().iter().filter(|pin| {
-                module
-                    .remove_pins
+                remove_pins
                     .iter()
-                    .any(|lim| pin.limitations.contains(lim))
+                    .any(|lim| pin.limitations.contains(&lim.as_str()))
             });
             let strapping_pins = chip
                 .pins()
@@ -850,13 +871,14 @@ fn prune_chip_incompatible_options(chip: Chip, options: &mut Vec<GeneratorOption
 /// [`TEMPLATE`].
 ///
 /// Applies, in order:
-///   1. chip-compat pruning (`prune_chip_incompatible_options`),
-///   2. module-category population (`modules::populate_module_category`),
-///   3. toolchain-category population (`ToolchainCategory::populate`), if a
+///   1. chip-compat pruning (`prune_chip_incompatible_options`), which
+///      also hides modules whose `compatible.chip` excludes this chip,
+///   2. toolchain-category population (`ToolchainCategory::populate`), if a
 ///      `ToolchainCategory` was captured off the original template.
 ///
-/// The `chip` category itself is authored statically in `template.yaml` and
-/// validated once at [`TEMPLATE`] load; no runtime population is needed.
+/// The `chip` and `module` categories are both authored statically in
+/// `template.yaml` and validated once at [`TEMPLATE`] load; no runtime
+/// population is needed for either.
 ///
 /// This is the single place that knows how to turn "chip + current toolchain
 /// list" into a ready-to-use options tree, and it is deliberately cheap enough
@@ -869,7 +891,6 @@ fn build_options_for_chip(
 ) -> Vec<GeneratorOptionItem> {
     let mut options = TEMPLATE.options.clone();
     prune_chip_incompatible_options(chip, &mut options);
-    esp_generate::modules::populate_module_category(chip, &mut options);
     if let Some(category) = toolchain_category {
         category.populate(&mut options, toolchains);
     }

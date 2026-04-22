@@ -9,9 +9,7 @@ use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use esp_generate::{
     Chip,
-    chip_selector::populate_chip_category,
     config::{ActiveConfiguration, find_option, flatten_options},
-    modules::populate_module_category,
     template::{GeneratorOption, GeneratorOptionCategory, GeneratorOptionItem, Template},
 };
 use itertools::Itertools;
@@ -256,16 +254,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     };
 
     let options = include_str!("../../template/template.yaml");
-    let mut template = serde_yaml::from_str::<Template>(options)?;
-
-    // Fully populate the template before deriving any test configuration:
-    // both the `chip` and `module` categories ship as placeholder `!Option`
-    // entries in the YAML and are expanded at runtime, just like the binary
-    // does in `build_options_for_chip`. Without this, the chip-index lookup
-    // below would fail (and any option-level `compatible: { chip: [...] }`
-    // constraints would misfire during seeding).
-    populate_chip_category(&mut template.options);
-    populate_module_category(chip, &mut template.options);
+    let template = serde_yaml::from_str::<Template>(options)?;
     let flat_options = flatten_options(&template.options);
 
     // Locate the flat index of the `chip`-group entry for the target chip.
@@ -283,9 +272,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     let chip_idx = flat_options
         .iter()
         .position(|o| o.selection_group == "chip" && o.name == chip_name)
-        .ok_or_else(|| {
-            anyhow::anyhow!("template has no `chip` option named `{chip_name}`")
-        })?;
+        .ok_or_else(|| anyhow::anyhow!("template has no `chip` option named `{chip_name}`"))?;
 
     fn collect<'data>(
         all_options: &mut Vec<&'data str>,

@@ -12,6 +12,65 @@ use serde::{Deserialize, Serialize};
 /// selection group the TUI populates at runtime.
 pub type CompatibilityRequirements = IndexMap<String, Vec<String>>;
 
+/// Value carried by a [`GeneratorOption::sets`] entry.
+///
+/// Using `#[serde(untagged)]` lets template authors write the YAML form
+/// that reads most naturally for the datum at hand:
+///
+/// ```yaml
+/// sets:
+///   wokwi-board: board-esp32-c6-devkitc-1       # scalar -> Scalar
+///   remove_pins: [spi_flash, spi_psram]         # sequence -> List
+/// ```
+///
+/// Consumers branch on the variant:
+///
+///   * `#REPLACE` directives look for scalars only and silently skip list
+///     entries — list-valued data is meaningful to code-generation paths
+///     (pin reservations, etc.) but has no obvious single-string form for
+///     textual substitution.
+///   * Code-generation paths (e.g. the module pin-reservation block) read
+///     the specific list-keys they care about, asserting via `as_list`.
+///
+/// Keeping both shapes in one container means `sets` stays the sole
+/// mechanism for option-scoped data — no parallel fields on
+/// [`GeneratorOption`] for every new datum shape.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum SetValue {
+    Scalar(String),
+    List(Vec<String>),
+}
+
+impl SetValue {
+    /// Convenience constructor for scalar values, so generator-side code
+    /// that synthesises a `sets`-like context (e.g. `project-name`,
+    /// `mcu`) doesn't have to spell out the variant every time.
+    pub fn scalar(s: impl Into<String>) -> Self {
+        Self::Scalar(s.into())
+    }
+
+    /// Returns `Some(&str)` if this value is a scalar, `None` for lists.
+    /// Templates' `#REPLACE` machinery uses this to treat list-valued keys
+    /// as "not applicable" rather than producing garbage substitutions.
+    pub fn as_scalar(&self) -> Option<&str> {
+        match self {
+            Self::Scalar(s) => Some(s.as_str()),
+            Self::List(_) => None,
+        }
+    }
+
+    /// Returns `Some(&[String])` if this value is a list, `None` for
+    /// scalars. Used by code-generation paths that expect a list-shaped
+    /// entry under a specific well-known key.
+    pub fn as_list(&self) -> Option<&[String]> {
+        match self {
+            Self::List(xs) => Some(xs.as_slice()),
+            Self::Scalar(_) => None,
+        }
+    }
+}
+
 #[derive(Clone, Default, Serialize, Deserialize, Debug)]
 pub struct GeneratorOption {
     pub name: String,
@@ -27,21 +86,24 @@ pub struct GeneratorOption {
     /// [`CompatibilityRequirements`].
     #[serde(default)]
     pub compatible: CompatibilityRequirements,
-    /// Template variables contributed by this option when it is part of the
-    /// final selection. Each selected option's `sets` entries are merged into
-    /// the substitution context used by `#REPLACE` directives, keyed by
-    /// variable name.
+    /// Option-scoped template data. Each selected option's `sets` entries
+    /// are merged into the generation context, keyed by variable name. Values
+    /// can be scalars or lists ([`SetValue`]) so the same mechanism carries
+    /// heterogeneous data:
     ///
-    /// This is how option-scoped, data-driven values like `wokwi-board` reach
-    /// template files without a per-value Rust table: the chip option that
-    /// represents the active chip carries its own `wokwi-board` entry, and
-    /// chips that have no Wokwi model simply don't contribute one.
+    ///   * scalars (`wokwi-board: board-...`) feed `#REPLACE` substitutions
+    ///     in template files — chips that have no Wokwi model simply don't
+    ///     contribute a `wokwi-board` entry;
+    ///   * lists (`remove_pins: [spi_flash, spi_psram]`) feed code-generation
+    ///     paths — the module pin-reservation block intersects `remove_pins`
+    ///     with the chip's pin metadata to emit `let _ = peripherals.GPIOn;`
+    ///     stanzas.
     ///
     /// Keys must not collide with the fixed set of generator-provided
     /// variables (`project-name`, `mcu`, `rust_target`, etc.); on collision
     /// the generator-provided value wins to preserve existing behaviour.
     #[serde(default)]
-    pub sets: IndexMap<String, String>,
+    pub sets: IndexMap<String, SetValue>,
 }
 
 impl GeneratorOption {

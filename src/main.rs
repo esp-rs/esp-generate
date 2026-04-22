@@ -123,10 +123,7 @@ enum SubCommands {
 
 impl SubCommands {
     fn handle(&self) -> Result<()> {
-        fn compatibility_info_text(
-            options: &[&GeneratorOption],
-            opt: &GeneratorOption,
-        ) -> String {
+        fn compatibility_info_text(options: &[&GeneratorOption], opt: &GeneratorOption) -> String {
             // Collect every `compatible` group key used by any variant sharing
             // this option's name (there can be more than one variant — see the
             // duplicate `probe-rs` entries in the template). Order is stable:
@@ -704,8 +701,6 @@ fn main() -> Result<()> {
         let (_, option) = find_option(&selected[idx], &flat_options, chip).unwrap();
         selected.push(option.selection_group.clone());
     }
-
-    selected.push(chip.to_string());
 
     selected.push(if chip.metadata().is_xtensa() {
         "xtensa".to_string()

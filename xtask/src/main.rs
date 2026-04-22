@@ -425,12 +425,23 @@ fn generate(
 
     args.push(project_name.to_string());
 
-    Command::new("cargo")
+    // Capture stderr (rather than discarding it via `Stdio::null()`)
+    // so that any failure from the underlying `esp-generate` invocation — e.g.
+    // a bad option, a filesystem error, or a panic — surfaces to the xtask
+    // caller instead of silently turning into an empty project directory.
+    let output = Command::new("cargo")
         .args(args)
         .current_dir(workspace)
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
         .output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stderr.is_empty() {
+            eprintln!("{stderr}");
+        }
+        bail!("esp-generate failed for chip {chip} with options {options:?}");
+    }
 
     Ok(())
 }

@@ -258,13 +258,12 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     let options = include_str!("../../template/template.yaml");
     let mut template = serde_yaml::from_str::<Template>(options)?;
 
-    // Fully populate the template before deriving any test configuration: the
-    // `chip` and `module` categories ship as placeholder !Options in the YAML
-    // and are expanded at runtime, just like the binary does in
-    // `build_options_for_chip`. Populating `chip` is also what makes it
-    // possible to satisfy option-level `compatible: { chip: [...] }`
-    // constraints below by seeding the per-trial selection with the target
-    // chip's flat-option index.
+    // Fully populate the template before deriving any test configuration:
+    // both the `chip` and `module` categories ship as placeholder `!Option`
+    // entries in the YAML and are expanded at runtime, just like the binary
+    // does in `build_options_for_chip`. Without this, the chip-index lookup
+    // below would fail (and any option-level `compatible: { chip: [...] }`
+    // constraints would misfire during seeding).
     populate_chip_category(&mut template.options);
     populate_module_category(chip, &mut template.options);
     let flat_options = flatten_options(&template.options);
@@ -277,8 +276,9 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     // the compatibility predicate and silently drops out of the test matrix.
     //
     // The index is stripped back out before the selection list leaves this
-    // function so it doesn't surface as a spurious `-o <chip>` on the
-    // generated CLI; the chip is already passed via `--chip`.
+    // function: `generate()` injects the chip as its own `-o <chip>` entry,
+    // so leaving it in here would produce a duplicate `-o <chip>` on the
+    // generated CLI.
     let chip_name = chip.to_string();
     let chip_idx = flat_options
         .iter()
@@ -447,12 +447,16 @@ fn generate(
         "--no-default-features",
         "--",
         "--headless",
-        &format!("--chip={chip}"),
         &format!("--output-path={}", project_path.display()),
     ]
     .iter()
     .map(|arg| arg.to_string())
     .collect::<Vec<_>>();
+
+    // The target chip is now just another `-o` option as far as the
+    // `esp-generate` CLI is concerned; pass it first so it reads naturally
+    // in the log output (`WITH OPTIONS: …` lists the rest).
+    args.extend(["-o".to_string(), chip.to_string()]);
 
     for option in options {
         args.extend(["-o".to_string(), option.to_owned()]);

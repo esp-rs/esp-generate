@@ -1,4 +1,6 @@
 #INCLUDEFILE false
+required:
+  - chip
 options:
   - !Include .template/chip.yaml
 

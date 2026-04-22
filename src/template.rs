@@ -191,14 +191,56 @@ impl GeneratorOptionItem {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Template {
     pub options: Vec<GeneratorOptionItem>,
+    /// Names of selection groups that must have at least one option selected
+    /// before generation can proceed. A missing required group is a hard
+    /// error in headless mode and blocks the Save action in the TUI — the
+    /// TUI also surfaces which groups still need a pick so the user knows
+    /// what's gating the "save and generate" key.
+    #[serde(default)]
+    pub required: Vec<String>,
 }
 
 impl Template {
     pub fn all_options(&self) -> Vec<&GeneratorOption> {
         all_options_in(&self.options)
+    }
+
+    /// Validate that every entry in [`Self::required`] is non-empty and
+    /// names a selection group that actually carries at least one option
+    /// in the template.
+    pub fn validate_required(&self) -> Result<(), String> {
+        let all = self.all_options();
+        for group in &self.required {
+            if group.is_empty() {
+                return Err("required selection group names must be non-empty".into());
+            }
+            let has_member = all.iter().any(|o| o.selection_group == *group);
+            if !has_member {
+                return Err(format!(
+                    "required selection group `{group}` has no options in the template"
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Return the required groups that are not satisfied by the given set
+    /// of selected option names.
+    pub fn missing_required_groups(&self, selected_names: &[String]) -> Vec<String> {
+        let all = self.all_options();
+        self.required
+            .iter()
+            .filter(|group| {
+                !selected_names.iter().any(|name| {
+                    all.iter()
+                        .any(|o| &o.selection_group == *group && &o.name == name)
+                })
+            })
+            .cloned()
+            .collect()
     }
 
     /// Parses a bundled [`Template`] from its YAML root document,
@@ -259,24 +301,18 @@ where
             let path = match &tagged.value {
                 Value::String(s) => s.clone(),
                 other => {
-                    return Err(format!(
-                        "!Include expects a string path, got {:?}",
-                        other
-                    ));
+                    return Err(format!("!Include expects a string path, got {:?}", other));
                 }
             };
 
             if stack.iter().any(|p| p == &path) {
                 let mut chain = stack.clone();
                 chain.push(path);
-                return Err(format!(
-                    "template-include cycle: {}",
-                    chain.join(" -> ")
-                ));
+                return Err(format!("template-include cycle: {}", chain.join(" -> ")));
             }
 
-            let contents = loader(&path)
-                .ok_or_else(|| format!("template include `{path}` not found"))?;
+            let contents =
+                loader(&path).ok_or_else(|| format!("template include `{path}` not found"))?;
             let mut inner: Value = serde_yaml::from_str(&contents)
                 .map_err(|e| format!("failed to parse include `{path}`: {e}"))?;
 
@@ -361,6 +397,71 @@ options:
 "#;
         let err = Template::load(main, |_| None).expect_err("should error");
         assert!(err.contains("missing.yaml"), "{err}");
+    }
+
+    #[test]
+    fn validate_required_rejects_unknown_or_empty_groups() {
+        // A `required` entry that doesn't name a real selection group is a
+        // template bug — satisfying it is impossible, so no user-driven
+        // selection could ever unblock generation. Catching it at load
+        // keeps the failure close to its cause.
+        let t = Template {
+            required: vec!["nonexistent".to_string()],
+            ..Template::default()
+        };
+        let err = t
+            .validate_required()
+            .expect_err("unknown group should fail");
+        assert!(err.contains("nonexistent"), "{err}");
+
+        let t = Template {
+            required: vec![String::new()],
+            ..Template::default()
+        };
+        let err = t
+            .validate_required()
+            .expect_err("empty group name should fail");
+        assert!(err.contains("non-empty"), "{err}");
+    }
+
+    #[test]
+    fn missing_required_groups_reports_unsatisfied_groups_only() {
+        // A template that declares `chip` as required. When no chip-like
+        // name is selected, `missing_required_groups` reports `chip`;
+        // once a matching name is selected the group drops out.
+        let main = r#"
+required:
+  - chip
+options:
+  - !Category
+    name: chip
+    display_name: Chip
+    options:
+      - !Option
+        name: esp32
+        display_name: ESP32
+        selection_group: chip
+      - !Option
+        name: esp32c6
+        display_name: ESP32-C6
+        selection_group: chip
+"#;
+        let template = Template::load(main, |_| None).expect("should parse");
+        template.validate_required().expect("chip group exists");
+
+        assert_eq!(
+            template.missing_required_groups(&[]),
+            vec!["chip".to_string()]
+        );
+        assert_eq!(
+            template.missing_required_groups(&["unrelated".to_string()]),
+            vec!["chip".to_string()]
+        );
+        assert!(
+            template
+                .missing_required_groups(&["esp32".to_string()])
+                .is_empty()
+        );
     }
 
     #[test]

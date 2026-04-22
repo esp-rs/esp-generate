@@ -57,6 +57,12 @@ static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
         .expect("invalid `chip` category in bundled template");
     chip_selector::validate_module_category(&template.options)
         .expect("invalid `module` category in bundled template");
+    // Every group named in `required` must carry at least one option in
+    // the template, or satisfying it would be impossible — see
+    // `Template::validate_required`.
+    template
+        .validate_required()
+        .expect("bundled template declares an unsatisfiable required group");
 
     template
 });
@@ -192,7 +198,11 @@ impl SubCommands {
                     }
                 }
                 for (group, options) in groups {
-                    println!("Group: {}", group);
+                    if TEMPLATE.required.contains(group) {
+                        println!("Group: {} (required)", group);
+                    } else {
+                        println!("Group: {}", group);
+                    }
                     for option in options {
                         let option = &all_options[option];
                         let mut help_text = option.display_name.clone();
@@ -306,13 +316,18 @@ fn about() -> String {
 }
 
 /// Scan the user's `-o`/`--option` list for an entry that names a [`Chip`]
-/// variant. The chip is no longer a first-class CLI flag; it travels with the
-/// rest of the generation options, so `-o esp32c6` both picks the target and
-/// ticks the matching entry in the `chip` selection group.
+/// variant. The chip travels with the rest of the generation options (it's a
+/// normal entry in the `chip` selection group), so `-o esp32c6` both picks
+/// the target and ticks the matching option.
 ///
 /// Returns the first match. If the user passes multiple chip options (which
 /// is meaningless since they share a selection group), the conflict is
 /// surfaced later by [`process_options`] via the `same_selection_group` check.
+///
+/// Higher-level *presence* checks (i.e. "did the user pick a chip at all?")
+/// go through [`Template::missing_required_groups`] instead — this helper
+/// exists purely to produce the typed [`Chip`] value the rest of the
+/// generator pipeline consumes.
 fn chip_from_options(options: &[String]) -> Option<Chip> {
     options.iter().find_map(|opt| opt.parse::<Chip>().ok())
 }
@@ -322,10 +337,16 @@ fn setup_args_interactive(args: &mut Args) -> Result<()> {
         let mut missing = String::from(
             "You are in headless mode, but esp-generate needs more information to generate your project.",
         );
-        if chip_from_options(&args.option).is_none() {
-            missing.push_str(
-                "\nThe target chip is missing. Add `-o <your-chip-name>` (e.g. `-o esp32c6`) to the command.",
-            );
+        // Surface every required selection group that doesn't have a pick
+        // in `-o`, not just the chip. Templates declare their required
+        // groups in `template.yaml::required`; `chip` happens to be the
+        // only one today, but the generator doesn't hard-code that.
+        for group in TEMPLATE.missing_required_groups(&args.option) {
+            missing.push_str(&format!(
+                "\nNo option selected for the required `{group}` group. \
+                 Add `-o <name>` for one of its options \
+                 (see `esp-generate list-options`)."
+            ));
         }
         if args.name.is_none() {
             missing.push_str("\nThe project name is missing. Add the name of your project to the end of the command.");
@@ -334,11 +355,11 @@ fn setup_args_interactive(args: &mut Args) -> Result<()> {
         bail!("{missing}");
     }
 
-    // The chip is not prompted for up front: the TUI exposes it as a
-    // first-class selection group ("chip" category), so users can pick — and
-    // switch — the target chip interactively. When no chip is passed on the
-    // command line we just seed the TUI with a reasonable default; the user
-    // can change it from the first menu level.
+    // Required groups are not prompted for up front: the TUI exposes each
+    // of them as a first-class selection group, and blocks the Save action
+    // until every required group has a pick. When no value is passed on
+    // the command line we just seed the TUI with a reasonable default
+    // tree; the user picks from the first menu level.
 
     if args.name.is_none() {
         let project_name = Text::new("Enter project name:")
@@ -368,19 +389,23 @@ fn main() -> Result<()> {
         check_for_update(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
     }
 
-    // Run the interactive TUI only if chip or name is missing. Both checks
-    // happen against the `-o` list (chip is just another option now) plus
-    // `args.name` — headless mode is rejected inside `setup_args_interactive`
-    // if either piece is still missing.
-    if chip_from_options(&args.option).is_none() || args.name.is_none() {
+    // Run the interactive TUI only if some required group is unpicked or
+    // the name is missing. Required-group membership is driven by the
+    // template's `required` list (see `Template::missing_required_groups`);
+    // headless mode is rejected inside `setup_args_interactive` if either
+    // piece is still missing.
+    let missing_required = TEMPLATE.missing_required_groups(&args.option);
+    if !missing_required.is_empty() || args.name.is_none() {
         setup_args_interactive(&mut args)?;
     }
 
     // In TUI mode the chip is a normal selection group — if the user didn't
-    // pass one via `-o`, just seed the session with the first chip variant
-    // and let them switch from the TUI. Headless mode has already been
-    // rejected above if the user didn't provide a chip, so the `unwrap_or`
-    // branch only runs in the TUI path.
+    // pass one via `-o`, just seed the session tree with the first chip
+    // variant (so there *is* a tree to render) and let them pick from the
+    // TUI. Headless mode has already been rejected above if any required
+    // group was unpicked, so the `unwrap_or` fallback only runs in the TUI
+    // path. The fallback chip is *not* added to `initial_selected`: the
+    // user must actively pick one before Save is unblocked.
     let mut chip = chip_from_options(&args.option).unwrap_or_else(|| {
         Chip::iter()
             .next()
@@ -456,21 +481,19 @@ fn main() -> Result<()> {
     process_options(
         &Template {
             options: initial_options.clone(),
+            required: TEMPLATE.required.clone(),
         },
         &args,
         chip,
     )?;
 
-    // Initial selection for TUI/headless, including toolchain if provided.
-    // Users passing a chip via `-o` already have it in `args.option`; only
-    // append the (defaulted) chip when it isn't already present, so the
-    // `chip` selection group starts with the right entry ticked without
-    // creating a duplicate selected index.
+    // Initial selection for TUI/headless. Whatever the user passed via
+    // `-o` goes in verbatim — in particular, if they didn't pass a chip
+    // the chip selection group starts empty and the TUI blocks Save until
+    // they pick one (see `App::can_save`). In headless mode we already
+    // bailed above if any required group was unsatisfied, so we know the
+    // chip (and any other required group) is already present here.
     let mut initial_selected = args.option.clone();
-    let chip_name = chip.to_string();
-    if !initial_selected.iter().any(|o| o == &chip_name) {
-        initial_selected.push(chip_name);
-    }
     if let Some(ref tc) = args.toolchain {
         initial_selected.push(tc.clone());
     }
@@ -481,7 +504,7 @@ fn main() -> Result<()> {
     let repository = tui::Repository::new(chip, initial_options, &initial_selected);
 
     let (mut selected, flat_options) = if !args.headless {
-        let mut app = tui::App::new(repository);
+        let mut app = tui::App::new(repository, TEMPLATE.required.clone());
 
         let mut terminal = tui::init_terminal()?;
 

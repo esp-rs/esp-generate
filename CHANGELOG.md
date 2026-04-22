@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Chip selector has been moved to the TUI. (#328)
+
 ### Fixed
 
 ### Removed

@@ -78,6 +78,26 @@ impl ActiveConfiguration {
         self.drop_unsatisfied();
     }
 
+    /// Return the subset of `required` that currently has no selected
+    /// option in the live tree. Mirrors
+    /// [`crate::template::Template::missing_required_groups`] but operates
+    /// on the selection indices the TUI actually mutates, so it stays in
+    /// sync across chip switches and toolchain repopulations without the
+    /// caller having to translate back to option names.
+    pub fn missing_required_groups(&self, required: &[String]) -> Vec<String> {
+        required
+            .iter()
+            .filter(|group| {
+                !self.selected.iter().any(|&idx| {
+                    self.flat_options
+                        .get(idx)
+                        .is_some_and(|o| &o.selection_group == *group)
+                })
+            })
+            .cloned()
+            .collect()
+    }
+
     pub fn is_group_selected(&self, group: &str) -> bool {
         self.selected
             .iter()

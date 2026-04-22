@@ -9,8 +9,8 @@ local rust_analyzer = {
 }
 --IF option("xtensa")
 --REPLACE esp rust_toolchain
-rust_analyzer.cargo.extraEnv = { RUST_TOOLCHAIN = "esp" }
-rust_analyzer.server = { extraEnv = { RUST_TOOLCHAIN = "stable" } }
+rust_analyzer.cargo.extraEnv = { RUSTUP_TOOLCHAIN = "esp" }
+rust_analyzer.server = { extraEnv = { RUSTUP_TOOLCHAIN = "stable" } }
 --ENDIF
 
 -- Note the neovim name of the language server is rust_analyzer with an underscore.

@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 /// selection group the TUI populates at runtime.
 pub type CompatibilityRequirements = IndexMap<String, Vec<String>>;
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug)]
 pub struct GeneratorOption {
     pub name: String,
     pub display_name: String,
@@ -27,6 +27,21 @@ pub struct GeneratorOption {
     /// [`CompatibilityRequirements`].
     #[serde(default)]
     pub compatible: CompatibilityRequirements,
+    /// Template variables contributed by this option when it is part of the
+    /// final selection. Each selected option's `sets` entries are merged into
+    /// the substitution context used by `#REPLACE` directives, keyed by
+    /// variable name.
+    ///
+    /// This is how option-scoped, data-driven values like `wokwi-board` reach
+    /// template files without a per-value Rust table: the chip option that
+    /// represents the active chip carries its own `wokwi-board` entry, and
+    /// chips that have no Wokwi model simply don't contribute one.
+    ///
+    /// Keys must not collide with the fixed set of generator-provided
+    /// variables (`project-name`, `mcu`, `rust_target`, etc.); on collision
+    /// the generator-provided value wins to preserve existing behaviour.
+    #[serde(default)]
+    pub sets: IndexMap<String, String>,
 }
 
 impl GeneratorOption {

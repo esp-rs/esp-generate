@@ -665,6 +665,7 @@ mod test {
             help: String::new(),
             requires: requires.iter().map(|r| r.to_string()).collect(),
             compatible: IndexMap::new(),
+            sets: IndexMap::new(),
         })
     }
 
@@ -685,6 +686,7 @@ mod test {
             help: String::new(),
             requires: requires.iter().map(|r| r.to_string()).collect(),
             compatible,
+            sets: IndexMap::new(),
         })
     }
 
@@ -698,6 +700,7 @@ mod test {
             help: String::new(),
             requires: Vec::new(),
             compatible: IndexMap::new(),
+            sets: IndexMap::new(),
         })
     }
 
@@ -887,6 +890,7 @@ mod test {
                 help: String::new(),
                 requires: vec!["!method".to_string()],
                 compatible: wrong_chip_compat,
+                sets: IndexMap::new(),
             }),
         ];
         let repository = Repository::new(

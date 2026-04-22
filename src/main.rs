@@ -172,22 +172,7 @@ impl SubCommands {
             }
         }
 
-        // Populate the `chip` category so chips show up under their real
-        // names (`esp32c6` etc.) rather than the static `PLACEHOLDER` entry
-        // that ships in the YAML. The chip is a valid `-o` target now, so
-        // `list-options`/`explain` must be able to describe it.
-        //
-        // `module` and `toolchain` are intentionally *not* populated here:
-        // modules are chip-specific (so a chip-agnostic listing has nothing
-        // useful to say) and toolchains are discovered from the user's
-        // rustup install at runtime. Those two groups are filtered out of
-        // the listing below instead.
-        let mut populated_options = TEMPLATE.options.clone();
-        esp_generate::chip_selector::populate_chip_category(&mut populated_options);
-        let populated = Template {
-            options: populated_options,
-        };
-
+        let all_options = TEMPLATE.all_options();
         match self {
             SubCommands::ListOptions => {
                 println!(
@@ -195,7 +180,6 @@ impl SubCommands {
                 );
                 let mut groups = IndexMap::new();
                 let mut seen = HashSet::new();
-                let all_options = populated.all_options();
                 for (index, option) in all_options
                     .iter()
                     .enumerate()
@@ -236,7 +220,6 @@ impl SubCommands {
                 Ok(())
             }
             SubCommands::Explain { option } => {
-                let all_options = populated.all_options();
                 if let Some(option) = all_options.iter().find(|o| &o.name == option) {
                     println!(
                         "Option: {}\n\n{}{}",

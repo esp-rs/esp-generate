@@ -4,6 +4,11 @@ use serde::{Deserialize, Serialize};
 pub mod cargo;
 pub mod config;
 pub mod template;
+/// Build-script-generated `TEMPLATE_FILES` array mapping each file under
+/// `template/` to its baked-in contents. Kept `pub` so xtask (and any other
+/// consumer that needs to resolve `!Include` paths against the bundled
+/// template tree) can share the same source-of-truth as the binary.
+pub mod template_files;
 
 #[derive(
     Debug,

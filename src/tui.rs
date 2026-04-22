@@ -43,11 +43,10 @@ pub struct Repository {
 }
 
 impl Repository {
-    pub fn new(chip: Chip, options: Vec<GeneratorOptionItem>, selected: &[String]) -> Self {
+    pub fn new(options: Vec<GeneratorOptionItem>, selected: &[String]) -> Self {
         let flat_options = flatten_options(&options);
         Self {
             config: ActiveConfiguration {
-                chip,
                 selected: selected
                     .iter()
                     .flat_map(|option| flat_options.iter().position(|o| &o.name == option))
@@ -59,7 +58,7 @@ impl Repository {
         }
     }
 
-    /// Rebuild the options tree for a (possibly different) chip.
+    /// Rebuild the options tree.
     ///
     /// The `options` argument is the *fully prepared* tree: the caller is
     /// responsible for running chip-filtering, module population and toolchain
@@ -70,8 +69,8 @@ impl Repository {
     /// The menu path is trimmed to the depth that still resolves against the
     /// new tree, so categories that vanish drop out while surviving ones keep
     /// the user's cursor in place.
-    pub fn set_options(&mut self, chip: Chip, options: Vec<GeneratorOptionItem>) {
-        self.config.reset_options(chip, options);
+    pub fn set_options(&mut self, options: Vec<GeneratorOptionItem>) {
+        self.config.reset_options(options);
 
         // Trim the navigation path to whatever still resolves in the new tree.
         let mut current: &[GeneratorOptionItem] = &self.config.options;
@@ -101,13 +100,9 @@ impl Repository {
     }
 
     /// Returns the chip that is currently ticked in the `chip` selection
-    /// group, if any. The main loop polls this after every event to detect
-    /// user-driven chip switches; disagreement with [`ActiveConfiguration::chip`]
-    /// triggers a full options-tree rebuild.
-    ///
-    /// Returns `None` only in degenerate situations (e.g. tests that build a
-    /// `Repository` without a chip category). Callers should fall back to
-    /// `self.config.chip` in that case.
+    /// group, if any. Returns `None` only in degenerate situations (e.g. tests
+    /// that build a `Repository` without a chip category, or the user hasn't
+    /// picked a chip yet).
     pub fn selected_chip(&self) -> Option<Chip> {
         self.config.selected.iter().find_map(|idx| {
             let option = &self.config.flat_options[*idx];
@@ -625,8 +620,8 @@ impl App {
     ///
     /// `Repository::set_options` trims the navigation path to whatever still
     /// resolves in the new tree; we mirror that here on the `ListState` stack.
-    pub fn set_options(&mut self, chip: Chip, options: Vec<GeneratorOptionItem>) {
-        self.repository.set_options(chip, options);
+    pub fn set_options(&mut self, options: Vec<GeneratorOptionItem>) {
+        self.repository.set_options(options);
 
         let desired = self.repository.path_len() + 1;
         self.state.truncate(desired.max(1));
@@ -726,7 +721,7 @@ mod test {
             chip_group_option(Chip::Esp32c6),
             option("alloc", &[]),
         ];
-        let repository = Repository::new(Chip::Esp32, options, &["alloc".to_string()]);
+        let repository = Repository::new(options, &["alloc".to_string()]);
         let mut app = app_with(&["chip"], repository);
 
         assert!(
@@ -747,7 +742,7 @@ mod test {
         // No `required` entries → Save is never gated, regardless of
         // selection state. This is the fallback for templates that don't
         // opt into the mechanism.
-        let repository = Repository::new(Chip::Esp32, vec![option("alloc", &[])], &[]);
+        let repository = Repository::new(vec![option("alloc", &[])], &[]);
         let app = app_with(&[], repository);
         assert!(app.can_save());
         assert!(app.missing_required_groups().is_empty());
@@ -767,7 +762,6 @@ mod test {
         ];
 
         let mut repository = Repository::new(
-            Chip::Esp32,
             options,
             &[
                 "method-unselected-a".to_string(),
@@ -807,7 +801,6 @@ mod test {
         ];
 
         let repository = Repository::new(
-            Chip::Esp32,
             options,
             &["method".to_string(), "dependent".to_string()],
         );
@@ -884,7 +877,7 @@ mod test {
             option("method", &[]),
             option("unmet-pos", &["needs-x", "!method"]),
         ];
-        let repository = Repository::new(Chip::Esp32, options, &["method".to_string()]);
+        let repository = Repository::new(options, &["method".to_string()]);
 
         let (actionable, line) = repository
             .current_level_desc(80, &ui, Some(1))
@@ -924,7 +917,6 @@ mod test {
             }),
         ];
         let repository = Repository::new(
-            Chip::Esp32,
             options,
             &["esp32".to_string(), "method".to_string()],
         );
@@ -961,7 +953,6 @@ mod test {
         ];
 
         let repository = Repository::new(
-            Chip::Esp32,
             options,
             &[
                 "loooooong-one".to_string(),
@@ -1023,7 +1014,6 @@ mod test {
         )];
 
         let mut repository = Repository::new(
-            Chip::Esp32,
             initial,
             &[
                 "survivor".to_string(),
@@ -1051,9 +1041,8 @@ mod test {
             },
         )];
 
-        repository.set_options(Chip::Esp32c6, rebuilt);
+        repository.set_options(rebuilt);
 
-        assert_eq!(repository.config.chip, Chip::Esp32c6);
         assert!(repository.config.is_selected("survivor"));
         // Name no longer exists in the new tree: remap-by-name drops it.
         assert!(!repository.config.is_selected("will-vanish"));
@@ -1064,18 +1053,16 @@ mod test {
 
         // Now rebuild with the category itself gone: path must be trimmed.
         let reshaped = vec![option("survivor", &[])];
-        repository.set_options(Chip::Esp32c6, reshaped);
+        repository.set_options(reshaped);
         assert_eq!(repository.path.len(), 0);
         assert!(repository.config.is_selected("survivor"));
     }
 
     #[test]
     fn selected_chip_reports_chip_group_selection() {
-        // `selected_chip` is the bridge the main loop uses to notice user-driven
-        // chip switches. It must return the chip whose group entry is currently
-        // ticked, regardless of what `config.chip` says (divergence is the
-        // whole point — that's how we detect a pending switch), and `None`
-        // when no chip-group option is present in the tree at all.
+        // `selected_chip` returns the chip whose group entry is currently
+        // ticked, and `None` when no chip-group option is present in the tree
+        // at all.
         let options = vec![
             chip_group_option(Chip::Esp32),
             chip_group_option(Chip::Esp32c6),
@@ -1083,20 +1070,13 @@ mod test {
         ];
 
         let repository = Repository::new(
-            Chip::Esp32,
             options,
             &["esp32c6".to_string(), "alloc".to_string()],
         );
 
-        // config.chip still says Esp32 (the tree hasn't been rebuilt yet) but
-        // the user has ticked `esp32c6` in the chip group — the main loop
-        // picks this up and triggers the rebuild.
-        assert_eq!(repository.config.chip, Chip::Esp32);
         assert_eq!(repository.selected_chip(), Some(Chip::Esp32c6));
 
-        // A tree without a chip category means no chip group selection —
-        // falls back to `None`, which the main loop maps to `config.chip`.
-        let no_chip_group = Repository::new(Chip::Esp32, vec![option("alloc", &[])], &[]);
+        let no_chip_group = Repository::new(vec![option("alloc", &[])], &[]);
         assert_eq!(no_chip_group.selected_chip(), None);
     }
 
@@ -1110,7 +1090,7 @@ mod test {
             chip_group_option(Chip::Esp32),
             chip_group_option(Chip::Esp32c6),
         ];
-        let mut repository = Repository::new(Chip::Esp32, options, &["esp32".to_string()]);
+        let mut repository = Repository::new(options, &["esp32".to_string()]);
 
         repository.toggle_current(0);
         assert!(
@@ -1152,7 +1132,6 @@ mod test {
         ];
 
         let repository = Repository::new(
-            Chip::Esp32,
             options,
             &[
                 "esp32".to_string(),
@@ -1220,7 +1199,6 @@ mod test {
         ];
 
         let mut repository = Repository::new(
-            Chip::Esp32,
             initial,
             &[
                 "esp32".to_string(),
@@ -1245,17 +1223,14 @@ mod test {
         repository.toggle_current(1);
         assert_eq!(repository.selected_chip(), Some(Chip::Esp32c6));
 
-        repository.set_options(Chip::Esp32c6, rebuilt);
+        repository.set_options(rebuilt);
 
-        assert_eq!(repository.config.chip, Chip::Esp32c6);
         assert!(repository.config.is_selected("esp32c6"));
         assert!(!repository.config.is_selected("esp32"));
         assert!(repository.config.is_selected("shared"));
         // Chip-filtered out of the tree entirely; rebuild-by-name drops it.
         assert!(!repository.config.is_selected("only-on-esp32"));
-        // And `selected_chip()` now agrees with `config.chip` — no more
-        // pending switch.
-        assert_eq!(repository.selected_chip(), Some(repository.config.chip));
+        assert_eq!(repository.selected_chip(), Some(Chip::Esp32c6));
     }
 }
 

@@ -1,13 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::Chip;
-
 use crate::template::{GeneratorOption, GeneratorOptionItem};
 
 #[derive(Debug)]
 pub struct ActiveConfiguration {
-    /// The chip that is configured for
-    pub chip: Chip,
     /// The names of the selected options
     pub selected: Vec<usize>,
     /// The tree of all available options
@@ -55,13 +51,13 @@ impl ActiveConfiguration {
             .collect();
     }
 
-    /// Swap in a new chip + options tree and keep `selected` / `flat_options`
+    /// Swap in a new options tree and keep `selected` / `flat_options`
     /// consistent.
     ///
-    /// This is the supported entry point for dynamic chip switching: the caller
-    /// builds the new options tree (chip filter + module population + toolchain
-    /// population) off of the pristine template and hands it over. The rest is
-    /// mechanical:
+    /// This is the supported entry point for dynamic tree rebuilds (chip
+    /// switch, toolchain scan result, …): the caller builds the new options
+    /// tree (chip filter + module population + toolchain population) off of
+    /// the pristine template and hands it over. The rest is mechanical:
     ///   * [`Self::rebuild_indices`] remaps selection indices by option name,
     ///     silently dropping any name that no longer exists in the new tree;
     ///   * [`Self::drop_unsatisfied`] then cascades out anything whose
@@ -70,11 +66,8 @@ impl ActiveConfiguration {
     ///     switch eliminated).
     ///
     /// Note: `path` on [`crate::tui::Repository`] is a UI concern and is NOT
-    /// touched here. Callers that change the chip should also either reset or
-    /// clamp the menu path themselves — the category the user was browsing may
-    /// no longer exist.
-    pub fn reset_options(&mut self, chip: Chip, options: Vec<GeneratorOptionItem>) {
-        self.chip = chip;
+    /// touched here.
+    pub fn reset_options(&mut self, options: Vec<GeneratorOptionItem>) {
         self.options = options;
         self.rebuild_indices();
         self.drop_unsatisfied();
@@ -172,7 +165,7 @@ impl ActiveConfiguration {
     }
 
     pub fn select(&mut self, option: &str) {
-        let (index, _o) = find_option(option, &self.flat_options, self.chip).unwrap();
+        let (index, _o) = find_option(option, &self.flat_options).unwrap();
         self.select_idx(index);
     }
 
@@ -282,7 +275,7 @@ impl ActiveConfiguration {
     /// toggleable (selecting it cascades the conflict out), and its cascade is
     /// exactly what callers want reported.
     pub fn would_force_deselect(&self, option: &GeneratorOption) -> Vec<String> {
-        let option_idx = find_option(&option.name, &self.flat_options, self.chip).map(|(i, _)| i);
+        let option_idx = find_option(&option.name, &self.flat_options).map(|(i, _)| i);
 
         let currently_selected = option_idx
             .map(|idx| self.selected.contains(&idx))
@@ -564,7 +557,7 @@ impl ActiveConfiguration {
 
     // An option can only be disabled if it's not required by any other selected option.
     pub fn can_be_disabled(&self, option: &str) -> bool {
-        let (option, _) = find_option(option, &self.flat_options, self.chip).unwrap();
+        let (option, _) = find_option(option, &self.flat_options).unwrap();
         Self::can_be_disabled_impl(&self.selected, &self.flat_options, option, false)
     }
 
@@ -636,34 +629,25 @@ pub struct Relationships<'a> {
     pub disabled_by: Vec<&'a str>,
 }
 
-/// Find an option by name, disambiguating duplicate entries via the `compatible`
-/// constraint on the `chip` selection group.
+/// Find an option by name.
 ///
-/// The template may legitimately carry two options that share a name but target
-/// different chips (e.g. the two `probe-rs` entries with different help text).
-/// We pick the first entry whose `compatible: { chip: [...] }` allow-list
-/// includes the given chip, or — if the entry doesn't constrain `chip` at all —
-/// the first such unconstrained entry.
+/// The template may carry multiple entries that share a name but differ by
+/// their `compatible: { chip: [...] }` constraint. `options` is expected to
+/// have already been pruned for the active chip (see
+/// `build_options_for_chip` in `main`), so at most one entry per name should
+/// survive and a simple name match is enough.
 pub fn find_option<'c>(
     option: &str,
     options: &'c [GeneratorOption],
-    chip: Chip,
 ) -> Option<(usize, &'c GeneratorOption)> {
-    let chip_name = chip.to_string();
-    options.iter().enumerate().find(|(_, opt)| {
-        if opt.name != option {
-            return false;
-        }
-        match opt.compatible.get("chip") {
-            None => true,
-            Some(allowed) => allowed.iter().any(|n| n == &chip_name),
-        }
-    })
+    options
+        .iter()
+        .enumerate()
+        .find(|(_, opt)| opt.name == option)
 }
 
 #[cfg(test)]
 mod test {
-    use crate::Chip;
     use indexmap::IndexMap;
 
     use crate::{
@@ -694,7 +678,6 @@ mod test {
             }),
         ];
         let active = ActiveConfiguration {
-            chip: Chip::Esp32,
             selected: vec![0],
             flat_options: flatten_options(&options),
             options,
@@ -741,7 +724,6 @@ mod test {
             }),
         ];
         let mut active = ActiveConfiguration {
-            chip: Chip::Esp32,
             selected: vec![],
             flat_options: flatten_options(&options),
             options,
@@ -810,7 +792,6 @@ mod test {
             }),
         ];
         let mut active = ActiveConfiguration {
-            chip: Chip::Esp32,
             selected: vec![],
             flat_options: flatten_options(&options),
             options,
@@ -859,7 +840,6 @@ mod test {
             }),
         ];
         let mut active = ActiveConfiguration {
-            chip: Chip::Esp32,
             selected: vec![],
             flat_options: flatten_options(&options),
             options,
@@ -898,7 +878,6 @@ mod test {
             }),
         ];
         let mut active = ActiveConfiguration {
-            chip: Chip::Esp32,
             selected: vec![],
             flat_options: flatten_options(&options),
             options,
@@ -976,7 +955,6 @@ mod test {
             }),
         ];
         let mut active = ActiveConfiguration {
-            chip: Chip::Esp32,
             selected: vec![],
             flat_options: flatten_options(&options),
             options,
@@ -1014,7 +992,7 @@ mod test {
         assert!(!evicted.contains(&"wifi".to_string())); // unrelated stays
 
         let (probe_rs_flat_idx, _) =
-            find_option("probe-rs", &active.flat_options, Chip::Esp32).unwrap();
+            find_option("probe-rs", &active.flat_options).unwrap();
         active.deselect_idx(probe_rs_flat_idx);
         assert!(!active.is_selected("probe-rs"));
         assert!(!active.is_selected("panic-rtt-target"));
@@ -1088,7 +1066,6 @@ mod test {
             }),
         ];
         let mut active = ActiveConfiguration {
-            chip: Chip::Esp32,
             selected: vec![],
             flat_options: flatten_options(&options),
             options,
@@ -1167,7 +1144,6 @@ mod test {
             }),
         ];
         let mut active = ActiveConfiguration {
-            chip: Chip::Esp32,
             selected: vec![],
             flat_options: flatten_options(&options),
             options,

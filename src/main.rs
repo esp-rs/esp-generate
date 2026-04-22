@@ -531,7 +531,7 @@ fn main() -> Result<()> {
     // Single source of truth: `Repository` owns the options tree from here on.
     // The CLI post-processing code below reads `flat_options` / `options` back
     // out of it regardless of which branch (TUI or headless) populated them.
-    let repository = tui::Repository::new(chip, initial_options, &initial_selected);
+    let repository = tui::Repository::new(initial_options, &initial_selected);
 
     let (mut selected, flat_options) = if !args.headless {
         let mut app = tui::App::new(repository, TEMPLATE.required.clone());
@@ -595,7 +595,7 @@ fn main() -> Result<()> {
                 let desired_chip = current_compat
                     .get("chip")
                     .and_then(|name| name.parse().ok())
-                    .unwrap_or(app.repository.config.chip);
+                    .unwrap_or(chip);
 
                 let filtered = toolchain::toolchains_for_chip(
                     &cached_toolchains,
@@ -612,7 +612,8 @@ fn main() -> Result<()> {
                     toolchain_category.as_ref(),
                     &filtered.names,
                 );
-                app.set_options(desired_chip, new_options);
+                app.set_options(new_options);
+                chip = desired_chip;
                 populated_compat = Some(app.repository.config.compatibility_signature());
                 populated_with_scan = scan_finished;
             }
@@ -646,8 +647,9 @@ fn main() -> Result<()> {
         // Pick up whatever chip the TUI ended on. The user may have switched
         // chips mid-session; everything downstream (linker config, template
         // variables, validation) must match the chip the options were built
-        // against.
-        chip = app.repository.config.chip;
+        // against. `can_save` gates on the `chip` required group, so
+        // `selected_chip()` is guaranteed to be `Some` here.
+        chip = app.repository.selected_chip().unwrap_or(chip);
 
         (sel, app.repository.config.flat_options)
     } else {
@@ -678,7 +680,7 @@ fn main() -> Result<()> {
     // category in `flat_options` (TUI via scan results, headless via the
     // `--toolchain` CLI hint), so `find_option` resolves in either case.
     let selected_toolchain = selected.iter().find_map(|name| {
-        let (_, opt) = find_option(name, &flat_options, chip)?;
+        let (_, opt) = find_option(name, &flat_options)?;
         if opt.selection_group == "toolchain" {
             Some(name.clone())
         } else {
@@ -687,7 +689,7 @@ fn main() -> Result<()> {
     });
 
     let selected_module = selected.iter().find_map(|name| {
-        let (_, opt) = find_option(name, &flat_options, chip)?;
+        let (_, opt) = find_option(name, &flat_options)?;
         if opt.selection_group == "module" {
             Some(name.clone())
         } else {
@@ -695,9 +697,8 @@ fn main() -> Result<()> {
         }
     });
 
-    // Also add the active selection groups
     for idx in 0..selected.len() {
-        let (_, option) = find_option(&selected[idx], &flat_options, chip).unwrap();
+        let (_, option) = find_option(&selected[idx], &flat_options).unwrap();
         selected.push(option.selection_group.clone());
     }
 
@@ -737,7 +738,7 @@ fn main() -> Result<()> {
     // do with them (see the pin-reservation block below), so they're
     // deliberately skipped here instead of being joined into a string.
     for name in &selected {
-        let Some((_, opt)) = find_option(name, &flat_options, chip) else {
+        let Some((_, opt)) = find_option(name, &flat_options) else {
             continue;
         };
         for (key, value) in &opt.sets {
@@ -759,7 +760,7 @@ fn main() -> Result<()> {
     let mut reserved_gpio_code = String::new();
 
     if let Some(ref module_name) = selected_module {
-        if let Some((_, module_option)) = find_option(module_name, &flat_options, chip) {
+        if let Some((_, module_option)) = find_option(module_name, &flat_options) {
             // The module option carries its limitation tags as a list-valued
             // `sets` entry; a missing entry means "no pins to reserve", not
             // an error — e.g. a chip-specific module with nothing special
@@ -1179,7 +1180,6 @@ fn process_options(template: &Template, args: &Args, chip: Chip) -> Result<()> {
     }
 
     let selected_config = ActiveConfiguration {
-        chip,
         selected,
         flat_options,
         options: template.options.clone(),

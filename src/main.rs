@@ -428,10 +428,6 @@ fn main() -> Result<()> {
         setup_args_interactive(&mut args)?;
     }
 
-    // `None` until the user picks one in the TUI; headless mode has
-    // already rejected a missing required `chip` selection above.
-    let mut chip: Option<Chip> = chip_from_options(&args.option);
-
     let name = args.name.clone().unwrap();
 
     let path = &args
@@ -507,9 +503,17 @@ fn main() -> Result<()> {
         keys
     };
 
-    let initial_selections: HashMap<String, String> = chip
-        .map(|c| HashMap::from([("chip".to_string(), c.to_string())]))
-        .unwrap_or_default();
+    // `None` until the user picks one in the TUI; headless mode has
+    // already rejected a missing required `chip` selection above.
+    let mut chip: Option<Chip> = chip_from_options(&args.option);
+
+    // Initial pruning
+    let initial_selections: HashMap<String, String> = TEMPLATE
+        .all_options()
+        .iter()
+        .filter(|o| args.option.iter().any(|n| n == &o.name) && !o.selection_group.is_empty())
+        .map(|o| (o.selection_group.clone(), o.name.clone()))
+        .collect();
     let initial_options = build_options(
         &initial_selections,
         toolchain_category.as_ref(),

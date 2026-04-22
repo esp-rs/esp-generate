@@ -9,6 +9,7 @@ use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use esp_generate::{
     Chip,
+    chip_selector::populate_chip_category,
     config::{ActiveConfiguration, find_option, flatten_options},
     modules::populate_module_category,
     template::{GeneratorOption, GeneratorOptionCategory, GeneratorOptionItem, Template},
@@ -257,9 +258,34 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     let options = include_str!("../../template/template.yaml");
     let mut template = serde_yaml::from_str::<Template>(options)?;
 
-    // Populate the module category with chip-specific modules
+    // Fully populate the template before deriving any test configuration: the
+    // `chip` and `module` categories ship as placeholder !Options in the YAML
+    // and are expanded at runtime, just like the binary does in
+    // `build_options_for_chip`. Populating `chip` is also what makes it
+    // possible to satisfy option-level `compatible: { chip: [...] }`
+    // constraints below by seeding the per-trial selection with the target
+    // chip's flat-option index.
+    populate_chip_category(&mut template.options);
     populate_module_category(chip, &mut template.options);
     let flat_options = flatten_options(&template.options);
+
+    // Locate the flat index of the `chip`-group entry for the target chip.
+    // Every trial `ActiveConfiguration` below is seeded with this index so
+    // that `is_option_active` can satisfy option-level
+    // `compatible: { chip: [...] }` constraints — without it, every
+    // chip-restricted option (wifi, ble-*, chip-specific probe-rs, …) fails
+    // the compatibility predicate and silently drops out of the test matrix.
+    //
+    // The index is stripped back out before the selection list leaves this
+    // function so it doesn't surface as a spurious `-o <chip>` on the
+    // generated CLI; the chip is already passed via `--chip`.
+    let chip_name = chip.to_string();
+    let chip_idx = flat_options
+        .iter()
+        .position(|o| o.selection_group == "chip" && o.name == chip_name)
+        .ok_or_else(|| {
+            anyhow::anyhow!("template has no `chip` option named `{chip_name}`")
+        })?;
 
     fn collect<'data>(
         all_options: &mut Vec<&'data str>,
@@ -316,7 +342,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
                 .unwrap_or_else(|| panic!("Option not found: {}", option));
             let mut config = ActiveConfiguration {
                 chip,
-                selected: vec![],
+                selected: vec![chip_idx],
                 flat_options: flat_options.clone(),
                 options: template.options.clone(),
             };
@@ -328,6 +354,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
             enable_config_and_dependencies(&mut config, &option.name, chip)?;
 
             if is_valid(&config) {
+                config.selected.retain(|&idx| idx != chip_idx);
                 config.selected.sort();
                 available_options.push(config.selected);
             }
@@ -355,20 +382,28 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     let mut template_options = Some(template.options);
     let mut flat_options = Some(flat_options);
     for options in available_options.iter().map(|v| v.as_slice()).powerset() {
+        // Same reasoning as the single-option loop above: seed with the chip
+        // index so `is_valid` (which runs `is_option_active` per selected
+        // option) sees the `compatible.chip` allow-lists satisfied, then
+        // strip it back out before persisting the combination so the chip
+        // doesn't leak into the `-o` argument list.
+        let selected: Vec<usize> = options
+            .into_iter()
+            .flatten()
+            .chain(std::iter::once(&chip_idx))
+            .collect::<HashSet<_>>() // We don't need iteration order stability, slightly faster than `.unique()`
+            .into_iter()
+            .cloned()
+            .collect();
         let mut config = ActiveConfiguration {
             chip,
-            selected: options
-                .into_iter()
-                .flatten()
-                .collect::<HashSet<_>>() // We don't need iteration order stability, slightly faster than `.unique()`
-                .into_iter()
-                .cloned()
-                .collect(),
+            selected,
             options: template_options.take().unwrap(),
             flat_options: flat_options.take().unwrap(),
         };
 
         if is_valid(&config) {
+            config.selected.retain(|&idx| idx != chip_idx);
             config.selected.sort();
             result.push(config.selected);
         }

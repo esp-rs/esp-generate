@@ -29,7 +29,6 @@ use taplo::formatter::Options;
 use crate::template_files::TEMPLATE_FILES;
 
 mod check;
-mod chip_selector;
 mod template_files;
 mod toolchain;
 mod tui;
@@ -826,7 +825,7 @@ fn build_options_for_chip(
 ) -> Vec<GeneratorOptionItem> {
     let mut options = TEMPLATE.options.clone();
     prune_chip_incompatible_options(chip, &mut options);
-    chip_selector::populate_chip_category(&mut options);
+    esp_generate::chip_selector::populate_chip_category(&mut options);
     esp_generate::modules::populate_module_category(chip, &mut options);
     if let Some(category) = toolchain_category {
         category.populate(&mut options, toolchains);

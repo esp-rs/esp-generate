@@ -12,14 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Reverted: Preserve per-method flashing options when switching probe-rs and espflash (#327)
-- Flashing options are now cleared when selecting a different flashing method (#327)
-
 ### Fixed
 
 ### Removed
 
-## [1.3.0-rc.0] - 2026-04-17
+## [1.3.0] - 2026-04-24
 
 ### Added
 
@@ -35,13 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The default panic handler has been updated to print the panic info using the configured log method (#307)
 - The generated project no longer includes default optimization settings (#310)
 - Downgrade `ratatui` (#316)
-- Updated for esp-hal@1.1 and esp-radio@1.0-beta.0 (#314)
+- Updated for esp-hal@1.1.0 and esp-radio@1.0-beta.0 (#314)
+- Flashing options are now cleared when selecting a different flashing method (#327)
 
 ### Fixed
 
 - Fix IDE settings and checks when using `-a/--name` (#302)
 - Fix UI-breaking warnings (#315)
-- Preserve per-method flashing options when switching probe-rs and espflash (#312)
 - Fix crash when trying to enter an empty category (#321)
 
 ## [1.2.0] - 2025-01-13
@@ -260,7 +257,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/esp-rs/esp-generate/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/esp-rs/esp-generate/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/esp-rs/esp-generate/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/esp-rs/esp-generate/compare/v1.0.0...v1.0.1

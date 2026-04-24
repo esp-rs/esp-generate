@@ -12,12 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Reverted: Preserve per-method flashing options when switching probe-rs and espflash (#327)
-- Flashing options are now cleared when selecting a different flashing method (#327)
-
 ### Fixed
 
 ### Removed
+
+## [1.3.0] - 2026-04-24
+
+### Changed
+
+- Update `esp-hal` dependency to ~1.1.0 (#334)
+- Reverted: Preserve per-method flashing options when switching probe-rs and espflash (#327)
+- Flashing options are now cleared when selecting a different flashing method (#327)
 
 ## [1.3.0-rc.0] - 2026-04-17
 
@@ -260,7 +265,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/esp-rs/esp-generate/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/esp-rs/esp-generate/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/esp-rs/esp-generate/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/esp-rs/esp-generate/compare/v1.0.0...v1.0.1

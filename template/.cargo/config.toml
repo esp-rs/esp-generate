@@ -1,3 +1,6 @@
+# Keep compilation settings in this file and user/runtime settings in `esp-config.toml`.
+include = ["esp-config.toml"]
+
 #REPLACE riscv32imac-unknown-none-elf rust_target
 [target.riscv32imac-unknown-none-elf]
 #IF option("probe-rs")
@@ -9,13 +12,6 @@ runner = "probe-rs run --chip=esp32c6 --preverify --always-print-stacktrace --no
 #ELSE
 #REPLACE esp32c6 mcu
 #+runner = "espflash flash --monitor --chip esp32c6"
-#ENDIF
-
-[env]
-#IF option("defmt")
-DEFMT_LOG="info"
-#ELIF option("log")
-ESP_LOG="info"
 #ENDIF
 
 [build]

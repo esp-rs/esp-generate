@@ -7,6 +7,7 @@ pub mod cargo;
 pub mod config;
 pub mod modules;
 pub mod template;
+pub mod template_embed;
 
 #[derive(
     Debug,

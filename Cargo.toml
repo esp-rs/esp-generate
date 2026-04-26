@@ -40,6 +40,8 @@ serde           = { version = "1.0.228", features = ["derive"] }
 serde_yaml      = "0.9.33"
 toml_edit       = "0.25.11+spec-1.1.0"
 indexmap = "2.13.0"
+walkdir         = "2.5.0"
+quote           = "1.0.43"
 
 [build-dependencies]
 quote   = "1.0.45"

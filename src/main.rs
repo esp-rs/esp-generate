@@ -50,13 +50,10 @@ static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
     })
     .expect("failed to load bundled template");
 
-    // The `chip` and `module` categories are authored in YAML (in their
-    // own include files now) but both have to stay well-formed for the
-    // generator to work.
+    // The `chip` category is authored in YAML but must stay aligned with the
+    // `Chip` enum for the generator to work.
     chip_selector::validate_chip_category(&template.options)
         .expect("invalid `chip` category in bundled template");
-    chip_selector::validate_module_category(&template.options)
-        .expect("invalid `module` category in bundled template");
 
     template
 });

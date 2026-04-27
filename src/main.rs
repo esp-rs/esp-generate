@@ -493,10 +493,6 @@ fn main() -> Result<()> {
         // cache as "no toolchains available" — the toolchain category then
         // keeps its "Scanning installed toolchains…" placeholder.
         let mut cached_toolchains: Vec<toolchain::ToolchainInfo> = Vec::new();
-        // Tracks whether `cached_toolchains` reflects a *completed* scan. A
-        // chip switch always rebuilds; an initial population only fires once
-        // the scan finishes (or there never was one, i.e. headless-style).
-        let mut scan_finished = toolchain_scan.is_none();
         // The chip that `app.repository.options` was last built for. `None`
         // forces the first-ever rebuild regardless of whether the chip has
         // actually changed — this is how we swap the placeholder toolchain
@@ -508,24 +504,24 @@ fn main() -> Result<()> {
             // cached list is reused across chip switches, and per-chip filtering
             // happens down below in the rebuild block.
             if let Some(scan) = toolchain_scan.as_mut() {
-                match scan.try_get_toolchain_list() {
-                    None => {
-                        app.set_toolchains_loading(true);
-                    }
+                let finished = match scan.try_get_toolchain_list() {
+                    None => false,
                     Some(Ok(list)) => {
-                        if !scan_finished {
-                            cached_toolchains = list.clone();
-                            scan_finished = true;
-                        }
-                        app.set_toolchains_loading(false);
+                        cached_toolchains = list.clone();
+                        true
                     }
                     Some(Err(err)) => {
-                        if !scan_finished {
-                            log::warn!("Toolchain scan failed: {err}");
-                            scan_finished = true;
-                        }
-                        app.set_toolchains_loading(false);
+                        log::warn!("Toolchain scan failed: {err}");
+                        true
                     }
+                };
+
+                app.set_toolchains_loading(!finished);
+                if finished {
+                    // Clear state to rebuild UI with correct toolchain data.
+                    populated_for_chip = None;
+                    // Stop re-checking, scan is a one-shot process.
+                    toolchain_scan = None;
                 }
             }
 
@@ -539,6 +535,8 @@ fn main() -> Result<()> {
             // Both paths flow through the same `build_options_for_chip` +
             // `App::set_options` pair, keeping chip selection and toolchain
             // repopulation on one code path.
+
+            let scan_finished = toolchain_scan.is_none();
             let tree_chip = app.repository.config.chip;
             let desired_chip = app.repository.selected_chip().unwrap_or(tree_chip);
             let chip_changed = desired_chip != tree_chip;

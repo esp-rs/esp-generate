@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Chip selector has been moved to the TUI. (#328)
+- The chip needs to be specified as `-o <chip>` instead of `--chip <chip>` when using CLI (#328)
+
 ### Fixed
 
 ### Removed

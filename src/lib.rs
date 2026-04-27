@@ -1,12 +1,14 @@
 use esp_metadata_generated::{MemoryRegion, PinInfo};
 use serde::{Deserialize, Serialize};
 
-use crate::modules::Module;
-
 pub mod cargo;
 pub mod config;
-pub mod modules;
 pub mod template;
+/// Build-script-generated `TEMPLATE_FILES` array mapping each file under
+/// `template/` to its baked-in contents. Kept `pub` so xtask (and any other
+/// consumer that needs to resolve `!Include` paths against the bundled
+/// template tree) can share the same source-of-truth as the binary.
+pub mod template_files;
 
 #[derive(
     Debug,
@@ -14,11 +16,13 @@ pub mod template;
     Copy,
     PartialEq,
     Eq,
+    Hash,
     Serialize,
     Deserialize,
     clap::ValueEnum,
     strum::EnumIter,
     strum::Display,
+    strum::EnumString,
 )]
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
@@ -48,20 +52,6 @@ impl Chip {
         }
     }
 
-    pub fn wokwi(self) -> &'static str {
-        match self {
-            Chip::Esp32 => "board-esp32-devkit-c-v4",
-            Chip::Esp32c2 => "",
-            Chip::Esp32c3 => "board-esp32-c3-devkitm-1",
-            Chip::Esp32c5 => "",
-            Chip::Esp32c6 => "board-esp32-c6-devkitc-1",
-            Chip::Esp32c61 => "",
-            Chip::Esp32h2 => "board-esp32-h2-devkitm-1",
-            Chip::Esp32s2 => "board-esp32-s2-devkitm-1",
-            Chip::Esp32s3 => "board-esp32-s3-devkitc-1",
-        }
-    }
-
     pub fn dram2_region(self) -> &'static MemoryRegion {
         self.metadata()
             .memory_layout()
@@ -71,26 +61,6 @@ impl Chip {
 
     pub fn pins(self) -> &'static [PinInfo] {
         self.metadata().pins()
-    }
-
-    pub fn modules(self) -> &'static [Module] {
-        match self {
-            Chip::Esp32 => crate::modules::ESP32_MODULES,
-            Chip::Esp32c2 => crate::modules::ESP32C2_MODULES,
-            Chip::Esp32c3 => crate::modules::ESP32C3_MODULES,
-            Chip::Esp32c5 => crate::modules::ESP32C5_MODULES,
-            Chip::Esp32c6 => crate::modules::ESP32C6_MODULES,
-            Chip::Esp32c61 => crate::modules::ESP32C61_MODULES,
-            Chip::Esp32h2 => crate::modules::ESP32H2_MODULES,
-            Chip::Esp32s2 => crate::modules::ESP32S2_MODULES,
-            Chip::Esp32s3 => crate::modules::ESP32S3_MODULES,
-        }
-    }
-
-    pub fn module_by_name(&self, module_name: &str) -> Option<&'static Module> {
-        self.modules()
-            .iter()
-            .find(|module| module.name == module_name)
     }
 }
 

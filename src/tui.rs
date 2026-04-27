@@ -302,7 +302,7 @@ impl Repository {
     /// Builds the visible list rows.
     ///
     /// `hovered` is the index of the currently highlighted row (what the cursor is
-    /// on). Only that row gets the "will disable: …" warning trailer (styled yellow)
+    /// on). Only that row gets the "will deselect: …" warning trailer (styled yellow)
     /// when a selection there would force-deselect something; every other row keeps
     /// its normal right-aligned name. This keeps the list quiet and surfaces the
     /// side-effect info only when the user is actually considering the action.
@@ -346,10 +346,10 @@ impl Repository {
                 };
 
                 // The option's internal name is always shown on the right; only the
-                // hovered row additionally appends a yellow " - will disable: …"
+                // hovered row additionally appends a yellow " - will deselect: …"
                 // clause when selecting it would force-deselect something. When the
                 // detailed list wouldn't fit, the clause degrades to
-                // " - will disable N" (count) before any actual truncation kicks in.
+                // " - will deselect N" (count) before any actual truncation kicks in.
                 let name_part: String = match v {
                     GeneratorOptionItem::Option(_) => v.name().to_string(),
                     GeneratorOptionItem::Category(_) => String::new(),
@@ -374,12 +374,12 @@ impl Repository {
                         if evicted.is_empty() {
                             None
                         } else {
-                            let detailed = format!(" - will disable: {}", evicted.join(", "));
+                            let detailed = format!(" - will deselect: {}", evicted.join(", "));
                             let budget = padding.saturating_sub(name_part.len());
                             if detailed.len() <= budget {
                                 Some(detailed)
                             } else {
-                                Some(format!(" - will disable {}", evicted.len()))
+                                Some(format!(" - will deselect {}", evicted.len()))
                             }
                         }
                     }
@@ -468,7 +468,7 @@ struct UiElements {
     selected: &'static str,
     unselected: &'static str,
     category: &'static str,
-    /// Style applied to the " - will disable …" hover clause.
+    /// Style applied to the " - will deselect …" hover clause.
     force_deselect_style: Style,
 }
 
@@ -754,7 +754,7 @@ mod test {
 
     #[test]
     fn force_deselect_trailer_appears_only_on_hovered_row() {
-        // The "will disable …" trailer must:
+        // The "will deselect …" trailer must:
         //  * only show on the hovered row (keeps the list quiet),
         //  * live in its own span so the theme can style it,
         //  * appear for BOTH directions — selecting a row that force-deselects
@@ -795,7 +795,7 @@ mod test {
         let method_hover = row_text(0, Some(0));
         assert!(
             method_hover.contains("method")
-                && method_hover.contains("- will disable: dependent"),
+                && method_hover.contains("- will deselect: dependent"),
             "expected deselect-side warning on selected hovered row, got: {method_hover:?}"
         );
 
@@ -804,7 +804,7 @@ mod test {
         let unselected_hover = row_text(1, Some(1));
         assert!(
             unselected_hover.contains("method-unselected-a")
-                && unselected_hover.contains("- will disable:")
+                && unselected_hover.contains("- will deselect:")
                 && unselected_hover.contains("method")
                 && unselected_hover.contains("dependent"),
             "expected select-side warning on hovered row, got: {unselected_hover:?}"
@@ -821,7 +821,7 @@ mod test {
         let warning_span = hover_line
             .spans
             .iter()
-            .find(|s| s.content.contains("will disable"))
+            .find(|s| s.content.contains("will deselect"))
             .expect("warning span");
         assert!(!warning_span.content.contains("method-unselected-a "));
 
@@ -830,7 +830,7 @@ mod test {
         for idx in 0..3 {
             let text = row_text(idx, Some(2 /* `dependent` — non-destructive */));
             assert!(
-                !text.contains("will disable"),
+                !text.contains("will deselect"),
                 "no row must show the warning when hover is non-destructive, got: {text:?}"
             );
         }
@@ -864,13 +864,13 @@ mod test {
             "unmet-pos row must report as non-actionable, got: {text:?}"
         );
         assert!(
-            !text.contains("will disable"),
+            !text.contains("will deselect"),
             "non-toggleable hovered row must not show the warning, got: {text:?}"
         );
 
         // Incompatible rows are now hidden from the TUI by
         // `current_level_desc` — they don't even enter the visible list, so
-        // `will disable` is impossible to render. This is the generalised
+        // `will deselect` is impossible to render. This is the generalised
         // replacement for the old "chip-mismatch shown as a silent, greyed-out
         // row" behaviour: `compatible: { chip: [esp32c6] }` with an `esp32`
         // active in the chip selection group filters the row out outright.
@@ -917,7 +917,7 @@ mod test {
     #[test]
     fn force_deselect_trailer_collapses_to_count_when_too_wide() {
         // With several long-named options being evicted and a narrow row, the
-        // detailed list must collapse to "will disable N" rather than overflow /
+        // detailed list must collapse to "will deselect N" rather than overflow /
         // truncate the text.
         let options = vec![
             option("m", &[]),
@@ -946,11 +946,11 @@ mod test {
             .collect::<Vec<_>>();
         let narrow_text: String = narrow[0].spans.iter().map(|s| s.content.as_ref()).collect();
         assert!(
-            narrow_text.contains("will disable 3"),
+            narrow_text.contains("will deselect 3"),
             "expected count fallback, got: {narrow_text:?}"
         );
         assert!(
-            !narrow_text.contains("will disable:"),
+            !narrow_text.contains("will deselect:"),
             "detailed list must not be present when it doesn't fit, got: {narrow_text:?}"
         );
 
@@ -962,7 +962,7 @@ mod test {
             .collect::<Vec<_>>();
         let wide_text: String = wide[0].spans.iter().map(|s| s.content.as_ref()).collect();
         assert!(
-            wide_text.contains("will disable: loooooong-one, loooooong-two, loooooong-three"),
+            wide_text.contains("will deselect: loooooong-one, loooooong-two, loooooong-three"),
             "expected detailed trailer, got: {wide_text:?}"
         );
     }
@@ -1101,7 +1101,7 @@ mod test {
         // target chip would be removed from the tree by
         // `remove_incompatible_chip_options` on rebuild — from the user's
         // perspective that's a force-deselect, so it belongs in the
-        // "will disable" trailer.
+        // "will deselect" trailer.
         let options = vec![
             chip_group_option(Chip::Esp32),
             chip_group_option(Chip::Esp32c6),
@@ -1348,7 +1348,7 @@ impl App {
         outer_block.render(outer_area, buf);
 
         // The hovered index is what ratatui's ListState reports as selected; rows
-        // build their "will disable …" trailer only for this row so the list stays
+        // build their "will deselect …" trailer only for this row so the list stays
         // quiet otherwise.
         let hovered = self.state.last().and_then(|s| s.selected());
 

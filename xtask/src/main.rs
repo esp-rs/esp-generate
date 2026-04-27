@@ -9,17 +9,33 @@ use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use esp_generate::{
     Chip,
+    chip_selector::populate_chip_category,
     config::{ActiveConfiguration, find_option, flatten_options},
     modules::populate_module_category,
-    template::{GeneratorOptionCategory, GeneratorOptionItem, Template},
+    template::{GeneratorOption, GeneratorOptionCategory, GeneratorOptionItem, Template},
 };
 use itertools::Itertools;
 use log::info;
 
 // Unfortunate hard-coded list of non-codegen options.
-const IGNORED_CATEGORIES: &[&str] = &["editor", "optional", "toolchain"];
+const IGNORED_CATEGORIES: &[&str] = &["chip", "editor", "optional", "toolchain"];
 // The module selector generates way too many test cases to check with --all-combinations.
-const IGNORED_CATEGORIES_FULL: &[&str] = &["editor", "optional", "toolchain", "module"];
+const IGNORED_CATEGORIES_FULL: &[&str] = &["chip", "editor", "optional", "toolchain", "module"];
+
+/// Mirror of `esp_generate::main::prune_chip_incompatible_options`'s predicate:
+/// an option is considered chip-compatible when it either has no `compatible:
+/// { chip: [...] }` constraint at all, or its allow-list contains the given
+/// chip. Other `compatible` entries aren't evaluated here — like the binary,
+/// the xtask only applies chip-based filtering at the tree-shaping layer.
+fn is_chip_compatible(option: &GeneratorOption, chip: Chip) -> bool {
+    match option.compatible.get("chip") {
+        None => true,
+        Some(allowed) => {
+            let chip_name = chip.to_string();
+            allowed.iter().any(|n| n == &chip_name)
+        }
+    }
+}
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -242,9 +258,34 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     let options = include_str!("../../template/template.yaml");
     let mut template = serde_yaml::from_str::<Template>(options)?;
 
-    // Populate the module category with chip-specific modules
+    // Fully populate the template before deriving any test configuration:
+    // both the `chip` and `module` categories ship as placeholder `!Option`
+    // entries in the YAML and are expanded at runtime, just like the binary
+    // does in `build_options_for_chip`. Without this, the chip-index lookup
+    // below would fail (and any option-level `compatible: { chip: [...] }`
+    // constraints would misfire during seeding).
+    populate_chip_category(&mut template.options);
     populate_module_category(chip, &mut template.options);
     let flat_options = flatten_options(&template.options);
+
+    // Locate the flat index of the `chip`-group entry for the target chip.
+    // Every trial `ActiveConfiguration` below is seeded with this index so
+    // that `is_option_active` can satisfy option-level
+    // `compatible: { chip: [...] }` constraints — without it, every
+    // chip-restricted option (wifi, ble-*, chip-specific probe-rs, …) fails
+    // the compatibility predicate and silently drops out of the test matrix.
+    //
+    // The index is stripped back out before the selection list leaves this
+    // function: `generate()` injects the chip as its own `-o <chip>` entry,
+    // so leaving it in here would produce a duplicate `-o <chip>` on the
+    // generated CLI.
+    let chip_name = chip.to_string();
+    let chip_idx = flat_options
+        .iter()
+        .position(|o| o.selection_group == "chip" && o.name == chip_name)
+        .ok_or_else(|| {
+            anyhow::anyhow!("template has no `chip` option named `{chip_name}`")
+        })?;
 
     fn collect<'data>(
         all_options: &mut Vec<&'data str>,
@@ -255,7 +296,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
         for option in &category.options {
             match option {
                 GeneratorOptionItem::Option(option) => {
-                    if option.chips.is_empty() || option.chips.contains(&chip) {
+                    if is_chip_compatible(option, chip) {
                         all_options.push(option.name.as_str());
                     }
                 }
@@ -279,7 +320,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
             GeneratorOptionItem::Option(option) => {
                 if option.selection_group == "base-template" {
                     template_selectors.push(Some(option.name.clone()));
-                } else if option.chips.is_empty() || option.chips.contains(&chip) {
+                } else if is_chip_compatible(option, chip) {
                     all_options.push(option.name.as_str());
                 }
             }
@@ -301,7 +342,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
                 .unwrap_or_else(|| panic!("Option not found: {}", option));
             let mut config = ActiveConfiguration {
                 chip,
-                selected: vec![],
+                selected: vec![chip_idx],
                 flat_options: flat_options.clone(),
                 options: template.options.clone(),
             };
@@ -313,6 +354,7 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
             enable_config_and_dependencies(&mut config, &option.name, chip)?;
 
             if is_valid(&config) {
+                config.selected.retain(|&idx| idx != chip_idx);
                 config.selected.sort();
                 available_options.push(config.selected);
             }
@@ -340,20 +382,28 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     let mut template_options = Some(template.options);
     let mut flat_options = Some(flat_options);
     for options in available_options.iter().map(|v| v.as_slice()).powerset() {
+        // Same reasoning as the single-option loop above: seed with the chip
+        // index so `is_valid` (which runs `is_option_active` per selected
+        // option) sees the `compatible.chip` allow-lists satisfied, then
+        // strip it back out before persisting the combination so the chip
+        // doesn't leak into the `-o` argument list.
+        let selected: Vec<usize> = options
+            .into_iter()
+            .flatten()
+            .chain(std::iter::once(&chip_idx))
+            .collect::<HashSet<_>>() // We don't need iteration order stability, slightly faster than `.unique()`
+            .into_iter()
+            .cloned()
+            .collect();
         let mut config = ActiveConfiguration {
             chip,
-            selected: options
-                .into_iter()
-                .flatten()
-                .collect::<HashSet<_>>() // We don't need iteration order stability, slightly faster than `.unique()`
-                .into_iter()
-                .cloned()
-                .collect(),
+            selected,
             options: template_options.take().unwrap(),
             flat_options: flat_options.take().unwrap(),
         };
 
         if is_valid(&config) {
+            config.selected.retain(|&idx| idx != chip_idx);
             config.selected.sort();
             result.push(config.selected);
         }
@@ -397,12 +447,16 @@ fn generate(
         "--no-default-features",
         "--",
         "--headless",
-        &format!("--chip={chip}"),
         &format!("--output-path={}", project_path.display()),
     ]
     .iter()
     .map(|arg| arg.to_string())
     .collect::<Vec<_>>();
+
+    // The target chip is now just another `-o` option as far as the
+    // `esp-generate` CLI is concerned; pass it first so it reads naturally
+    // in the log output (`WITH OPTIONS: …` lists the rest).
+    args.extend(["-o".to_string(), chip.to_string()]);
 
     for option in options {
         args.extend(["-o".to_string(), option.to_owned()]);
@@ -410,12 +464,23 @@ fn generate(
 
     args.push(project_name.to_string());
 
-    Command::new("cargo")
+    // Capture stderr (rather than discarding it via `Stdio::null()`)
+    // so that any failure from the underlying `esp-generate` invocation — e.g.
+    // a bad option, a filesystem error, or a panic — surfaces to the xtask
+    // caller instead of silently turning into an empty project directory.
+    let output = Command::new("cargo")
         .args(args)
         .current_dir(workspace)
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
         .output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stderr.is_empty() {
+            eprintln!("{stderr}");
+        }
+        bail!("esp-generate failed for chip {chip} with options {options:?}");
+    }
 
     Ok(())
 }

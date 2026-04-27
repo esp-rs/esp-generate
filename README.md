@@ -27,17 +27,17 @@ You can also directly download pre-compiled [release binaries] or use [`cargo-bi
       ```
       esp-generate
       ```
-      You will be prompted to select a target chip and name for your project, after which you would use TUI to select the other options you need for your project.
+      You will be prompted for a project name, and the target chip (along with every other option) is selected inside the TUI.
 
    2. Using the Command Line Interface (CLI), adding the options to the `esp-generate` command:
 
       ```
-      esp-generate --chip esp32 -o alloc -o wifi your-project
+      esp-generate -o esp32 -o alloc -o wifi your-project
       ```
       Use the `--headless` flag to avoid using the TUI.
 
-      Replace the chip and project name accordingly, and select the desired options using the `-o/--option` flag.
-      Use the `esp-generate list-options` command to see a list of available options. Use `esp-generate explain <option>` to get a detailed explanation of an option.
+      Replace the chip and project name accordingly. The target chip (e.g. `esp32c6`) is just one of the available `-o/--option` values.
+      Use the `esp-generate list-options` command to see a list of available options (chips included). Use `esp-generate explain <option>` to get a detailed explanation of an option.
 
 [release binaries]: https://github.com/esp-rs/esp-generate/releases
 [`cargo-binstall`]: https://github.com/cargo-bins/cargo-binstall

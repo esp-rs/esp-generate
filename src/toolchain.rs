@@ -1,21 +1,44 @@
+use std::collections::BTreeSet;
 use std::process::Command;
 use std::sync::mpsc;
 use std::sync::mpsc::TryRecvError;
 use std::thread;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use esp_generate::template::{GeneratorOption, GeneratorOptionItem};
 
 use crate::{Chip, check};
 
+/// Chip-agnostic metadata for a single installed rustup toolchain.
+///
+/// Scanning this information is expensive (one `rustc +tc --print target-list`
+/// and one `rustc +tc --version` per toolchain), so we capture it once up front
+/// and then derive per-chip filtered views via [`toolchains_for_chip`] without
+/// spawning any more subprocesses.
+#[derive(Debug, Clone)]
+pub struct ToolchainInfo {
+    pub name: String,
+    pub targets: BTreeSet<String>,
+    pub version: Option<check::Version>,
+}
+
+/// The filtered list of toolchains usable for a given chip, alongside any
+/// non-fatal warnings the caller should surface (e.g. "`esp32` excluded because
+/// the requested CLI toolchain is generic").
+#[derive(Debug, Default)]
+pub struct FilteredToolchains {
+    pub names: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
 pub struct ToolchainScan {
-    rx: mpsc::Receiver<Result<Vec<String>>>,
-    cached: Option<Result<Vec<String>>>,
+    rx: mpsc::Receiver<Result<Vec<ToolchainInfo>>>,
+    cached: Option<Result<Vec<ToolchainInfo>>>,
 }
 
 impl ToolchainScan {
     /// Try to get the scanned toolchain list *without blocking*.
-    pub fn try_get_toolchain_list(&mut self) -> Option<&Result<Vec<String>>> {
+    pub fn try_get_toolchain_list(&mut self) -> Option<&Result<Vec<ToolchainInfo>>> {
         if self.cached.is_some() {
             return self.cached.as_ref();
         }
@@ -36,26 +59,25 @@ impl ToolchainScan {
         }
     }
 }
-/// Start discovering toolchains in a background thread.
-pub fn start_toolchain_scan(
-    chip: Chip,
-    cli_toolchain: Option<String>,
-    msrv: check::Version,
-) -> ToolchainScan {
+/// Start discovering all installed rustup toolchains in a background thread.
+///
+/// No chip or MSRV is involved here — the scan is chip-agnostic on purpose so
+/// that switching chips in the TUI does not require re-scanning. Per-chip
+/// filtering is done in-memory by [`toolchains_for_chip`].
+pub fn start_toolchain_scan() -> ToolchainScan {
     let (tx, rx) = mpsc::channel();
 
     thread::spawn(move || {
-        let cli_ref = cli_toolchain.as_deref();
-        let result = find_toolchains(chip, cli_ref, &msrv);
+        let result = scan_installed_toolchains();
         let _ = tx.send(result);
     });
 
     ToolchainScan { rx, cached: None }
 }
 
-/// Return all installed rustup toolchains that support the given `target`
-/// and meet the given MSRV.
-fn filter_toolchains_for(target: &str, msrv: &check::Version) -> Result<Vec<String>> {
+/// Enumerate every installed rustup toolchain and capture its target list and
+/// version. Never fails hard — subprocess errors degrade to "no toolchains".
+fn scan_installed_toolchains() -> Result<Vec<ToolchainInfo>> {
     let output = match Command::new("rustup").args(["toolchain", "list"]).output() {
         Ok(res) => res,
         Err(err) => {
@@ -78,27 +100,21 @@ fn filter_toolchains_for(target: &str, msrv: &check::Version) -> Result<Vec<Stri
     let mut available = Vec::new();
 
     for line in stdout.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-
         // rustup prints things like: "stable-x86_64-unknown-linux-gnu (active, default)"
-        let Some(name) = line.split_whitespace().next() else {
-            continue;
-        };
-
-        if toolchain_matches_target_and_msrv(name, target, msrv) {
-            available.push(name.to_string());
+        if let Some(name) = line.split_whitespace().next()
+            && let Some(info) = inspect_toolchain(name)
+        {
+            available.push(info);
         }
     }
 
     Ok(available)
 }
 
-fn toolchain_matches_target_and_msrv(name: &str, target: &str, msrv: &check::Version) -> bool {
-    // check whether this toolchain's rustc knows the desired target
-    // (rustup doesn't recognize some custom toolchains, e.g. `esp`)
+/// Collect target list + version for a single toolchain. Returns `None` if the
+/// toolchain can't be introspected at all (e.g. not a real rustup toolchain —
+/// we skip rather than poison the whole scan).
+fn inspect_toolchain(name: &str) -> Option<ToolchainInfo> {
     let output = match Command::new("rustc")
         .args([
             format!("+{name}"),
@@ -110,7 +126,7 @@ fn toolchain_matches_target_and_msrv(name: &str, target: &str, msrv: &check::Ver
         Ok(res) => res,
         Err(err) => {
             log::warn!("Failed to run `rustc +{name} --print target-list`: {err}");
-            return false;
+            return None;
         }
     };
 
@@ -119,28 +135,25 @@ fn toolchain_matches_target_and_msrv(name: &str, target: &str, msrv: &check::Ver
             "`rustc +{name} --print target-list` exited with status {:?}",
             output.status.code()
         );
-        return false;
+        return None;
     }
 
-    if !String::from_utf8_lossy(&output.stdout)
+    let targets: BTreeSet<String> = String::from_utf8_lossy(&output.stdout)
         .lines()
-        .any(|l| l.trim() == target)
-    {
-        // target not found - skip
-        return false;
-    }
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
 
-    // call `rustc +<toolchain> --version` and compare to `msrv`
-    if let Some(ver) = check::get_version("rustc", &[&format!("+{name}")]) {
-        if !ver.is_at_least(msrv) {
-            // toolchain version is below MSRV - skip
-            return false;
-        }
-    } else {
+    let version = check::get_version("rustc", &[&format!("+{name}")]);
+    if version.is_none() {
         log::warn!("Failed to detect rustc version for toolchain `{name}`; skipping MSRV check");
     }
 
-    true
+    Some(ToolchainInfo {
+        name: name.to_string(),
+        targets,
+        version,
+    })
 }
 
 /// Return the currently active rustup toolchain name, if any
@@ -160,127 +173,171 @@ fn active_rustup_toolchain() -> Option<String> {
         .and_then(|line| line.split_whitespace().next().map(|name| name.to_string()))
 }
 
-/// Among all installed toolchains, finds ones that support the required target and satisfy the MSRV.
-pub(crate) fn find_toolchains(
+/// Pure, cheap filter over a [`ToolchainInfo`] slice for the given chip.
+///
+/// Recomputed on demand (e.g. whenever the user switches chip in the TUI).
+/// All per-chip concerns live here — target-triple match, MSRV gate, Xtensa
+/// exclusion of generic toolchains, and CLI-toolchain sort/validation — so
+/// that the cached scan data stays untouched across chip switches.
+///
+/// Previously-fatal CLI-toolchain mismatches are now returned as warnings:
+/// the caller decides whether to promote them (headless) or surface them in
+/// the TUI footer. Dynamic chip switching requires this: a chip switch that
+/// invalidates the CLI toolchain must not be unrecoverable.
+pub fn toolchains_for_chip(
+    all: &[ToolchainInfo],
     chip: Chip,
-    cli_toolchain: Option<&str>,
     msrv: &check::Version,
-) -> Result<Vec<String>> {
+    cli_hint: Option<&str>,
+) -> FilteredToolchains {
     let target = chip.metadata().target().to_string();
 
-    let mut available = filter_toolchains_for(&target, msrv)?;
+    let mut names: Vec<String> = all
+        .iter()
+        .filter(|tc| tc.targets.contains(target.as_str()))
+        .filter(|tc| tc.version.as_ref().is_none_or(|v| v.is_at_least(msrv)))
+        .map(|tc| tc.name.clone())
+        .collect();
 
     // for now, we should hide the generic toolchains for Xtensa (stable-*, beta-*, nightly-*).
     if chip.metadata().is_xtensa() {
-        available.retain(|name| {
+        names.retain(|name| {
             !(name.starts_with("stable") || name.starts_with("beta") || name.starts_with("nightly"))
         });
     }
 
-    // sanity check
-    if available.is_empty() {
-        if let Some(cli) = cli_toolchain {
-            if chip.metadata().is_xtensa()
-                && (cli.starts_with("stable")
-                    || cli.starts_with("beta")
-                    || cli.starts_with("nightly"))
-            {
-                bail!(
-                    "Toolchain `{cli}` is not supported for Xtensa targets; \
-                     please use different toolchain (e.g. `esp`, see  https://docs.espressif.com/projects/rust/book/getting-started/toolchain.html#xtensa-devices)"
-                );
-            }
+    let mut warnings = Vec::new();
 
-            bail!(
-                "Toolchain `{cli}` does not have target `{target}` installed (or no toolchain does).\
-                See https://docs.espressif.com/projects/rust/book/getting-started/toolchain.html"
-            );
+    if names.is_empty() {
+        if let Some(cli) = cli_hint {
+            if chip.metadata().is_xtensa() && is_generic_toolchain(cli) {
+                warnings.push(format!(
+                    "Toolchain `{cli}` is not supported for Xtensa targets; \
+                     please use different toolchain (e.g. `esp`, see \
+                     https://docs.espressif.com/projects/rust/book/getting-started/toolchain.html#xtensa-devices)"
+                ));
+            } else {
+                warnings.push(format!(
+                    "Toolchain `{cli}` does not have target `{target}` installed (or no toolchain does). \
+                     See https://docs.espressif.com/projects/rust/book/getting-started/toolchain.html"
+                ));
+            }
+        } else {
+            warnings.push(format!(
+                "No rustc toolchains found that have `{target}` installed; \
+                 toolchain category will stay as placeholder"
+            ));
         }
-        log::warn!(
-            "No rustc toolchains found that have `{target}` installed; toolchain category will stay as placeholder"
-        );
-        return Ok(Vec::new());
+        return FilteredToolchains { names, warnings };
     }
 
-    if let Some(cli) = cli_toolchain {
-        if !available.iter().any(|t| t == cli) {
-            if chip.metadata().is_xtensa()
-                && (cli.starts_with("stable")
-                    || cli.starts_with("beta")
-                    || cli.starts_with("nightly"))
-            {
-                bail!(
+    if let Some(cli) = cli_hint {
+        if !names.iter().any(|t| t == cli) {
+            if chip.metadata().is_xtensa() && is_generic_toolchain(cli) {
+                warnings.push(format!(
                     "Toolchain `{cli}` is not supported for Xtensa targets; \
                      please use an ESP toolchain (e.g. `esp`)"
-                );
+                ));
+            } else {
+                warnings.push(format!(
+                    "Toolchain `{cli}` does not have target `{target}` installed"
+                ));
             }
-
-            bail!("Toolchain `{cli}` does not have target `{target}` installed");
+        } else {
+            // CLI toolchain is valid: float it to the top for the selector.
+            names.sort();
+            names.sort_by_key(|t| if t == cli { 0 } else { 1 });
         }
-        // put CLI toolchain first in toolchain search in case it was provided.
-        available.sort();
-        available.sort_by_key(|t| if t == cli { 0 } else { 1 });
     }
-    Ok(available)
+
+    FilteredToolchains { names, warnings }
 }
 
-/// Rewrite the `toolchain` category using the provided `available` toolchains.
-pub(crate) fn populate_toolchain_category_from_list(
-    options: &mut [GeneratorOptionItem],
-    flat_options: &mut Vec<GeneratorOption>,
-    available: &[String],
-) -> Result<()> {
-    if available.is_empty() {
-        // nothing to do
-        return Ok(());
-    }
+fn is_generic_toolchain(name: &str) -> bool {
+    name.starts_with("stable") || name.starts_with("beta") || name.starts_with("nightly")
+}
 
-    // get active/default toolchain to mark it properly
-    let default = active_rustup_toolchain();
+/// Stash for the original "Scanning installed toolchains…" placeholder.
+///
+/// Captured once before any population and reused on every [`Self::populate`]
+/// call. This makes the populate step idempotent and reversible — crucial for
+/// dynamic chip switching, where a chip change may grow, shrink, or empty the
+/// list of valid toolchains. Mutating the placeholder in place (as the old API
+/// did) loses that anchor forever.
+#[derive(Debug, Clone)]
+pub struct ToolchainCategory {
+    placeholder: GeneratorOption,
+}
 
-    // rewrite the `toolchain` category using the placeholder option as template
-    for item in options.iter_mut() {
-        let GeneratorOptionItem::Category(category) = item else {
-            continue;
-        };
-        if category.name != "toolchain" {
-            continue;
-        }
-
-        // we know exactly the template/placeholder structure, so we can just take `first` one
-        let template_opt = match category.options.first() {
-            Some(GeneratorOptionItem::Option(opt)) => opt.clone(),
-            _ => {
-                // If `template.yaml` is broken, fail loudly
-                panic!("toolchain category must contain a placeholder !Option");
-            }
-        };
-
-        // remove the placeholder, we've "scanned" it already
-        category.options.clear();
-
-        for toolchain in available {
-            // copy our placeholder option (again) to populate another toolchain instead of it
-            let mut opt = template_opt.clone();
-
-            let is_default = default.as_deref() == Some(toolchain.as_str());
-
-            opt.name = toolchain.clone();
-            opt.display_name = if is_default {
-                format!("Use `{toolchain}` toolchain [default]")
-            } else {
-                format!("Use `{toolchain}` toolchain")
+impl ToolchainCategory {
+    /// Capture the placeholder option sitting under the `toolchain` category.
+    ///
+    /// Returns `None` if the template has no `toolchain` category at all; the
+    /// caller can choose to skip toolchain handling entirely in that case.
+    pub fn capture(options: &[GeneratorOptionItem]) -> Option<Self> {
+        for item in options {
+            let GeneratorOptionItem::Category(category) = item else {
+                continue;
             };
-            opt.selection_group = "toolchain".to_string();
-
-            category
-                .options
-                .push(GeneratorOptionItem::Option(opt.clone()));
-            flat_options.push(opt);
+            if category.name != "toolchain" {
+                continue;
+            }
+            let GeneratorOptionItem::Option(first) = category.options.first()? else {
+                return None;
+            };
+            return Some(Self {
+                placeholder: first.clone(),
+            });
         }
-
-        break;
+        None
     }
 
-    Ok(())
+    /// Rebuild the `toolchain` category wholesale from `available`.
+    ///
+    /// - Empty `available` leaves / restores the placeholder row, so the
+    ///   "Scanning installed toolchains…" text reappears if a chip switch
+    ///   wipes the list.
+    /// - Non-empty `available` replaces the category with one option per
+    ///   discovered toolchain, each derived from the stashed placeholder
+    ///   (so `selection_group` / help text stay consistent with the YAML).
+    ///
+    /// The caller is responsible for rebuilding dependent state after this:
+    /// in particular [`crate::config::ActiveConfiguration::rebuild_indices`]
+    /// must be invoked on any live `ActiveConfiguration` whose `options` were
+    /// mutated, or `selected` indices will dangle.
+    pub fn populate(&self, options: &mut [GeneratorOptionItem], available: &[String]) {
+        let default = active_rustup_toolchain();
+
+        for item in options.iter_mut() {
+            let GeneratorOptionItem::Category(category) = item else {
+                continue;
+            };
+            if category.name != "toolchain" {
+                continue;
+            }
+
+            category.options.clear();
+
+            if available.is_empty() {
+                category
+                    .options
+                    .push(GeneratorOptionItem::Option(self.placeholder.clone()));
+                return;
+            }
+
+            for toolchain in available {
+                let mut opt = self.placeholder.clone();
+                let is_default = default.as_deref() == Some(toolchain.as_str());
+                opt.name = toolchain.clone();
+                opt.display_name = if is_default {
+                    format!("Use `{toolchain}` toolchain [default]")
+                } else {
+                    format!("Use `{toolchain}` toolchain")
+                };
+                opt.selection_group = "toolchain".to_string();
+                category.options.push(GeneratorOptionItem::Option(opt));
+            }
+            return;
+        }
+    }
 }

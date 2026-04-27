@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::modules::Module;
 
 pub mod cargo;
+pub mod chip_selector;
 pub mod config;
 pub mod modules;
 pub mod template;
@@ -19,6 +20,7 @@ pub mod template;
     clap::ValueEnum,
     strum::EnumIter,
     strum::Display,
+    strum::EnumString,
 )]
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]

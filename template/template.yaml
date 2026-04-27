@@ -1,6 +1,17 @@
 #INCLUDEFILE false
 options:
   - !Category
+    name: chip
+    display_name: Chip selection
+    help: Target Espressif chip. Switching chip hides options whose `compatible` allow-list
+      excludes the new chip and clears their selection.
+    options:
+      - !Option
+        name: PLACEHOLDER
+        display_name: "<dynamic - will be replaced at runtime>"
+        selection_group: chip
+
+  - !Category
     name: module
     display_name: Module/Board selection
     help: Select your specific ESP32 module. This selection is optional, but it will generate code to help you avoid using reserved GPIOs.
@@ -28,15 +39,16 @@ options:
     requires:
       - alloc
       - unstable-hal
-    chips:
-      - esp32
-      - esp32c2
-      - esp32c3
-      - esp32c5
-      - esp32c6
-      - esp32c61
-      - esp32s2
-      - esp32s3
+    compatible:
+      chip:
+        - esp32
+        - esp32c2
+        - esp32c3
+        - esp32c5
+        - esp32c6
+        - esp32c61
+        - esp32s2
+        - esp32s3
 
   - !Option
     name: ble-bleps
@@ -46,15 +58,16 @@ options:
     requires:
       - alloc
       - unstable-hal
-    chips:
-      - esp32
-      - esp32c2
-      - esp32c3
-      - esp32c5
-      - esp32c6
-      - esp32c61
-      - esp32h2
-      - esp32s3
+    compatible:
+      chip:
+        - esp32
+        - esp32c2
+        - esp32c3
+        - esp32c5
+        - esp32c6
+        - esp32c61
+        - esp32h2
+        - esp32s3
 
   - !Option
     name: ble-trouble
@@ -65,15 +78,16 @@ options:
       - alloc
       - unstable-hal
       - embassy
-    chips:
-      - esp32
-      - esp32c2
-      - esp32c3
-      - esp32c5
-      - esp32c6
-      - esp32c61
-      - esp32h2
-      - esp32s3
+    compatible:
+      chip:
+        - esp32
+        - esp32c2
+        - esp32c3
+        - esp32c5
+        - esp32c6
+        - esp32c61
+        - esp32h2
+        - esp32s3
 
   - !Option
     name: embassy
@@ -95,12 +109,13 @@ options:
     help: probe-rs is a debugger that connects to the chips over JTAG. It can be used to flash and
       monitor, and it can also be used to interactively debug an application, or run tests on the
       hardware. Semihosting or RTT-based technologies like defmt-rtt require probe-rs.
-    chips:
-      - esp32c5
-      - esp32c6
-      - esp32c61
-      - esp32h2
-      - esp32s3
+    compatible:
+      chip:
+        - esp32c5
+        - esp32c6
+        - esp32c61
+        - esp32h2
+        - esp32s3
 
   - !Option
     name: probe-rs
@@ -111,11 +126,12 @@ options:
 
       probe-rs requires a debug probe like esp-prog, and will not work with USB-UART adapters that
       often come on development boards.
-    chips:
-      - esp32
-      - esp32s2
-      - esp32c2
-      - esp32c3
+    compatible:
+      chip:
+        - esp32
+        - esp32s2
+        - esp32c2
+        - esp32c3
 
   - !Category
     name: flashing-probe-rs
@@ -169,13 +185,14 @@ options:
       - !Option
         name: wokwi
         display_name: Add support for Wokwi simulation using VS Code Wokwi extension.
-        chips:
-          - esp32
-          - esp32c3
-          - esp32c6
-          - esp32h2
-          - esp32s2
-          - esp32s3
+        compatible:
+          chip:
+            - esp32
+            - esp32c3
+            - esp32c6
+            - esp32h2
+            - esp32s2
+            - esp32s3
 
       - !Option
         name: ci

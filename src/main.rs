@@ -53,6 +53,9 @@ static TEMPLATE: LazyLock<Template> = LazyLock::new(|| {
     // `Chip` enum for the generator to work.
     chip_selector::validate_chip_category(&template.options)
         .expect("invalid `chip` category in bundled template");
+    template
+        .validate_required()
+        .expect("invalid `required` list in bundled template");
 
     template
 });
@@ -862,10 +865,11 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// Prune options whose `compatible` constraints aren't satisfied by
-/// `selections`. A `compatible` group with no (or empty) pick in
-/// `selections` also prunes the option. Categories that end up empty are
-/// dropped.
+/// Prune options whose `compatible` constraints are actively violated by
+/// `selections`. A group that is absent from `selections`, or present with an
+/// empty value, is treated as unconstrained — the option is kept and the
+/// runtime compatibility check handles it once the user makes a pick.
+/// Categories that end up empty are dropped.
 fn prune_incompatible_options(
     selections: &HashMap<String, String>,
     options: &mut Vec<GeneratorOptionItem>,
@@ -878,7 +882,7 @@ fn prune_incompatible_options(
         GeneratorOptionItem::Option(option) => option.compatible.iter().all(|(group, allowed)| {
             match selections.get(group).filter(|s| !s.is_empty()) {
                 Some(picked) => allowed.iter().any(|n| n == picked),
-                None => false,
+                None => true,
             }
         }),
     });
@@ -899,7 +903,8 @@ fn prune_incompatible_options(
 /// `selections` typically carries at least `{ "chip" => <chip name> }` — any
 /// other `(group, pick)` entries enable additional build-time pruning (e.g.
 /// dropping options incompatible with the current `log-frontend`). Groups
-/// absent from `selections` are left to the runtime compatibility check.
+/// absent from `selections`, or present with an empty value, are treated as
+/// unconstrained and left to the runtime compatibility check.
 fn build_options(
     selections: &HashMap<String, String>,
     toolchain_category: Option<&toolchain::ToolchainCategory>,

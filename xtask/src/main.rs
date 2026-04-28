@@ -210,7 +210,7 @@ fn enable_config_and_dependencies(
     option: &str,
     chip: Chip,
 ) -> Result<()> {
-    let (idx, option) = find_option(option, &config.flat_options, chip)
+    let (idx, option) = find_option(option, &config.flat_options)
         .ok_or_else(|| anyhow::anyhow!("Option not found: {option}"))?;
 
     if config.selected.contains(&idx) {
@@ -351,10 +351,9 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
 
     for base_template in &template_selectors {
         for option in &all_options {
-            let (_, option) = find_option(&option, &flat_options, chip)
+            let (_, option) = find_option(&option, &flat_options)
                 .unwrap_or_else(|| panic!("Option not found: {}", option));
             let mut config = ActiveConfiguration {
-                chip,
                 selected: vec![chip_idx],
                 flat_options: flat_options.clone(),
                 options: template.options.clone(),
@@ -409,7 +408,6 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
             .cloned()
             .collect();
         let mut config = ActiveConfiguration {
-            chip,
             selected,
             options: template_options.take().unwrap(),
             flat_options: flat_options.take().unwrap(),

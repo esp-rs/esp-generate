@@ -198,6 +198,35 @@ options:
         name: ci
         display_name: Add GitHub Actions support with some basic checks.
 
+      - !Category
+        name: coding-agent-guidance
+        display_name: Add agent guidance file for coding agents.
+        help: Select the guidance filename that matches the coding agent you use.
+        options:
+          - !Option
+            name: agents
+            display_name: AGENTS.md
+            selection_group: coding-agent-guidance
+            help: Adds an AGENTS.md file with project-specific guidance and links that coding agents can use while working on this generated project.
+
+          - !Option
+            name: claude
+            display_name: CLAUDE.md
+            selection_group: coding-agent-guidance
+            help: Adds a CLAUDE.md file with project-specific guidance and links that Claude can use while working on this generated project.
+
+          - !Option
+            name: codex
+            display_name: CODEX.md
+            selection_group: coding-agent-guidance
+            help: Adds a CODEX.md file with project-specific guidance and links that Codex can use while working on this generated project.
+
+          - !Option
+            name: gemini
+            display_name: GEMINI.md
+            selection_group: coding-agent-guidance
+            help: Adds a GEMINI.md file with project-specific guidance and links that Gemini can use while working on this generated project.
+
   - !Category
     name: editor
     display_name: Optional editor integration

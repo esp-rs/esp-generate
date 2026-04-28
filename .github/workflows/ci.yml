@@ -1,7 +1,7 @@
 name: CI
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [ opened, synchronize, reopened ]
     paths-ignore:
       - "**/README.md"
   merge_group:
@@ -22,7 +22,7 @@ env:
   CARGO_TARGET_DIR: ${{ github.workspace }}/target
   CARGO_TERM_COLOR: always
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  MSRV: "1.86"
+  MSRV: "1.95"
   SSID: ""
   PASSWORD: ""
 
@@ -45,7 +45,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        chip: [esp32, esp32c2, esp32c3, esp32c6, esp32c5, esp32c61, esp32h2, esp32s2, esp32s3]
+        chip:
+          [
+            esp32,
+            esp32c2,
+            esp32c3,
+            esp32c6,
+            esp32c5,
+            esp32c61,
+            esp32h2,
+            esp32s2,
+            esp32s3,
+          ]
 
     steps:
       - uses: actions/checkout@v6
@@ -79,7 +90,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Generate and check project
-        run: cargo ${{ env.TOOLCHAIN }} xtask check ${{ matrix.chip }} ${{ fromJSON('["", "--all-combinations"]')[inputs.all_combinations || github.event_name == 'schedule'] }} ${{ fromJSON('["", "--build"]')[inputs.build || github.event_name == 'schedule'] }}
+        run: cargo ${{ env.TOOLCHAIN }} xtask check ${{ matrix.chip }} ${{
+          fromJSON('["", "--all-combinations"]')[inputs.all_combinations ||
+          github.event_name == 'schedule'] }} ${{ fromJSON('["",
+          "--build"]')[inputs.build || github.event_name == 'schedule'] }}
 
       - if: github.event_name == 'schedule'
         name: Run cargo-package

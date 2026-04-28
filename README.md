@@ -1,7 +1,7 @@
 # `esp-generate`
 
 [![Crates.io](https://img.shields.io/crates/v/esp-generate?labelColor=1C2C2E&color=C96329&logo=Rust&style=flat-square)](https://crates.io/crates/esp-generate)
-![MSRV](https://img.shields.io/badge/MSRV-1.86-blue?labelColor=1C2C2E&logo=Rust&style=flat-square)
+![MSRV](https://img.shields.io/badge/MSRV-1.95-blue?labelColor=1C2C2E&logo=Rust&style=flat-square)
 ![Crates.io](https://img.shields.io/crates/l/esp-generate?labelColor=1C2C2E&style=flat-square)
 
 Template generation tool to create `no_std` applications targeting Espressif's line of SoCs and modules.

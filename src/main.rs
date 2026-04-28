@@ -1232,10 +1232,10 @@ fn process_options(template: &Template, args: &Args, chip: Chip) -> Result<()> {
             for &option_item in pristine_options.iter().filter(|item| item.name == option) {
                 option_found = true;
 
-                if let Some(allowed) = option_item.compatible.get("chip") {
-                    if !allowed.iter().any(|n| n == &chip_name) {
-                        continue;
-                    }
+                if let Some(allowed) = option_item.compatible.get("chip")
+                    && !allowed.iter().any(|n| n == &chip_name)
+                {
+                    continue;
                 }
                 option_found_for_chip = true;
             }

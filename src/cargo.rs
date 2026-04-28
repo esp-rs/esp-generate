@@ -115,16 +115,14 @@ impl CargoToml {
                 Item::None => {
                     // alias = { package = "foo", version = "version" }
                     let update_renamed_dep = table.get_values().iter().find_map(|(k, p)| {
-                        if let Value::InlineTable(table) = p {
-                            if let Some(Value::String(name)) = &table.get("package") {
-                                if name.value() == package_name {
+                        if let Value::InlineTable(table) = p
+                            && let Some(Value::String(name)) = &table.get("package")
+                                && name.value() == package_name {
                                     // Return the actual key of this dependency, e.g.:
                                     // `procmacros = { package = "esp-hal-procmacros" }`
                                     //  ^^^^^^^^^^
                                     return Some(k.last().unwrap().get().to_string());
                                 }
-                            }
-                        }
 
                         None
                     });

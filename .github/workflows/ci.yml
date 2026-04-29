@@ -154,4 +154,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ env.MSRV }}
-      - run: cargo check -p esp-generate
+      - run: cargo +${{ env.MSRV }} check -p esp-generate

@@ -1229,8 +1229,8 @@ mod test {
 
 impl App {
     pub fn handle_event(&mut self, event: Event) -> Result<AppResult> {
-        if let Event::Key(key) = event
-            && key.kind == KeyEventKind::Press {
+        if let Event::Key(key) = event {
+            if key.kind == KeyEventKind::Press {
                 use KeyCode::*;
 
                 if self.confirm_quit {
@@ -1279,6 +1279,7 @@ impl App {
                     _ => {}
                 }
             }
+        }
 
         Ok(AppResult::Continue)
     }

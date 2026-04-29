@@ -716,8 +716,8 @@ fn main() -> Result<()> {
 
     let mut reserved_gpio_code = String::new();
 
-    if let Some(ref module_name) = selected_module
-        && let Some((_, module_option)) = find_option(module_name, &flat_options, chip) {
+    if let Some(ref module_name) = selected_module {
+        if let Some((_, module_option)) = find_option(module_name, &flat_options, chip) {
             // The module option carries its limitation tags as a list-valued
             // `sets` entry; a missing entry means "no pins to reserve", not
             // an error — e.g. a chip-specific module with nothing special
@@ -769,6 +769,7 @@ fn main() -> Result<()> {
                 .unwrap();
             };
         }
+    }
     variables.push(("reserved_gpio_code".to_string(), reserved_gpio_code));
 
     let project_dir = path.join(&name);
@@ -1231,10 +1232,10 @@ fn process_options(template: &Template, args: &Args, chip: Chip) -> Result<()> {
             for &option_item in pristine_options.iter().filter(|item| item.name == option) {
                 option_found = true;
 
-                if let Some(allowed) = option_item.compatible.get("chip")
-                    && !allowed.iter().any(|n| n == &chip_name)
-                {
-                    continue;
+                if let Some(allowed) = option_item.compatible.get("chip") {
+                    if !allowed.iter().any(|n| n == &chip_name) {
+                        continue;
+                    }
                 }
                 option_found_for_chip = true;
             }

@@ -245,10 +245,11 @@ impl ActiveConfiguration {
         let mut simulated = self.selected.clone();
         if currently_selected {
             // Simulated deselect: remove the option, then let cascade evict dependents.
-            if let Some(idx) = option_idx
-                && let Some(pos) = simulated.iter().position(|&i| i == idx) {
+            if let Some(idx) = option_idx {
+                if let Some(pos) = simulated.iter().position(|&i| i == idx) {
                     simulated.swap_remove(pos);
                 }
+            }
         } else {
             // Simulated select: kick same-group siblings…
             if !option.selection_group.is_empty() {
@@ -272,10 +273,11 @@ impl ActiveConfiguration {
             }
 
             // Put the option into the simulated set so cascade evaluates it in context.
-            if let Some(idx) = option_idx
-                && !simulated.contains(&idx) {
+            if let Some(idx) = option_idx {
+                if !simulated.contains(&idx) {
                     simulated.push(idx);
                 }
+            }
         }
 
         // Shared cascade: drop anything whose requirements are no longer met
@@ -467,10 +469,11 @@ impl ActiveConfiguration {
             };
 
             for requirement in selected_option.requires.iter() {
-                if let Some(requirement) = requirement.strip_prefix('!')
-                    && requirement == option.name {
+                if let Some(requirement) = requirement.strip_prefix('!') {
+                    if requirement == option.name {
                         return false;
                     }
+                }
             }
         }
 

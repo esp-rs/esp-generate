@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fixed neovim config (#332)
+- Fixed neovim config (#336)
 
 ### Removed
 

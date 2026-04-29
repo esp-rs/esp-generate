@@ -446,6 +446,7 @@ fn main() -> Result<()> {
     )
     .expect("Failed to read Cargo.toml");
 
+    // TODO: do not assume esp-hal version is present
     let esp_hal_version = versions.dependency_version("esp-hal");
     let esp_hal_version_full = if let Some(stripped) = esp_hal_version.strip_prefix("~") {
         let mut processed = stripped.to_string();
@@ -641,9 +642,6 @@ fn main() -> Result<()> {
         (initial_selected, repository.config.flat_options)
     };
 
-    // FIXME: do not assume the template even has a "chip" property
-    let chip = chip.expect("chip must be set by the time the TUI exits / headless validates");
-
     let mut toolchain_replaced = false;
 
     let selected_options = selected
@@ -668,6 +666,7 @@ fn main() -> Result<()> {
     // Same lookup for TUI and headless: both branches populated the toolchain
     // category in `flat_options` (TUI via scan results, headless via the
     // `--toolchain` CLI hint), so `find_option` resolves in either case.
+    // Needs to be done before selection groups are appended in the loop below.
     let selected_toolchain = selected
         .iter()
         .find(|name| {
@@ -681,12 +680,6 @@ fn main() -> Result<()> {
         selected.push(option.selection_group.clone());
     }
 
-    selected.push(if chip.metadata().is_xtensa() {
-        "xtensa".to_string()
-    } else {
-        "riscv".to_string()
-    });
-
     let mut variables = vec![
         // Generator specific
         ("generate-version", env!("CARGO_PKG_VERSION").to_string()),
@@ -695,94 +688,124 @@ fn main() -> Result<()> {
         ("generate-parameters", selected_options),
         // Template specific
         ("esp-hal-version-full", esp_hal_version_full),
-        ("mcu", chip.to_string()),
-        ("max-dram2-uninit", chip.dram2_region().size().to_string()),
-        ("rust_target", chip.metadata().target().to_string()),
     ];
 
-    if let Some(tc) = selected_toolchain.as_ref() {
-        variables.push(("rust_toolchain", tc.clone()));
-    }
+    if let Some(chip) = chip {
+        variables.extend_from_slice(&[
+            ("mcu", chip.to_string()),
+            ("max-dram2-uninit", chip.dram2_region().size().to_string()),
+            ("rust_target", chip.metadata().target().to_string()),
+        ]);
 
-    // Merge scalar `sets` entries contributed by the selected options (e.g.
-    // the chip-group option contributes `wokwi-board`). Generator-provided
-    // variables above take precedence — `#REPLACE` lookup is first-match-wins
-    // — so a template author can't accidentally shadow `project-name` /
-    // `mcu` / etc. by declaring them in an option's `sets`.
-    //
-    // List-valued entries (e.g. `remove_pins`) aren't substitutable text and
-    // are consumed directly by the code-generation paths that know what to
-    // do with them (see the pin-reservation block below), so they're
-    // deliberately skipped here instead of being joined into a string.
-    for name in &selected {
-        let Some((_, opt)) = find_option(name, &flat_options) else {
-            continue;
-        };
-        for (key, value) in &opt.sets {
-            if let Some(scalar) = value.as_scalar() {
-                variables.push((key, scalar.to_string()));
+        selected.push(if chip.metadata().is_xtensa() {
+            "xtensa".to_string()
+        } else {
+            "riscv".to_string()
+        });
+
+        if let Some(tc) = selected_toolchain.as_ref() {
+            variables.push(("rust_toolchain", tc.clone()));
+        }
+
+        // Merge scalar `sets` entries contributed by the selected options (e.g.
+        // the chip-group option contributes `wokwi-board`). Generator-provided
+        // variables above take precedence — `#REPLACE` lookup is first-match-wins
+        // — so a template author can't accidentally shadow `project-name` /
+        // `mcu` / etc. by declaring them in an option's `sets`.
+        //
+        // List-valued entries (e.g. `remove_pins`) aren't substitutable text and
+        // are consumed directly by the code-generation paths that know what to
+        // do with them (see the pin-reservation block below), so they're
+        // deliberately skipped here instead of being joined into a string.
+        for name in &selected {
+            let Some((_, opt)) = find_option(name, &flat_options) else {
+                continue;
+            };
+            for (key, value) in &opt.sets {
+                if let Some(scalar) = value.as_scalar() {
+                    variables.push((key, scalar.to_string()));
+                }
             }
         }
-    }
 
-    let mut reserved_gpio_code = String::new();
+        let mut reserved_gpio_code = String::new();
 
-    if let Some(remove_pins) = selected.iter().find_map(|name| {
-        // Find module, then get the pins that should be considered for removal/noting.
-        find_option(name, &flat_options)
-            .filter(|(_, opt)| opt.selection_group == "module")
-            .map(|(_, opt)| {
-                opt.sets
-                    .get("remove_pins")
-                    .and_then(SetValue::as_list)
-                    .unwrap_or(&[])
-            })
-    }) {
-        let restricted_pins = chip.pins().iter().filter(|pin| {
-            remove_pins
+        if let Some(remove_pins) = selected.iter().find_map(|name| {
+            // Find module, then get the pins that should be considered for removal/noting.
+            find_option(name, &flat_options)
+                .filter(|(_, opt)| opt.selection_group == "module")
+                .map(|(_, opt)| {
+                    opt.sets
+                        .get("remove_pins")
+                        .and_then(SetValue::as_list)
+                        .unwrap_or(&[])
+                })
+        }) {
+            let restricted_pins = chip.pins().iter().filter(|pin| {
+                remove_pins
+                    .iter()
+                    .any(|lim| pin.limitations.contains(&lim.as_str()))
+            });
+            let strapping_pins = chip
+                .pins()
                 .iter()
-                .any(|lim| pin.limitations.contains(&lim.as_str()))
-        });
-        let strapping_pins = chip
-            .pins()
-            .iter()
-            .filter(|pin| pin.limitations.contains(&"strapping"))
-            .collect::<Vec<_>>();
+                .filter(|pin| pin.limitations.contains(&"strapping"))
+                .collect::<Vec<_>>();
 
-        if !strapping_pins.is_empty() {
-            let strapping = strapping_pins
-                .iter()
-                .map(|pin| format!("// - GPIO{}", pin.pin))
-                .collect::<Vec<_>>()
-                .join("\n");
-            writeln!(
-                &mut reserved_gpio_code,
-                r#"// The following pins are used to bootstrap the chip. They are available
+            if !strapping_pins.is_empty() {
+                let strapping = strapping_pins
+                    .iter()
+                    .map(|pin| format!("// - GPIO{}", pin.pin))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                writeln!(
+                    &mut reserved_gpio_code,
+                    r#"// The following pins are used to bootstrap the chip. They are available
                     // for use, but check the datasheet of the module for more information on them.
                     {strapping}"#
-            )
-            .unwrap();
-        }
+                )
+                .unwrap();
+            }
 
-        // Only set module-selected if there are GPIOs to reserve
-        if restricted_pins.clone().next().is_some() {
-            selected.push("module-selected".to_string());
+            // Only set module-selected if there are GPIOs to reserve
+            if restricted_pins.clone().next().is_some() {
+                selected.push("module-selected".to_string());
 
-            let pin_plucker = restricted_pins
-                .map(|pin| format!("    let _ = peripherals.GPIO{};", pin.pin))
-                .collect::<Vec<_>>()
-                .join("\n");
-            writeln!(
+                let pin_plucker = restricted_pins
+                    .map(|pin| format!("    let _ = peripherals.GPIO{};", pin.pin))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                writeln!(
                 &mut reserved_gpio_code,
                 r#"// These GPIO pins are in use by some feature of the module and should not be used.
                 {pin_plucker}"#
             )
             .unwrap();
-        };
+            };
+        }
+        variables.push(("reserved_gpio_code", reserved_gpio_code));
+
+        // Check versions and install tools only when a chip is known, and
+        // BEFORE we generate the project.
+        check::check(
+            chip.metadata(),
+            selected.contains(&"probe-rs".to_string()),
+            msrv,
+            selected.contains(&"stack-smashing-protection".to_string())
+                && selected.contains(&"riscv".to_string()),
+            args.headless,
+            selected_toolchain.as_deref(),
+        );
     }
-    variables.push(("reserved_gpio_code", reserved_gpio_code));
 
     let project_dir = path.join(&name);
+
+    if check::offensive_cargo_config_check(&project_dir) {
+        println!(
+            "⚠️ `.config/cargo.toml` files found in parent directories - this can cause undesired behavior. See https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure"
+        );
+    }
+
     fs::create_dir(&project_dir)?;
 
     for &(file_path, contents) in TEMPLATE_FILES.iter() {
@@ -828,17 +851,6 @@ fn main() -> Result<()> {
     } else {
         log::warn!("Current directory is already in a git repository, skipping git initialization");
     }
-
-    check::check(
-        &project_dir,
-        chip.metadata(),
-        selected.contains(&"probe-rs".to_string()),
-        msrv,
-        selected.contains(&"stack-smashing-protection".to_string())
-            && selected.contains(&"riscv".to_string()),
-        args.headless,
-        selected_toolchain.as_deref(),
-    );
 
     Ok(())
 }

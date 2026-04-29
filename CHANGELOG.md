@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add an optional coding-agent guidance template submenu for selecting `AGENTS.md`, `CLAUDE.md`, `CODEX.md`, or `GEMINI.md`. (#319)
+- Add an optional coding-agent guidance template submenu for selecting `AGENTS.md`, `CLAUDE.md`, `CODEX.md`, or `GEMINI.md`. (#335)
 
 ### Changed
 

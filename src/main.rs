@@ -638,15 +638,6 @@ fn main() -> Result<()> {
         }
     });
 
-    let coding_agent_guidance_file = selected.iter().find_map(|name| {
-        let (_, opt) = find_option(name, &flat_options, chip)?;
-        if opt.selection_group == "coding-agent-guidance" {
-            coding_agent_guidance_file_for_option(name)
-        } else {
-            None
-        }
-    });
-
     // Also add the active selection groups
     for idx in 0..selected.len() {
         let (_, option) = find_option(&selected[idx], &flat_options, chip).unwrap();
@@ -708,10 +699,6 @@ fn main() -> Result<()> {
 
     if let Some(tc) = selected_toolchain.as_ref() {
         variables.push(("rust_toolchain".to_string(), tc.clone()));
-    }
-
-    if let Some(file) = coding_agent_guidance_file {
-        variables.push(("coding-agent-guidance-file".to_string(), file.to_string()));
     }
 
     let mut reserved_gpio_code = String::new();
@@ -859,16 +846,6 @@ fn prune_chip_incompatible_options(chip: Chip, options: &mut Vec<GeneratorOption
             Some(allowed) => allowed.iter().any(|n| n == &chip_name),
         },
     });
-}
-
-fn coding_agent_guidance_file_for_option(option: &str) -> Option<&'static str> {
-    match option {
-        "agents" => Some("AGENTS.md"),
-        "claude" => Some("CLAUDE.md"),
-        "codex" => Some("CODEX.md"),
-        "gemini" => Some("GEMINI.md"),
-        _ => None,
-    }
 }
 
 /// Build a fully-prepared options tree for the given chip off the pristine
@@ -1476,44 +1453,5 @@ mod test {
             .unwrap();
             assert_eq!(expected, res.trim(), "options: {:?}", options);
         }
-    }
-
-    #[test]
-    fn test_include_as_replaces_variables() {
-        let mut file_path = String::from("CODING_AGENT_GUIDANCE.md");
-        let res = process_file(
-            "#INCLUDEFILE option(\"coding-agent-guidance\")\n#INCLUDE_AS {coding-agent-guidance-file}\ncontent\n",
-            &["coding-agent-guidance".to_string()],
-            &[(
-                "coding-agent-guidance-file".to_string(),
-                "AGENTS.md".to_string(),
-            )],
-            &mut file_path,
-        )
-        .unwrap();
-
-        assert_eq!("AGENTS.md", file_path);
-        assert_eq!("content", res.trim());
-    }
-
-    #[test]
-    fn test_coding_agent_guidance_file_for_option() {
-        assert_eq!(
-            Some("AGENTS.md"),
-            coding_agent_guidance_file_for_option("agents")
-        );
-        assert_eq!(
-            Some("CLAUDE.md"),
-            coding_agent_guidance_file_for_option("claude")
-        );
-        assert_eq!(
-            Some("CODEX.md"),
-            coding_agent_guidance_file_for_option("codex")
-        );
-        assert_eq!(
-            Some("GEMINI.md"),
-            coding_agent_guidance_file_for_option("gemini")
-        );
-        assert_eq!(None, coding_agent_guidance_file_for_option("ci"));
     }
 }

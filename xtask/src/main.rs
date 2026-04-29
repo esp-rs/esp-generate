@@ -17,9 +17,22 @@ use itertools::Itertools;
 use log::info;
 
 // Unfortunate hard-coded list of non-codegen options.
-const IGNORED_CATEGORIES: &[&str] = &["chip", "editor", "optional", "toolchain"];
+const IGNORED_CATEGORIES: &[&str] = &[
+    "chip",
+    "editor",
+    "optional",
+    "toolchain",
+    "coding-agent-guidance",
+];
 // The module selector generates way too many test cases to check with --all-combinations.
-const IGNORED_CATEGORIES_FULL: &[&str] = &["chip", "editor", "optional", "toolchain", "module"];
+const IGNORED_CATEGORIES_FULL: &[&str] = &[
+    "chip",
+    "editor",
+    "optional",
+    "toolchain",
+    "coding-agent-guidance",
+    "module",
+];
 
 /// Mirror of `esp_generate::main::prune_chip_incompatible_options`'s predicate:
 /// an option is considered chip-compatible when it either has no `compatible:

@@ -697,24 +697,22 @@ fn main() -> Result<()> {
         "riscv".to_string()
     });
 
-    // mark that a toolchain was explicitly selected for template replacements
-    if selected_toolchain.is_some() {
-        selected.push("toolchain-selected".to_string());
-    }
-
-    let max_dram2 = chip.dram2_region().size();
-
     let mut variables = vec![
-        ("project-name".to_string(), name.clone()),
-        ("mcu".to_string(), chip.to_string()),
-        (
-            "generate-version".to_string(),
-            env!("CARGO_PKG_VERSION").to_string(),
-        ),
-        ("generate-parameters".to_string(), selected_options),
-        ("esp-hal-version-full".to_string(), esp_hal_version_full),
-        ("max-dram2-uninit".to_string(), format!("{max_dram2}")),
+        // Generator specific
+        ("generate-version", env!("CARGO_PKG_VERSION").to_string()),
+        // Project specific
+        ("project-name", name.clone()),
+        ("generate-parameters", selected_options),
+        // Template specific
+        ("esp-hal-version-full", esp_hal_version_full),
+        ("mcu", chip.to_string()),
+        ("max-dram2-uninit", chip.dram2_region().size().to_string()),
+        ("rust_target", chip.metadata().target().to_string()),
     ];
+
+    if let Some(tc) = selected_toolchain.as_ref() {
+        variables.push(("rust_toolchain", tc.clone()));
+    }
 
     // Merge scalar `sets` entries contributed by the selected options (e.g.
     // the chip-group option contributes `wokwi-board`). Generator-provided
@@ -732,18 +730,9 @@ fn main() -> Result<()> {
         };
         for (key, value) in &opt.sets {
             if let Some(scalar) = value.as_scalar() {
-                variables.push((key.clone(), scalar.to_string()));
+                variables.push((key, scalar.to_string()));
             }
         }
-    }
-
-    variables.push((
-        "rust_target".to_string(),
-        chip.metadata().target().to_string(),
-    ));
-
-    if let Some(tc) = selected_toolchain.as_ref() {
-        variables.push(("rust_toolchain".to_string(), tc.clone()));
     }
 
     let mut reserved_gpio_code = String::new();
@@ -802,7 +791,7 @@ fn main() -> Result<()> {
             };
         }
     }
-    variables.push(("reserved_gpio_code".to_string(), reserved_gpio_code));
+    variables.push(("reserved_gpio_code", reserved_gpio_code));
 
     let project_dir = path.join(&name);
     fs::create_dir(&project_dir)?;
@@ -955,14 +944,14 @@ impl BlockKind {
 }
 
 fn process_file(
-    contents: &str,                 // Raw content of the file
-    options: &[String],             // Selected options
-    variables: &[(String, String)], // Variables and their values in tuples
-    file_path: &mut String,         // File path to be modified
+    contents: &str,               // Raw content of the file
+    options: &[String],           // Selected options
+    variables: &[(&str, String)], // Variables and their values in tuples
+    file_path: &mut String,       // File path to be modified
 ) -> Option<String> {
     let mut res = String::new();
 
-    let mut replace: Option<Vec<(String, String)>> = None;
+    let mut replace: Option<Vec<(&str, &str)>> = None;
     let mut include = vec![BlockKind::Root];
     let mut file_directives = true;
 
@@ -1026,9 +1015,9 @@ fn process_file(
                 .filter_map(|pair| {
                     let mut parts = pair.split_whitespace();
                     if let (Some(pattern), Some(var_name)) = (parts.next(), parts.next()) {
-                        if let Some((_, value)) = variables.iter().find(|(key, _)| key == var_name)
+                        if let Some((_, value)) = variables.iter().find(|(key, _)| key == &var_name)
                         {
-                            Some((pattern.to_string(), value.clone()))
+                            Some((pattern, value.as_str()))
                         } else {
                             None
                         }

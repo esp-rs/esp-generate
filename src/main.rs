@@ -648,7 +648,7 @@ fn main() -> Result<()> {
         .iter()
         .find(|name| {
             find_option(name, &flat_options)
-                .map_or(false, |(_, opt)| opt.selection_group == "toolchain")
+                .is_some_and(|(_, opt)| opt.selection_group == "toolchain")
         })
         .cloned();
 
@@ -669,7 +669,7 @@ fn main() -> Result<()> {
 
     // Inject chip-specific variables when possible.
     if let Some(chip) = selected.iter().find(|name| {
-        find_option(name, &flat_options).map_or(false, |(_, opt)| opt.selection_group == "chip")
+        find_option(name, &flat_options).is_some_and(|(_, opt)| opt.selection_group == "chip")
     }) {
         let chip: Chip = chip
             .parse()

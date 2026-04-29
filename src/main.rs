@@ -668,23 +668,13 @@ fn main() -> Result<()> {
     // Same lookup for TUI and headless: both branches populated the toolchain
     // category in `flat_options` (TUI via scan results, headless via the
     // `--toolchain` CLI hint), so `find_option` resolves in either case.
-    let selected_toolchain = selected.iter().find_map(|name| {
-        let (_, opt) = find_option(name, &flat_options)?;
-        if opt.selection_group == "toolchain" {
-            Some(name.clone())
-        } else {
-            None
-        }
-    });
-
-    let selected_module = selected.iter().find_map(|name| {
-        let (_, opt) = find_option(name, &flat_options)?;
-        if opt.selection_group == "module" {
-            Some(name.clone())
-        } else {
-            None
-        }
-    });
+    let selected_toolchain = selected
+        .iter()
+        .find(|name| {
+            find_option(name, &flat_options)
+                .map_or(false, |(_, opt)| opt.selection_group == "toolchain")
+        })
+        .cloned();
 
     for idx in 0..selected.len() {
         let (_, option) = find_option(&selected[idx], &flat_options).unwrap();
@@ -737,59 +727,58 @@ fn main() -> Result<()> {
 
     let mut reserved_gpio_code = String::new();
 
-    if let Some(ref module_name) = selected_module {
-        if let Some((_, module_option)) = find_option(module_name, &flat_options) {
-            // The module option carries its limitation tags as a list-valued
-            // `sets` entry; a missing entry means "no pins to reserve", not
-            // an error — e.g. a chip-specific module with nothing special
-            // about its wiring.
-            let remove_pins = module_option
-                .sets
-                .get("remove_pins")
-                .and_then(SetValue::as_list)
-                .unwrap_or(&[]);
-            let restricted_pins = chip.pins().iter().filter(|pin| {
-                remove_pins
-                    .iter()
-                    .any(|lim| pin.limitations.contains(&lim.as_str()))
-            });
-            let strapping_pins = chip
-                .pins()
+    if let Some(remove_pins) = selected.iter().find_map(|name| {
+        // Find module, then get the pins that should be considered for removal/noting.
+        find_option(name, &flat_options)
+            .filter(|(_, opt)| opt.selection_group == "module")
+            .map(|(_, opt)| {
+                opt.sets
+                    .get("remove_pins")
+                    .and_then(SetValue::as_list)
+                    .unwrap_or(&[])
+            })
+    }) {
+        let restricted_pins = chip.pins().iter().filter(|pin| {
+            remove_pins
                 .iter()
-                .filter(|pin| pin.limitations.contains(&"strapping"))
-                .collect::<Vec<_>>();
+                .any(|lim| pin.limitations.contains(&lim.as_str()))
+        });
+        let strapping_pins = chip
+            .pins()
+            .iter()
+            .filter(|pin| pin.limitations.contains(&"strapping"))
+            .collect::<Vec<_>>();
 
-            if !strapping_pins.is_empty() {
-                let strapping = strapping_pins
-                    .iter()
-                    .map(|pin| format!("// - GPIO{}", pin.pin))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                writeln!(
-                    &mut reserved_gpio_code,
-                    r#"// The following pins are used to bootstrap the chip. They are available
+        if !strapping_pins.is_empty() {
+            let strapping = strapping_pins
+                .iter()
+                .map(|pin| format!("// - GPIO{}", pin.pin))
+                .collect::<Vec<_>>()
+                .join("\n");
+            writeln!(
+                &mut reserved_gpio_code,
+                r#"// The following pins are used to bootstrap the chip. They are available
                     // for use, but check the datasheet of the module for more information on them.
                     {strapping}"#
-                )
-                .unwrap();
-            }
-
-            // Only set module-selected if there are GPIOs to reserve
-            if restricted_pins.clone().next().is_some() {
-                selected.push("module-selected".to_string());
-
-                let pin_plucker = restricted_pins
-                    .map(|pin| format!("    let _ = peripherals.GPIO{};", pin.pin))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                writeln!(
-                    &mut reserved_gpio_code,
-                    r#"// These GPIO pins are in use by some feature of the module and should not be used.
-                    {pin_plucker}"#
-                )
-                .unwrap();
-            };
+            )
+            .unwrap();
         }
+
+        // Only set module-selected if there are GPIOs to reserve
+        if restricted_pins.clone().next().is_some() {
+            selected.push("module-selected".to_string());
+
+            let pin_plucker = restricted_pins
+                .map(|pin| format!("    let _ = peripherals.GPIO{};", pin.pin))
+                .collect::<Vec<_>>()
+                .join("\n");
+            writeln!(
+                &mut reserved_gpio_code,
+                r#"// These GPIO pins are in use by some feature of the module and should not be used.
+                {pin_plucker}"#
+            )
+            .unwrap();
+        };
     }
     variables.push(("reserved_gpio_code", reserved_gpio_code));
 

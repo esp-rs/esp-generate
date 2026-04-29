@@ -1,4 +1,4 @@
---INCLUDEFILE option("neovim-rustaceanvim") || option("neovim-classic")
+--INCLUDEFILE option("neovim")
 -- You must enable the exrc setting in neovim for this config file to be used.
 local rust_analyzer = {
     cargo = {
@@ -15,22 +15,14 @@ local rust_analyzer = {
 --IF option("neovim-rustaceanvim")
 -- Note the rustaceanvim name of the language server is rust-analyzer with a dash.
 vim.lsp.config("rust-analyzer", {
-    --IF option("xtensa")
-    cmd = { "rustup", "run", "stable", "rust-analyzer" },
-    --ENDIF
-    settings = {
-        ["rust-analyzer"] = rust_analyzer,
-    },
-})
---ENDIF
---IF option("neovim-classic")
+--ELSE
 -- Note the neovim name of the language server is rust_analyzer with an underscore.
 vim.lsp.config("rust_analyzer", {
-    --IF option("xtensa")
-    cmd = { "rustup", "run", "stable", "rust-analyzer" },
-    --ENDIF
+--ENDIF
+--IF option("xtensa")
+	cmd = { "rustup", "run", "stable", "rust-analyzer" },
+--ENDIF
     settings = {
         ["rust-analyzer"] = rust_analyzer,
     },
 })
---ENDIF

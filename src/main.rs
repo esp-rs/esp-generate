@@ -338,23 +338,6 @@ fn about() -> String {
     about
 }
 
-/// Scan the user's `-o`/`--option` list for an entry that names a [`Chip`]
-/// variant. The chip travels with the rest of the generation options (it's a
-/// normal entry in the `chip` selection group), so `-o esp32c6` both picks
-/// the target and ticks the matching option.
-///
-/// Returns the first match. If the user passes multiple chip options (which
-/// is meaningless since they share a selection group), the conflict is
-/// surfaced later by [`process_options`] via the `same_selection_group` check.
-///
-/// Higher-level *presence* checks (i.e. "did the user pick a chip at all?")
-/// go through [`Template::missing_required_groups`] instead — this helper
-/// exists purely to produce the typed [`Chip`] value the rest of the
-/// generator pipeline consumes.
-fn chip_from_options(options: &[String]) -> Option<Chip> {
-    options.iter().find_map(|opt| opt.parse::<Chip>().ok())
-}
-
 fn setup_args_interactive(args: &mut Args) -> Result<()> {
     if args.headless {
         let mut missing = String::from(
@@ -498,10 +481,6 @@ fn main() -> Result<()> {
         keys
     };
 
-    // `None` until the user picks one in the TUI; headless mode has
-    // already rejected a missing required `chip` selection above.
-    let mut chip: Option<Chip> = chip_from_options(&args.option);
-
     // Initial pruning
     let initial_selections: HashMap<String, String> = TEMPLATE
         .all_options()
@@ -635,8 +614,6 @@ fn main() -> Result<()> {
             return Ok(());
         };
 
-        chip = app.repository.selected_chip();
-
         (sel, app.repository.config.flat_options)
     } else {
         (initial_selected, repository.config.flat_options)
@@ -690,7 +667,13 @@ fn main() -> Result<()> {
         ("esp-hal-version-full", esp_hal_version_full),
     ];
 
-    if let Some(chip) = chip {
+    // Inject chip-specific variables when possible.
+    if let Some(chip) = selected.iter().find(|name| {
+        find_option(name, &flat_options).map_or(false, |(_, opt)| opt.selection_group == "chip")
+    }) {
+        let chip: Chip = chip
+            .parse()
+            .unwrap_or_else(|_| panic!("Not a valid chip name"));
         variables.extend_from_slice(&[
             ("mcu", chip.to_string()),
             ("max-dram2-uninit", chip.dram2_region().size().to_string()),

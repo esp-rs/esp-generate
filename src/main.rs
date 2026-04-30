@@ -690,27 +690,6 @@ fn main() -> Result<()> {
             variables.push(("rust_toolchain", tc.clone()));
         }
 
-        // Merge scalar `sets` entries contributed by the selected options (e.g.
-        // the chip-group option contributes `wokwi-board`). Generator-provided
-        // variables above take precedence — `#REPLACE` lookup is first-match-wins
-        // — so a template author can't accidentally shadow `project-name` /
-        // `mcu` / etc. by declaring them in an option's `sets`.
-        //
-        // List-valued entries (e.g. `remove_pins`) aren't substitutable text and
-        // are consumed directly by the code-generation paths that know what to
-        // do with them (see the pin-reservation block below), so they're
-        // deliberately skipped here instead of being joined into a string.
-        for name in &selected {
-            let Some((_, opt)) = find_option(name, &flat_options) else {
-                continue;
-            };
-            for (key, value) in &opt.sets {
-                if let Some(scalar) = value.as_scalar() {
-                    variables.push((key, scalar.to_string()));
-                }
-            }
-        }
-
         let mut reserved_gpio_code = String::new();
 
         if let Some(remove_pins) = selected.iter().find_map(|name| {
@@ -779,6 +758,27 @@ fn main() -> Result<()> {
             args.headless,
             selected_toolchain.as_deref(),
         );
+    }
+
+    // Merge scalar `sets` entries contributed by the selected options (e.g.
+    // the chip-group option contributes `wokwi-board`). Generator-provided
+    // variables above take precedence — `#REPLACE` lookup is first-match-wins
+    // — so a template author can't accidentally shadow `project-name` /
+    // `mcu` / etc. by declaring them in an option's `sets`.
+    //
+    // List-valued entries (e.g. `remove_pins`) aren't substitutable text and
+    // are consumed directly by the code-generation paths that know what to
+    // do with them (see the pin-reservation block below), so they're
+    // deliberately skipped here instead of being joined into a string.
+    for name in &selected {
+        let Some((_, opt)) = find_option(name, &flat_options) else {
+            continue;
+        };
+        for (key, value) in &opt.sets {
+            if let Some(scalar) = value.as_scalar() {
+                variables.push((key, scalar.to_string()));
+            }
+        }
     }
 
     let project_dir = path.join(&name);

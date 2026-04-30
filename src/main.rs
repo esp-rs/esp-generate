@@ -785,7 +785,7 @@ fn main() -> Result<()> {
 
     if check::offensive_cargo_config_check(&project_dir) {
         println!(
-            "⚠️ `.config/cargo.toml` files found in parent directories - this can cause undesired behavior. See https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure"
+            "⚠️ `.cargo/config.toml` files found in parent directories - this can cause undesired behavior. See https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure"
         );
     }
 

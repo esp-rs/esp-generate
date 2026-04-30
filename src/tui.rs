@@ -3,7 +3,6 @@ use std::io;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::Chip;
 use env_logger::{Builder, Env, Logger};
 use esp_generate::{
     append_list_as_sentence,
@@ -93,21 +92,6 @@ impl Repository {
             let option = &self.config.flat_options[*idx];
             if option.selection_group == "toolchain" {
                 Some(option.name.clone())
-            } else {
-                None
-            }
-        })
-    }
-
-    /// Returns the chip that is currently ticked in the `chip` selection
-    /// group, if any. Returns `None` only in degenerate situations (e.g. tests
-    /// that build a `Repository` without a chip category, or the user hasn't
-    /// picked a chip yet).
-    pub fn selected_chip(&self) -> Option<Chip> {
-        self.config.selected.iter().find_map(|idx| {
-            let option = &self.config.flat_options[*idx];
-            if option.selection_group == "chip" {
-                option.name.parse().ok()
             } else {
                 None
             }
@@ -1060,28 +1044,6 @@ mod test {
     }
 
     #[test]
-    fn selected_chip_reports_chip_group_selection() {
-        // `selected_chip` returns the chip whose group entry is currently
-        // ticked, and `None` when no chip-group option is present in the tree
-        // at all.
-        let options = vec![
-            chip_group_option(Chip::Esp32),
-            chip_group_option(Chip::Esp32c6),
-            option("alloc", &[]),
-        ];
-
-        let repository = Repository::new(
-            options,
-            &["esp32c6".to_string(), "alloc".to_string()],
-        );
-
-        assert_eq!(repository.selected_chip(), Some(Chip::Esp32c6));
-
-        let no_chip_group = Repository::new(vec![option("alloc", &[])], &[]);
-        assert_eq!(no_chip_group.selected_chip(), None);
-    }
-
-    #[test]
     fn toggle_chip_group_is_a_radio_not_a_toggle() {
         // The chip selection group is a *required* radio: clicking the
         // currently-selected chip must be a no-op (there is no "no chip"
@@ -1219,10 +1181,9 @@ mod test {
         ];
         // Before applying `set_options`, mimic what `toggle_current` would
         // have done: swap the chip-group pick on the *old* tree. This is the
-        // state the main loop sees when it reads `selected_chip()` and
-        // triggers the rebuild.
+        // state the main loop sees when it triggers the rebuild.
         repository.toggle_current(1);
-        assert_eq!(repository.selected_chip(), Some(Chip::Esp32c6));
+        assert!(repository.config.is_selected("esp32c6"));
 
         repository.set_options(rebuilt);
 
@@ -1231,7 +1192,6 @@ mod test {
         assert!(repository.config.is_selected("shared"));
         // Chip-filtered out of the tree entirely; rebuild-by-name drops it.
         assert!(!repository.config.is_selected("only-on-esp32"));
-        assert_eq!(repository.selected_chip(), Some(Chip::Esp32c6));
     }
 }
 

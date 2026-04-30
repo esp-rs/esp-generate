@@ -338,23 +338,6 @@ fn about() -> String {
     about
 }
 
-/// Scan the user's `-o`/`--option` list for an entry that names a [`Chip`]
-/// variant. The chip travels with the rest of the generation options (it's a
-/// normal entry in the `chip` selection group), so `-o esp32c6` both picks
-/// the target and ticks the matching option.
-///
-/// Returns the first match. If the user passes multiple chip options (which
-/// is meaningless since they share a selection group), the conflict is
-/// surfaced later by [`process_options`] via the `same_selection_group` check.
-///
-/// Higher-level *presence* checks (i.e. "did the user pick a chip at all?")
-/// go through [`Template::missing_required_groups`] instead — this helper
-/// exists purely to produce the typed [`Chip`] value the rest of the
-/// generator pipeline consumes.
-fn chip_from_options(options: &[String]) -> Option<Chip> {
-    options.iter().find_map(|opt| opt.parse::<Chip>().ok())
-}
-
 fn setup_args_interactive(args: &mut Args) -> Result<()> {
     if args.headless {
         let mut missing = String::from(
@@ -446,6 +429,7 @@ fn main() -> Result<()> {
     )
     .expect("Failed to read Cargo.toml");
 
+    // TODO: do not assume esp-hal version is present
     let esp_hal_version = versions.dependency_version("esp-hal");
     let esp_hal_version_full = if let Some(stripped) = esp_hal_version.strip_prefix("~") {
         let mut processed = stripped.to_string();
@@ -496,10 +480,6 @@ fn main() -> Result<()> {
         }
         keys
     };
-
-    // `None` until the user picks one in the TUI; headless mode has
-    // already rejected a missing required `chip` selection above.
-    let mut chip: Option<Chip> = chip_from_options(&args.option);
 
     // Initial pruning
     let initial_selections: HashMap<String, String> = TEMPLATE
@@ -634,15 +614,10 @@ fn main() -> Result<()> {
             return Ok(());
         };
 
-        chip = app.repository.selected_chip();
-
         (sel, app.repository.config.flat_options)
     } else {
         (initial_selected, repository.config.flat_options)
     };
-
-    // FIXME: do not assume the template even has a "chip" property
-    let chip = chip.expect("chip must be set by the time the TUI exits / headless validates");
 
     let mut toolchain_replaced = false;
 
@@ -668,97 +643,66 @@ fn main() -> Result<()> {
     // Same lookup for TUI and headless: both branches populated the toolchain
     // category in `flat_options` (TUI via scan results, headless via the
     // `--toolchain` CLI hint), so `find_option` resolves in either case.
-    let selected_toolchain = selected.iter().find_map(|name| {
-        let (_, opt) = find_option(name, &flat_options)?;
-        if opt.selection_group == "toolchain" {
-            Some(name.clone())
-        } else {
-            None
-        }
-    });
-
-    let selected_module = selected.iter().find_map(|name| {
-        let (_, opt) = find_option(name, &flat_options)?;
-        if opt.selection_group == "module" {
-            Some(name.clone())
-        } else {
-            None
-        }
-    });
+    // Needs to be done before selection groups are appended in the loop below.
+    let selected_toolchain = selected
+        .iter()
+        .find(|name| {
+            find_option(name, &flat_options)
+                .is_some_and(|(_, opt)| opt.selection_group == "toolchain")
+        })
+        .cloned();
 
     for idx in 0..selected.len() {
         let (_, option) = find_option(&selected[idx], &flat_options).unwrap();
         selected.push(option.selection_group.clone());
     }
 
-    selected.push(if chip.metadata().is_xtensa() {
-        "xtensa".to_string()
-    } else {
-        "riscv".to_string()
-    });
-
-    // mark that a toolchain was explicitly selected for template replacements
-    if selected_toolchain.is_some() {
-        selected.push("toolchain-selected".to_string());
-    }
-
-    let max_dram2 = chip.dram2_region().size();
-
     let mut variables = vec![
-        ("project-name".to_string(), name.clone()),
-        ("mcu".to_string(), chip.to_string()),
-        (
-            "generate-version".to_string(),
-            env!("CARGO_PKG_VERSION").to_string(),
-        ),
-        ("generate-parameters".to_string(), selected_options),
-        ("esp-hal-version-full".to_string(), esp_hal_version_full),
-        ("max-dram2-uninit".to_string(), format!("{max_dram2}")),
+        // Generator specific
+        ("generate-version", env!("CARGO_PKG_VERSION").to_string()),
+        // Project specific
+        ("project-name", name.clone()),
+        ("generate-parameters", selected_options),
+        // Template specific
+        ("esp-hal-version-full", esp_hal_version_full),
     ];
 
-    // Merge scalar `sets` entries contributed by the selected options (e.g.
-    // the chip-group option contributes `wokwi-board`). Generator-provided
-    // variables above take precedence — `#REPLACE` lookup is first-match-wins
-    // — so a template author can't accidentally shadow `project-name` /
-    // `mcu` / etc. by declaring them in an option's `sets`.
-    //
-    // List-valued entries (e.g. `remove_pins`) aren't substitutable text and
-    // are consumed directly by the code-generation paths that know what to
-    // do with them (see the pin-reservation block below), so they're
-    // deliberately skipped here instead of being joined into a string.
-    for name in &selected {
-        let Some((_, opt)) = find_option(name, &flat_options) else {
-            continue;
-        };
-        for (key, value) in &opt.sets {
-            if let Some(scalar) = value.as_scalar() {
-                variables.push((key.clone(), scalar.to_string()));
-            }
+    // Inject chip-specific variables when possible.
+    if let Some(chip) = selected.iter().find(|name| {
+        find_option(name, &flat_options).is_some_and(|(_, opt)| opt.selection_group == "chip")
+    }) {
+        let chip: Chip = chip
+            .parse()
+            .unwrap_or_else(|_| panic!("Not a valid chip name"));
+        variables.extend_from_slice(&[
+            ("mcu", chip.to_string()),
+            ("max-dram2-uninit", chip.dram2_region().size().to_string()),
+            ("rust_target", chip.metadata().target().to_string()),
+        ]);
+
+        selected.push(if chip.metadata().is_xtensa() {
+            "xtensa".to_string()
+        } else {
+            "riscv".to_string()
+        });
+
+        if let Some(tc) = selected_toolchain.as_ref() {
+            variables.push(("rust_toolchain", tc.clone()));
         }
-    }
 
-    variables.push((
-        "rust_target".to_string(),
-        chip.metadata().target().to_string(),
-    ));
+        let mut reserved_gpio_code = String::new();
 
-    if let Some(tc) = selected_toolchain.as_ref() {
-        variables.push(("rust_toolchain".to_string(), tc.clone()));
-    }
-
-    let mut reserved_gpio_code = String::new();
-
-    if let Some(ref module_name) = selected_module {
-        if let Some((_, module_option)) = find_option(module_name, &flat_options) {
-            // The module option carries its limitation tags as a list-valued
-            // `sets` entry; a missing entry means "no pins to reserve", not
-            // an error — e.g. a chip-specific module with nothing special
-            // about its wiring.
-            let remove_pins = module_option
-                .sets
-                .get("remove_pins")
-                .and_then(SetValue::as_list)
-                .unwrap_or(&[]);
+        if let Some(remove_pins) = selected.iter().find_map(|name| {
+            // Find module, then get the pins that should be considered for removal/noting.
+            find_option(name, &flat_options)
+                .filter(|(_, opt)| opt.selection_group == "module")
+                .map(|(_, opt)| {
+                    opt.sets
+                        .get("remove_pins")
+                        .and_then(SetValue::as_list)
+                        .unwrap_or(&[])
+                })
+        }) {
             let restricted_pins = chip.pins().iter().filter(|pin| {
                 remove_pins
                     .iter()
@@ -794,17 +738,57 @@ fn main() -> Result<()> {
                     .collect::<Vec<_>>()
                     .join("\n");
                 writeln!(
-                    &mut reserved_gpio_code,
-                    r#"// These GPIO pins are in use by some feature of the module and should not be used.
-                    {pin_plucker}"#
-                )
-                .unwrap();
+                &mut reserved_gpio_code,
+                r#"// These GPIO pins are in use by some feature of the module and should not be used.
+                {pin_plucker}"#
+            )
+            .unwrap();
             };
         }
+        variables.push(("reserved_gpio_code", reserved_gpio_code));
+
+        // Check versions and install tools only when a chip is known, and
+        // BEFORE we generate the project.
+        check::check(
+            chip.metadata(),
+            selected.contains(&"probe-rs".to_string()),
+            msrv,
+            selected.contains(&"stack-smashing-protection".to_string())
+                && selected.contains(&"riscv".to_string()),
+            args.headless,
+            selected_toolchain.as_deref(),
+        );
     }
-    variables.push(("reserved_gpio_code".to_string(), reserved_gpio_code));
+
+    // Merge scalar `sets` entries contributed by the selected options (e.g.
+    // the chip-group option contributes `wokwi-board`). Generator-provided
+    // variables above take precedence — `#REPLACE` lookup is first-match-wins
+    // — so a template author can't accidentally shadow `project-name` /
+    // `mcu` / etc. by declaring them in an option's `sets`.
+    //
+    // List-valued entries (e.g. `remove_pins`) aren't substitutable text and
+    // are consumed directly by the code-generation paths that know what to
+    // do with them (see the pin-reservation block below), so they're
+    // deliberately skipped here instead of being joined into a string.
+    for name in &selected {
+        let Some((_, opt)) = find_option(name, &flat_options) else {
+            continue;
+        };
+        for (key, value) in &opt.sets {
+            if let Some(scalar) = value.as_scalar() {
+                variables.push((key, scalar.to_string()));
+            }
+        }
+    }
 
     let project_dir = path.join(&name);
+
+    if check::offensive_cargo_config_check(&project_dir) {
+        println!(
+            "⚠️ `.cargo/config.toml` files found in parent directories - this can cause undesired behavior. See https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure"
+        );
+    }
+
     fs::create_dir(&project_dir)?;
 
     for &(file_path, contents) in TEMPLATE_FILES.iter() {
@@ -850,17 +834,6 @@ fn main() -> Result<()> {
     } else {
         log::warn!("Current directory is already in a git repository, skipping git initialization");
     }
-
-    check::check(
-        &project_dir,
-        chip.metadata(),
-        selected.contains(&"probe-rs".to_string()),
-        msrv,
-        selected.contains(&"stack-smashing-protection".to_string())
-            && selected.contains(&"riscv".to_string()),
-        args.headless,
-        selected_toolchain.as_deref(),
-    );
 
     Ok(())
 }
@@ -955,14 +928,14 @@ impl BlockKind {
 }
 
 fn process_file(
-    contents: &str,                 // Raw content of the file
-    options: &[String],             // Selected options
-    variables: &[(String, String)], // Variables and their values in tuples
-    file_path: &mut String,         // File path to be modified
+    contents: &str,               // Raw content of the file
+    options: &[String],           // Selected options
+    variables: &[(&str, String)], // Variables and their values in tuples
+    file_path: &mut String,       // File path to be modified
 ) -> Option<String> {
     let mut res = String::new();
 
-    let mut replace: Option<Vec<(String, String)>> = None;
+    let mut replace: Option<Vec<(&str, &str)>> = None;
     let mut include = vec![BlockKind::Root];
     let mut file_directives = true;
 
@@ -1026,9 +999,9 @@ fn process_file(
                 .filter_map(|pair| {
                     let mut parts = pair.split_whitespace();
                     if let (Some(pattern), Some(var_name)) = (parts.next(), parts.next()) {
-                        if let Some((_, value)) = variables.iter().find(|(key, _)| key == var_name)
+                        if let Some((_, value)) = variables.iter().find(|(key, _)| key == &var_name)
                         {
-                            Some((pattern.to_string(), value.clone()))
+                            Some((pattern, value.as_str()))
                         } else {
                             None
                         }

@@ -61,7 +61,6 @@ enum CheckResult {
 }
 
 pub fn check(
-    project_path: &Path,
     chip: Chip,
     probe_rs_required: bool,
     msrv: Version,
@@ -164,12 +163,6 @@ pub fn check(
             probers_suggestion_kind,
         )
     );
-
-    if offensive_cargo_config_check(project_path) {
-        println!(
-            "⚠️ `.config/cargo.toml` files found in parent directories - this can cause undesired behavior. See https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure"
-        );
-    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -339,7 +332,7 @@ fn try_extract_version(cmd: &str, line: &str) -> Option<Version> {
     })
 }
 
-fn offensive_cargo_config_check(path: &Path) -> bool {
+pub fn offensive_cargo_config_check(path: &Path) -> bool {
     let mut current = if let Some(parent) = path.parent() {
         PathBuf::from(parent)
     } else {

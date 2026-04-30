@@ -17,12 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chip selector has been moved to the TUI. (#328)
 - The chip needs to be specified as `-o <chip>` instead of `--chip <chip>` when using CLI (#328)
 - Generated projects now keep runtime configuration in `.cargo/esp-config.toml` and include it from `.cargo/config.toml` (#326)
+- Wi-Fi generation now requires the async Embassy template. (#341)
 
 ### Fixed
 
 - Fixed neovim config (#336)
 
 ### Removed
+
+- Removed the BLE `bleps` option. (#341)
 
 ## [1.3.0] - 2026-04-24
 

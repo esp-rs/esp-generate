@@ -35,9 +35,9 @@ esp-hal = { version = "~1.1.0", features = [
     #ENDIF
 ] }
 
-#IF option("embassy") || option("wifi") || option("ble-bleps") || option("ble-trouble")
+#IF option("embassy") || option("wifi") || option("ble-trouble")
 esp-rtos = { version = "0.3.0", features = [
-    #IF option("wifi") || option("ble-bleps") || option("ble-trouble")
+    #IF option("wifi") || option("ble-trouble")
     "esp-radio",
     #ENDIF
     #IF option("alloc")
@@ -118,7 +118,7 @@ panic-rtt-target = "0.2.0"
 esp-alloc = "0.10.0"
 #ENDIF defmt
 #ENDIF alloc
-#IF option("wifi") || option("ble-bleps") || option("ble-trouble")
+#IF option("wifi") || option("ble-trouble")
 #IF option("defmt")
 #+embedded-io = { version = "0.7.1", features = ["defmt"] }
 #ELSE
@@ -172,10 +172,10 @@ esp-radio = { version = "0.18.0", features = [
     #IF option("wifi")
     "wifi",
     #ENDIF
-    #IF option("ble-bleps") || option("ble-trouble")
+    #IF option("ble-trouble")
     "ble",
     #ENDIF
-    #IF option("wifi") && (option("ble-bleps") || option("ble-trouble"))
+    #IF option("wifi") && option("ble-trouble")
     "coex",
     #ENDIF
     #IF option("alloc")
@@ -189,14 +189,11 @@ esp-radio = { version = "0.18.0", features = [
     "log-04",
     #ENDIF
 ] }
-#IF option("ble-bleps")
-#+bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
-#ENDIF
 #IF option("ble-trouble")
 #+trouble-host = { version = "0.6.0", features = ["gatt"] }
 #+bt-hci = "0.8.0"
 #ENDIF
-#ENDIF wifi || ble || ble-trouble
+#ENDIF wifi || ble-trouble
 #IF option("embassy")
 embassy-executor = { version = "0.10.0", features = [
     #IF option("defmt")

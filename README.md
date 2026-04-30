@@ -32,7 +32,7 @@ You can also directly download pre-compiled [release binaries] or use [`cargo-bi
    2. Using the Command Line Interface (CLI), adding the options to the `esp-generate` command:
 
       ```
-      esp-generate -o esp32 -o alloc -o wifi your-project
+      esp-generate -o esp32 -o embassy -o unstable-hal -o alloc -o wifi your-project
       ```
       Use the `--headless` flag to avoid using the TUI.
 

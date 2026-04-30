@@ -13,13 +13,6 @@ use esp_hal::{
     main,
     time::{Duration, Instant},
 };
-//IF option("wifi") || option("ble-bleps")
-use esp_hal::timer::timg::TimerGroup;
-//ENDIF
-//IF option("ble-bleps")
-use esp_radio::ble::controller::BleConnector;
-//ENDIF
-
 //IF option("defmt")
 //IF !option("probe-rs")
 //+use esp_println as _;
@@ -92,7 +85,7 @@ fn main() -> ! {
     //ENDIF
 
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
-    //IF option("wifi") || option("ble-bleps") || option("module-selected")
+    //IF option("module-selected")
     let peripherals = esp_hal::init(config);
     //ELSE
     //+let _peripherals = esp_hal::init(config);
@@ -104,26 +97,7 @@ fn main() -> ! {
     //IF option("alloc")
     //REPLACE 65536 max-dram2-uninit
     esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 65536);
-    //IF option("wifi") && (option("ble-bleps") || option("ble-trouble"))
-    // COEX needs more RAM - so we've added some more
-    esp_alloc::heap_allocator!(size: 64 * 1024);
-    //ENDIF
     //ENDIF alloc
-
-    //IF option("wifi") || option("ble-bleps")
-    let timg0 = TimerGroup::new(peripherals.TIMG0);
-    let sw_interrupt =
-        esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
-    esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
-    //ENDIF
-    //IF option("wifi")
-    let (mut _wifi_controller, _interfaces) =
-        esp_radio::wifi::new(peripherals.WIFI, Default::default())
-            .expect("Failed to initialize Wi-Fi controller");
-    //ENDIF
-    //IF option("ble-bleps")
-    let _connector = BleConnector::new(peripherals.BT, Default::default());
-    //ENDIF
 
     loop {
         //IF option("defmt") || option("log")

@@ -12,7 +12,7 @@
 use esp_hal::clock::CpuClock;
 use esp_hal::timer::timg::TimerGroup;
 
-//IF option("ble-trouble") || option("ble-bleps")
+//IF option("ble-trouble")
 use esp_radio::ble::controller::BleConnector;
 //ENDIF
 //IF option("ble-trouble")
@@ -108,7 +108,7 @@ async fn main(spawner: Spawner) -> ! {
     //IF option("alloc")
     //REPLACE 65536 max-dram2-uninit
     esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 65536);
-    //IF option("wifi") && (option("ble-bleps") || option("ble-trouble"))
+    //IF option("wifi") && option("ble-trouble")
     // COEX needs more RAM - so we've added some more
     esp_alloc::heap_allocator!(size: 64 * 1024);
     //ENDIF
@@ -137,8 +137,6 @@ async fn main(spawner: Spawner) -> ! {
     let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
         HostResources::new();
     let _stack = trouble_host::new(ble_controller, &mut resources);
-    //ELIF option("ble-bleps")
-    let _connector = BleConnector::new(peripherals.BT, Default::default());
     //ENDIF
 
     // TODO: Spawn some tasks

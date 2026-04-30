@@ -24,6 +24,7 @@ options:
     requires:
       - alloc
       - unstable-hal
+      - embassy
     compatible:
       chip:
         - esp32
@@ -36,29 +37,9 @@ options:
         - esp32s3
 
   - !Option
-    name: ble-bleps
-    display_name: Enable BLE via the esp-radio crate (bleps).
-    help: esp-radio comes with no stability guarantees at this time.
-    selection_group: ble-lib
-    requires:
-      - alloc
-      - unstable-hal
-    compatible:
-      chip:
-        - esp32
-        - esp32c2
-        - esp32c3
-        - esp32c5
-        - esp32c6
-        - esp32c61
-        - esp32h2
-        - esp32s3
-
-  - !Option
     name: ble-trouble
     display_name: Enable BLE via the esp-radio crate (embassy-trouble).
     help: esp-radio comes with no stability guarantees at this time.
-    selection_group: ble-lib
     requires:
       - alloc
       - unstable-hal

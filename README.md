@@ -6,7 +6,7 @@
 
 Template generation tool to create `no_std` applications targeting Espressif's line of SoCs and modules.
 
-At present, this template supports the ESP32, ESP32-C2/C3/C6, ESP32-H2, and ESP32-S2/S3. Support for additional devices will be added as they become available.
+At present, this template supports the ESP32, ESP32-C2/C3/C5/C6/C61, ESP32-H2, and ESP32-S2/S3. Support for additional devices will be added as they become available.
 
 ## Quickstart
 

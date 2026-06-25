@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed neovim config (#336)
+- Fixed the supported ESP32 variants list in the README. (#349)
 
 ### Removed
 

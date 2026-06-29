@@ -23,7 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed neovim config (#336)
-- Fixed the supported ESP32 variants list in the README. (#349)
 
 ### Removed
 
@@ -45,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - esp-generate adds the selected template parameters to the generated code (#293)
 - Add `explain` and `list-options` subcommands (#293)
 - Add module selector (#289)
+- Add C5 and C61 support (#314)
 
 ### Changed
 

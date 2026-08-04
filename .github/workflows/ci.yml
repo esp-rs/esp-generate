@@ -85,20 +85,6 @@ jobs:
         name: Run cargo-package
         run: cargo package --allow-dirty
 
-      - if: ${{ github.event_name == 'schedule' && failure() }}
-        name: Create or Update GitHub Issue
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          sudo apt-get install gh -y
-          ISSUE_NAME=$(gh issue list --state open --search "Scheduled CI Failure in:title" --json number --jq '.[0].number')
-
-          if [[ -z "$ISSUE_NAME" ]];
-          then
-            gh issue create \
-              --title "Scheduled CI Failure" \
-              --body "Scheduled CI Workflow Failed! [View the failed job](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})."
-          fi
 
   # --------------------------------------------------------------------------
   # Test
@@ -141,3 +127,35 @@ jobs:
         with:
           toolchain: ${{ env.MSRV }}
       - run: cargo check -p esp-generate
+
+  # --------------------------------------------------------------------------
+  # Scheduled failure reporting
+
+  report-scheduled-failure:
+    if: ${{ github.event_name == 'schedule' && always() && (needs.verify.result == 'failure' || needs.test.result == 'failure' || needs.clippy.result == 'failure' || needs.msrv.result == 'failure') }}
+    needs: [verify, test, clippy, msrv]
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Create or update GitHub issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUMBER=$(gh issue list \
+            --state open \
+            --search '"Scheduled CI Failure" in:title' \
+            --limit 1 \
+            --json number \
+            --jq '.[0].number')
+
+          BODY="Scheduled CI workflow failed. [View the failed run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+
+          if [[ -n "$ISSUE_NUMBER" ]]; then
+            gh issue edit "$ISSUE_NUMBER" --body "$BODY"
+          else
+            gh issue create \
+              --title "Scheduled CI Failure" \
+              --body "$BODY"
+          fi

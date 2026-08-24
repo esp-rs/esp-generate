@@ -78,7 +78,10 @@ fn cargo_linker_env_var(target: &str) -> String {
 //ENDIF
 fn linker_be_nice() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 {
+    // The helpful-error branch reads both args[1] (kind) and args[2] (what),
+    // so it needs at least 3 args. Guarding on `> 1` left args[2] out of bounds
+    // when the linker wrapper was invoked with exactly 2 arguments.
+    if args.len() > 2 {
         let kind = &args[1];
         let what = &args[2];
 

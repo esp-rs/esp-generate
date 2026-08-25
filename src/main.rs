@@ -734,7 +734,7 @@ fn main() -> Result<()> {
                 selected.push("module-selected".to_string());
 
                 let pin_plucker = restricted_pins
-                    .map(|pin| format!("    let _ = peripherals.GPIO{};", pin.pin))
+                    .map(|pin| format!("    let _gpio{} = peripherals.GPIO{};", pin.pin, pin.pin))
                     .collect::<Vec<_>>()
                     .join("\n");
                 writeln!(

@@ -115,9 +115,7 @@ async fn main(spawner: Spawner) -> ! {
     //ENDIF alloc
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    let sw_interrupt =
-        esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
-    esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
+    esp_rtos::start(timg0.timer0, peripherals.FROM_CPU_INTR0);
 
     //IF option("defmt") || option("log")
     info!("Embassy initialized!");
@@ -126,17 +124,18 @@ async fn main(spawner: Spawner) -> ! {
     //ENDIF
 
     //IF option("wifi")
-    let (mut _wifi_controller, _interfaces) =
-        esp_radio::wifi::new(peripherals.WIFI, Default::default())
+    let _wifi_controller =
+        esp_radio::wifi::WifiController::new(peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
+    let _wifi_interface = esp_radio::wifi::Interface::station();
     //ENDIF
     //IF option("ble-trouble")
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
     let transport = BleConnector::new(peripherals.BT, Default::default()).unwrap();
     let ble_controller = ExternalController::<_, 1>::new(transport);
-    let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
+    let mut resources: HostResources<_, DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
         HostResources::new();
-    let _stack = trouble_host::new(ble_controller, &mut resources);
+    let _stack = trouble_host::new(ble_controller, &mut resources).build();
     //ENDIF
 
     // TODO: Spawn some tasks

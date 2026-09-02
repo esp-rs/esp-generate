@@ -21,7 +21,7 @@ test = false
 #ENDIF
 
 [dependencies]
-esp-hal = { version = "1.2.0-rc.0", git = "https://github.com/esp-rs/esp-hal", rev = "160b10794227eb84805b8676fe188c1110801e9d", features = [
+esp-hal = { version = "1.2.0-rc.0", git = "https://github.com/esp-rs/esp-hal", rev = "f4b7dcf5aa533d96b644b3572e624c77e214e730", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("unstable-hal")
@@ -36,7 +36,7 @@ esp-hal = { version = "1.2.0-rc.0", git = "https://github.com/esp-rs/esp-hal", r
 ] }
 
 #IF option("embassy") || option("wifi") || option("ble-trouble")
-esp-rtos = { version = "0.3.0", git = "https://github.com/esp-rs/esp-hal", rev = "160b10794227eb84805b8676fe188c1110801e9d", features = [
+esp-rtos = { version = "0.4.0", git = "https://github.com/esp-rs/esp-hal", rev = "f4b7dcf5aa533d96b644b3572e624c77e214e730", features = [
     #IF option("wifi") || option("ble-trouble")
     "esp-radio",
     #ENDIF
@@ -57,7 +57,7 @@ esp-rtos = { version = "0.3.0", git = "https://github.com/esp-rs/esp-hal", rev =
 ]}
 #ENDIF
 
-esp-bootloader-esp-idf = { version = "0.5.0", git = "https://github.com/esp-rs/esp-hal", rev = "160b10794227eb84805b8676fe188c1110801e9d", features = [
+esp-bootloader-esp-idf = { version = "0.6.0", git = "https://github.com/esp-rs/esp-hal", rev = "f4b7dcf5aa533d96b644b3572e624c77e214e730", features = [
     #IF option("defmt")
     #+"defmt",
     #ENDIF
@@ -81,7 +81,7 @@ rtt-target = { version = "0.6.2", features = ["defmt"] }
 #+rtt-target = "0.6.2"
 #ENDIF defmt
 #ELSE probe-rs
-esp-println = { version = "0.17.0", git = "https://github.com/esp-rs/esp-hal", rev = "160b10794227eb84805b8676fe188c1110801e9d", features = [
+esp-println = { version = "0.18.0", git = "https://github.com/esp-rs/esp-hal", rev = "f4b7dcf5aa533d96b644b3572e624c77e214e730", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("defmt")
@@ -94,7 +94,7 @@ esp-println = { version = "0.17.0", git = "https://github.com/esp-rs/esp-hal", r
 #ENDIF probe-rs
 #ENDIF log-frontend || panic-handler || probe-rs
 #IF option("esp-backtrace")
-esp-backtrace = { version = "0.19.0", git = "https://github.com/esp-rs/esp-hal", rev = "160b10794227eb84805b8676fe188c1110801e9d", features = [
+esp-backtrace = { version = "0.20.0", git = "https://github.com/esp-rs/esp-hal", rev = "f4b7dcf5aa533d96b644b3572e624c77e214e730", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     "panic-handler",
@@ -114,10 +114,10 @@ panic-rtt-target = "0.2.0"
 #IF option("alloc")
 #IF option("defmt")
 #REPLACE esp32c6 mcu
-#+esp-alloc = { version = "0.10.0", git = "https://github.com/esp-rs/esp-hal", rev = "160b10794227eb84805b8676fe188c1110801e9d", features = ["esp32c6", "defmt"] }
+#+esp-alloc = { version = "0.11.0", git = "https://github.com/esp-rs/esp-hal", rev = "f4b7dcf5aa533d96b644b3572e624c77e214e730", features = ["esp32c6", "defmt"] }
 #ELSE
 #REPLACE esp32c6 mcu
-esp-alloc = { version = "0.10.0", git = "https://github.com/esp-rs/esp-hal", rev = "160b10794227eb84805b8676fe188c1110801e9d", features = ["esp32c6"] }
+esp-alloc = { version = "0.11.0", git = "https://github.com/esp-rs/esp-hal", rev = "f4b7dcf5aa533d96b644b3572e624c77e214e730", features = ["esp32c6"] }
 #ENDIF defmt
 #ENDIF alloc
 #IF option("wifi") || option("ble-trouble")
@@ -168,7 +168,7 @@ smoltcp = { version = "0.13.0", default-features = false, features = [
     #ENDIF
 ] }
 #ENDIF wifi
-esp-radio = { version = "1.0.0-beta.0", git = "https://github.com/esp-rs/esp-hal", rev = "160b10794227eb84805b8676fe188c1110801e9d", features = [
+esp-radio = { version = "1.0.0-beta.0", git = "https://github.com/esp-rs/esp-hal", rev = "f4b7dcf5aa533d96b644b3572e624c77e214e730", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("wifi")

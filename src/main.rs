@@ -28,6 +28,7 @@ use taplo::formatter::Options;
 use esp_generate::{TemplateSource, manifest, plugins};
 
 mod check;
+mod fetch;
 mod toolchain;
 mod tui;
 
@@ -149,7 +150,7 @@ impl Loaded {
 }
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = about(), long_about = None, subcommand_negates_reqs = true)]
+#[command(author, version, about = HELP.about.as_str(), long_about = None, subcommand_negates_reqs = true)]
 struct Args {
     /// Name of the project to generate
     name: Option<String>,
@@ -159,15 +160,16 @@ struct Args {
     headless: bool,
 
     /// Generation options
-    #[arg(short, long, help = option_help())]
+    #[arg(short, long, help = HELP.options.as_str())]
     option: Vec<String>,
 
     /// Directory in which to generate the project
     #[arg(short = 'O', long)]
     output_path: Option<PathBuf>,
 
-    /// Generate from a template directory instead of the bundled one
-    #[arg(long, global = true, value_name = "DIR")]
+    /// Generate from an external template: a directory, or a repository to
+    /// clone (`owner/repo[@branch-or-tag]`, an `https://` URL, or `git@host:path`)
+    #[arg(long, global = true, value_name = "DIR_OR_REPO")]
     template: Option<PathBuf>,
 
     /// Do not check for updates
@@ -289,11 +291,10 @@ impl SubCommands {
                 );
                 let mut groups = IndexMap::new();
                 let mut seen = HashSet::new();
-                for (index, option) in all_options
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, o)| !["toolchain", "module"].contains(&o.selection_group.as_str()))
-                {
+                for (index, option) in all_options.iter().enumerate() {
+                    if option.name.is_empty() {
+                        continue;
+                    }
                     let group = groups.entry(&option.selection_group).or_insert(Vec::new());
 
                     if seen.insert(&option.name) {
@@ -419,68 +420,135 @@ fn wants_interactive(
     user_chose_nothing && !headless
 }
 
-/// The template to generate from, and the warning that goes with choosing one.
-///
-/// An external template decides what code lands in the project, so this is the
-/// one place a user is told they are trusting something other than us.
-fn template_source(args: &Args) -> Result<TemplateSource> {
-    let Some(dir) = args.template.as_ref() else {
-        return Ok(TemplateSource::Bundled);
+/// Locate what a `--template` value names, cloning it first if it is remote.
+fn locate_template(value: &str) -> Result<(PathBuf, Option<fetch::Checkout>)> {
+    Ok(match fetch::parse_template_arg(value)? {
+        fetch::TemplateRef::Local(dir) => (dir, None),
+        fetch::TemplateRef::Repo { url, reference } => {
+            log::info!(
+                "Cloning template from {url}{}",
+                reference
+                    .as_deref()
+                    .map(|r| format!(" at {r}"))
+                    .unwrap_or_default()
+            );
+            let checkout = fetch::clone(&url, reference.as_deref())?;
+            // The resolved commit, so a generated project can be traced back to
+            // exactly what produced it even when the ref later moves.
+            log::info!("Template resolved to {url}@{}", checkout.commit);
+            (checkout.root.clone(), Some(checkout))
+        }
+    })
+}
+
+fn template_source(args: &Args) -> Result<(TemplateSource, Option<fetch::Checkout>)> {
+    let Some(value) = args.template.as_ref() else {
+        return Ok((TemplateSource::Bundled, None));
     };
 
-    if !dir.is_dir() {
-        bail!("`--template {}` is not a directory", dir.display());
-    }
+    let (root, checkout) = locate_template(&value.to_string_lossy())?;
 
     log::warn!(
         "⚠️  Generating from the external template at `{}`. A template controls \
          what code and dependencies end up in your project — only use ones you trust.",
-        dir.display()
+        root.display()
     );
 
-    Ok(TemplateSource::Directory(dir.clone()))
+    Ok((TemplateSource::Directory(root), checkout))
 }
 
-/// The `-o` help text. Built while clap builds `Args`, i.e. before any argument
-/// is read — so, like [`about`], it can only describe the bundled template.
-fn option_help() -> String {
-    let Ok(loaded) = BUNDLED.as_ref() else {
-        return "Generation options".to_string();
-    };
+/// The text clap needs while it is building [`Args`] — that is, before any
+/// argument has been parsed, so it cannot ask clap which template was chosen.
+struct HelpText {
+    about: String,
+    options: String,
+}
 
-    let mut all_options: Vec<String> = Vec::new();
-    for option in loaded.template.options.iter() {
-        for opt in option.options() {
-            // Remove duplicates, which usually are chip-specific variations of an option.
-            // An example of this is probe-rs.
-            if !all_options.contains(&opt) && opt != "PLACEHOLDER" {
-                all_options.push(opt);
-            }
+static HELP: LazyLock<HelpText> = LazyLock::new(HelpText::build);
+
+impl HelpText {
+    fn build() -> Self {
+        let external = help_requested()
+            .then(template_arg_from_env)
+            .flatten()
+            .and_then(|value| match Self::external(&value) {
+                Ok(text) => Some(text),
+                Err(e) => {
+                    log::warn!("Describing the template at `{value}` failed: {e:#}");
+                    None
+                }
+            });
+
+        external.unwrap_or_else(Self::bundled)
+    }
+
+    fn bundled() -> Self {
+        match BUNDLED.as_ref() {
+            Ok(loaded) => Self::describe(loaded),
+            Err(_) => Self {
+                about: ABOUT.to_string(),
+                options: "Generation options".to_string(),
+            },
         }
     }
 
-    format!(
-        "Generation options: {} - For more information regarding the different options check the esp-generate README.md (https://github.com/esp-rs/esp-generate/blob/main/README.md).",
-        all_options.join(", ")
-    )
+    fn external(value: &str) -> Result<Self> {
+        // The checkout must outlive reading the template out of it.
+        let (root, _checkout) = locate_template(value)?;
+        Ok(Self::describe(&Loaded::open(TemplateSource::Directory(
+            root,
+        ))?))
+    }
+
+    fn describe(loaded: &Loaded) -> Self {
+        Self {
+            about: about_text(&loaded.source),
+            options: option_help(&loaded.template),
+        }
+    }
 }
 
-/// Runs while clap builds `Args`, i.e. before any argument is read — so it can
-/// only describe the bundled template.
-fn about() -> String {
-    let source = TemplateSource::Bundled;
-    let mut about = String::from(
-        "Template generation tool to create no_std applications targeting Espressif's chips.\n\nThe template will use these versions:\n",
-    );
+/// Whether the user asked for help, and so whether the help text is worth
+/// building properly.
+fn help_requested() -> bool {
+    env::args().any(|arg| ["-h", "--help", "help"].contains(&arg.as_str()))
+}
 
-    let toml = cargo::CargoToml::load(
-        source
-            .get("Cargo.toml")
-            .expect("Cargo.toml not found in template")
-            .as_ref(),
-    )
-    .expect("Failed to read Cargo.toml");
+/// The `--template` value, read straight from the process arguments.
+fn template_arg_from_env() -> Option<String> {
+    template_arg(env::args())
+}
 
+fn template_arg(args: impl IntoIterator<Item = String>) -> Option<String> {
+    let mut args = args.into_iter();
+    while let Some(arg) = args.next() {
+        if arg == "--" {
+            return None;
+        }
+        if let Some(value) = arg.strip_prefix("--template=") {
+            return Some(value.to_string());
+        }
+        if arg == "--template" {
+            return args.next();
+        }
+    }
+    None
+}
+
+const ABOUT: &str =
+    "Template generation tool to create no_std applications targeting Espressif's chips.";
+
+fn about_text(source: &TemplateSource) -> String {
+    let mut about = ABOUT.to_string();
+
+    let Some(toml) = source
+        .get("Cargo.toml")
+        .and_then(|raw| cargo::CargoToml::load(raw.as_ref()).ok())
+    else {
+        return about;
+    };
+
+    about.push_str("\n\nThe template will use these versions:\n");
     toml.visit_dependencies(|_, name, table| {
         if name == "dependencies" {
             for entry in table.iter() {
@@ -493,6 +561,29 @@ fn about() -> String {
     });
 
     about
+}
+
+/// Every name `-o` accepts, in template order.
+fn option_names(template: &Template) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for option in template.options.iter() {
+        for opt in option.options() {
+            // Remove duplicates, which usually are chip-specific variations of an option.
+            // An example of this is probe-rs. An unnamed entry is a placeholder
+            // the generator fills in at runtime, so `-o` cannot name it.
+            if !opt.is_empty() && !names.contains(&opt) {
+                names.push(opt);
+            }
+        }
+    }
+    names
+}
+
+fn option_help(template: &Template) -> String {
+    format!(
+        "Generation options: {} - For more information regarding the different options check the esp-generate README.md (https://github.com/esp-rs/esp-generate/blob/main/README.md).",
+        option_names(template).join(", ")
+    )
 }
 
 fn setup_args_interactive(template: &Template, args: &mut Args) -> Result<()> {
@@ -541,7 +632,8 @@ fn main() -> Result<()> {
     let mut args = Args::parse();
 
     if let Some(subcommand) = args.subcommands.take() {
-        return subcommand.handle(&Loaded::open(template_source(&args)?)?);
+        let (source, _checkout) = template_source(&args)?;
+        return subcommand.handle(&Loaded::open(source)?);
     }
 
     // Only check for updates once the command-line arguments have been processed,
@@ -552,7 +644,9 @@ fn main() -> Result<()> {
         check_for_update(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
     }
 
-    let loaded = Loaded::open(template_source(&args)?)?;
+    // Held for the whole run: a cloned template is deleted when this drops.
+    let (source, _checkout) = template_source(&args)?;
+    let loaded = Loaded::open(source)?;
 
     let user_chose_nothing = args.option.is_empty();
 
@@ -1238,6 +1332,45 @@ mod test {
     #[test]
     fn the_bundled_manifest_matches_the_bundled_files() {
         let _ = bundled();
+    }
+
+    fn template_arg_of(args: &[&str]) -> Option<String> {
+        template_arg(args.iter().map(|a| a.to_string()))
+    }
+
+    #[test]
+    fn the_template_argument_is_found_in_either_spelling() {
+        assert_eq!(
+            template_arg_of(&["esp-generate", "--template", "dir", "name"]).as_deref(),
+            Some("dir")
+        );
+        assert_eq!(
+            template_arg_of(&["esp-generate", "--template=dir", "name"]).as_deref(),
+            Some("dir")
+        );
+        assert_eq!(template_arg_of(&["esp-generate", "name"]), None);
+        assert_eq!(template_arg_of(&["esp-generate", "--template"]), None);
+    }
+
+    /// After `--` it is a project name, not the flag.
+    #[test]
+    fn a_template_argument_past_the_separator_is_not_one() {
+        assert_eq!(
+            template_arg_of(&["esp-generate", "--", "--template", "dir"]),
+            None
+        );
+    }
+
+    /// The bundled toolchain row is an unnamed placeholder, filled in from the
+    /// installed toolchains at runtime. `-o` has no name to accept for it.
+    #[test]
+    fn an_unnamed_placeholder_is_never_offered_as_an_option() {
+        let template = &bundled().template;
+        assert!(
+            template.all_options().iter().any(|o| o.name.is_empty()),
+            "the bundled template should still have a placeholder to filter"
+        );
+        assert!(!option_names(template).iter().any(|n| n.is_empty()));
     }
 
     /// A template `sets` key must not displace a host value of the same name.

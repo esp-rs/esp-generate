@@ -9,14 +9,24 @@
 //! lands on before `emit.as` gets a say.
 
 use std::borrow::Cow;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+
+use walkdir::{DirEntry, WalkDir};
 
 use crate::process::is_safe_relative_path;
 use crate::template_files::TEMPLATE_FILES;
 
 /// Never walked into: a template directory is often a git checkout, and
 /// `target/` is whatever the author last built.
-const SKIPPED_DIRS: &[&str] = &[".git", "target"];
+pub const SKIPPED_DIRS: &[&str] = &[".git", "target"];
+
+/// Whether a walk should refuse to descend into `entry`. The walk root itself
+/// is never skipped, whatever it happens to be called.
+pub fn is_skipped_dir(entry: &DirEntry) -> bool {
+    entry.depth() > 0
+        && entry.file_type().is_dir()
+        && SKIPPED_DIRS.contains(&entry.file_name().to_string_lossy().as_ref())
+}
 
 /// A template's file set.
 ///
@@ -71,56 +81,36 @@ impl TemplateSource {
 
             TemplateSource::Directory(root) => {
                 let mut out = Vec::new();
-                walk(root, root, &mut out)?;
+                for entry in WalkDir::new(root)
+                    .into_iter()
+                    .filter_entry(|e| !is_skipped_dir(e))
+                {
+                    let entry =
+                        entry.map_err(|e| format!("cannot read `{}`: {e}", root.display()))?;
+                    if !entry.file_type().is_file() {
+                        continue;
+                    }
+
+                    let relative = entry
+                        .path()
+                        .strip_prefix(root)
+                        .map_err(|_| {
+                            format!("`{}` is outside the template", entry.path().display())
+                        })?
+                        .to_string_lossy()
+                        .replace('\\', "/");
+
+                    let contents = std::fs::read_to_string(entry.path()).map_err(|e| {
+                        format!("cannot read `{relative}`: {e} (templates must be UTF-8 text)")
+                    })?;
+
+                    out.push((relative, Cow::Owned(contents)));
+                }
                 out.sort_by(|a, b| a.0.cmp(&b.0));
                 Ok(out)
             }
         }
     }
-}
-
-/// Collect every readable file under `dir`, keyed root-relative with `/`.
-///
-/// Symlinks are skipped rather than followed: one pointing outside the root
-/// would otherwise read a file the template does not contain.
-fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, Cow<'static, str>)>) -> Result<(), String> {
-    let entries =
-        std::fs::read_dir(dir).map_err(|e| format!("cannot read `{}`: {e}", dir.display()))?;
-
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("cannot read `{}`: {e}", dir.display()))?;
-        let path = entry.path();
-        let file_type = entry
-            .file_type()
-            .map_err(|e| format!("cannot stat `{}`: {e}", path.display()))?;
-
-        if file_type.is_symlink() {
-            continue;
-        }
-
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-
-        if file_type.is_dir() {
-            if !SKIPPED_DIRS.contains(&name.as_ref()) {
-                walk(root, &path, out)?;
-            }
-            continue;
-        }
-
-        let relative = path
-            .strip_prefix(root)
-            .map_err(|_| format!("`{}` is outside the template", path.display()))?
-            .to_string_lossy()
-            .replace('\\', "/");
-
-        let contents = std::fs::read_to_string(&path)
-            .map_err(|e| format!("cannot read `{relative}`: {e} (templates must be UTF-8 text)"))?;
-
-        out.push((relative, Cow::Owned(contents)));
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]

@@ -293,16 +293,17 @@ fn options_for_chip(chip: Chip, all_combinations: bool) -> Result<Vec<Vec<String
     let root_yaml = source
         .get("template.yaml")
         .ok_or_else(|| anyhow::anyhow!("bundled templates missing template.yaml"))?;
+    let root_yaml = root_yaml.as_ref();
     // The same reader and the same resolution the binary uses, so xtask cannot
     // enumerate a combination production would refuse.
-    let manifest = Manifest::load(source)?;
+    let manifest = Manifest::load(&source)?;
     let plugins = esp_generate::plugins();
     let resolved = plugins
         .resolve(&manifest.plugins)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     let template = Template::load(root_yaml, &resolved, |path| {
-        source.get(path).map(str::to_string)
+        source.get(path).map(std::borrow::Cow::into_owned)
     })
     .map_err(|e| anyhow::anyhow!("failed to load bundled template: {e}"))?;
 

@@ -72,6 +72,7 @@ impl SetValue {
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct GeneratorOption {
     pub name: String,
     pub display_name: String,
@@ -114,6 +115,7 @@ impl GeneratorOption {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct GeneratorOptionCategory {
     pub name: String,
     pub display_name: String,
@@ -438,6 +440,33 @@ options:
             }
             other => panic!("expected Category, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn an_unknown_key_is_refused_rather_than_ignored() {
+        let on_category = r#"
+options:
+  - !Category
+    name: peripherals
+    display_name: Peripherals
+    compatible:
+      chip: [esp32c6]
+    options: []
+"#;
+        let err = Template::load(on_category, &Resolved::default(), |_| None)
+            .expect_err("a gate on a category must not be silently dropped");
+        assert!(err.contains("compatible"), "{err}");
+
+        let stale_chips = r#"
+options:
+  - !Option
+    name: wifi
+    display_name: Wi-Fi
+    chips: [esp32c6]
+"#;
+        let err = Template::load(stale_chips, &Resolved::default(), |_| None)
+            .expect_err("`chips:` was replaced by `compatible`");
+        assert!(err.contains("chips"), "{err}");
     }
 
     #[test]

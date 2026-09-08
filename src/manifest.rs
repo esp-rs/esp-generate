@@ -81,12 +81,12 @@ pub enum Emit<'a> {
 impl Manifest {
     /// Read, parse and validate the manifest of `source`. Every check lives
     /// here, so a caller cannot get a half-checked one.
-    pub fn load(source: TemplateSource) -> Result<Self> {
+    pub fn load(source: &TemplateSource) -> Result<Self> {
         let raw = source
             .get(MANIFEST_PATH)
             .with_context(|| format!("template is missing `{MANIFEST_PATH}`"))?;
 
-        let manifest = Self::parse(raw)?;
+        let manifest = Self::parse(&raw)?;
         manifest.validate_paths(|path| source.get(path).is_some())?;
         Ok(manifest)
     }

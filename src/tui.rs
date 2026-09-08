@@ -826,8 +826,7 @@ mod test {
         // toggling it off would cascade out `dependent`.
         let method_hover = row_text(0, Some(0));
         assert!(
-            method_hover.contains("method")
-                && method_hover.contains("- will deselect: dependent"),
+            method_hover.contains("method") && method_hover.contains("- will deselect: dependent"),
             "expected deselect-side warning on selected hovered row, got: {method_hover:?}"
         );
 

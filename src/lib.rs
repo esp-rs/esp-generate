@@ -1,8 +1,12 @@
+use std::sync::LazyLock;
+use anyhow::Result;
+use template::Template;
+
 pub mod cargo;
 pub mod manifest;
 pub mod source;
 
-pub use esp_template_sdk::{config, contract, plugin, process, template};
+pub use esp_template_sdk::{config, contract, plugin, process, sweep, template};
 pub use source::TemplateSource;
 
 /// Build-script-generated `TEMPLATE_FILES` array mapping each file under
@@ -65,5 +69,52 @@ pub fn append_list_as_sentence<S: AsRef<str>>(base: &str, word: &str, els: &[S])
         requires
     } else {
         base.to_string()
+    }
+}
+
+static PLUGINS: LazyLock<plugin::Plugins> = LazyLock::new(plugins);
+
+/// A template source, read and validated.
+///
+/// Everything downstream takes this rather than reading a global, so the source
+/// is an ordinary value that a caller chooses.
+pub struct Loaded {
+    pub source: TemplateSource,
+    pub manifest: manifest::Manifest,
+    /// Borrows [`PLUGINS`], which outlives every caller.
+    pub resolved: plugin::Resolved<'static>,
+    pub template: Template,
+}
+
+impl Loaded {
+    pub fn open(source: TemplateSource) -> Result<Self> {
+        let manifest = manifest::Manifest::load(&source)?;
+        let resolved = PLUGINS
+            .resolve(&manifest.plugins)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+        let root_yaml = source
+            .read("template.yaml")
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+        let template = {
+            let load_include = |path: &str| source.get(path).map(std::borrow::Cow::into_owned);
+            Template::load(root_yaml.as_ref(), &resolved, load_include)
+                .map_err(|e| anyhow::anyhow!("invalid template: {e}"))?
+        };
+
+        template
+            .validate_required()
+            .map_err(|e| anyhow::anyhow!("invalid `required` list: {e}"))?;
+        template
+            .validate_capabilities(&resolved)
+            .map_err(|e| anyhow::anyhow!("invalid `requires_capabilities`: {e}"))?;
+
+        Ok(Loaded {
+            source,
+            manifest,
+            resolved,
+            template,
+        })
     }
 }

@@ -39,6 +39,16 @@ You can also directly download pre-compiled [release binaries] or use [`cargo-bi
       Replace the chip and project name accordingly. The target chip (e.g. `esp32c6`) is just one of the available `-o/--option` values.
       Use the `esp-generate list-options` command to see a list of available options (chips included). Use `esp-generate explain <option>` to get a detailed explanation of an option.
 
+## Writing a template
+
+`--template <dir-or-repo>` generates from a template other than the bundled one, and works with every command below.
+
+```
+esp-generate check --template ./my-template
+```
+
+`check` renders the template for each of its options in turn and reports every failure along with the `-o` line that reaches it — including mistakes in branches that any single generation would leave unevaluated. `--all-combinations` covers every valid combination rather than each option once, and `--build` also compiles what it generates (`cargo check`, `clippy`, `fmt`). Use it as the CI gate in your template's own repository.
+
 [release binaries]: https://github.com/esp-rs/esp-generate/releases
 [`cargo-binstall`]: https://github.com/cargo-bins/cargo-binstall
 

@@ -1,8 +1,8 @@
 use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use esp_generate::plugin;
-use esp_generate::process;
-use esp_generate::template::{GeneratorOption, GeneratorOptionItem, SetValue, Template};
+use esp_generate::sweep;
+use esp_generate::template::{GeneratorOption, GeneratorOptionItem, Template};
 use esp_generate::{
     append_list_as_sentence,
     config::{ActiveConfiguration, Relationships},
@@ -25,12 +25,14 @@ use std::{
 };
 use taplo::formatter::Options;
 
-use esp_generate::{TemplateSource, manifest, plugins};
+use esp_generate::{Loaded, TemplateSource};
 
 mod check;
 mod fetch;
+mod render;
 mod toolchain;
 mod tui;
+mod validate;
 
 /// Whether any selected option declares `requires_nightly`.
 ///
@@ -61,92 +63,6 @@ fn required_tools<'a>(
         .filter_map(|name| find_option(name, flat_options))
         .flat_map(|(_, opt)| opt.requires_tools.iter().map(String::as_str))
         .collect()
-}
-
-/// The selection as plugins see it: the option names, plus each selection
-/// group's pick — which is how a plugin identifies its own group's choice.
-fn selection(options: Vec<String>, flat: &[GeneratorOption]) -> plugin::Selection {
-    let mut groups = IndexMap::new();
-    let mut sets: IndexMap<String, SetValue> = IndexMap::new();
-    for name in &options {
-        let Some((_, opt)) = find_option(name, flat) else {
-            continue;
-        };
-        if !opt.selection_group.is_empty() {
-            groups
-                .entry(opt.selection_group.clone())
-                .or_insert_with(|| name.clone());
-        }
-        for (key, value) in &opt.sets {
-            sets.entry(key.clone()).or_insert_with(|| value.clone());
-        }
-    }
-    plugin::Selection {
-        options,
-        groups,
-        sets,
-    }
-}
-
-/// Merge scalar `sets` from the selected options into `facts`.
-fn merge_template_sets(facts: &mut process::Facts, selected: &[String], flat: &[GeneratorOption]) {
-    for name in selected {
-        let Some((_, opt)) = find_option(name, flat) else {
-            continue;
-        };
-        for (key, value) in &opt.sets {
-            if let Some(scalar) = value.as_scalar() {
-                facts.set_value(key.clone(), scalar);
-            }
-        }
-    }
-}
-
-static PLUGINS: LazyLock<esp_generate::plugin::Plugins> = LazyLock::new(plugins);
-
-/// A template source, read and validated.
-///
-/// Everything downstream takes this rather than reading a global, so the source
-/// is an ordinary value that a caller chooses.
-struct Loaded {
-    source: TemplateSource,
-    manifest: manifest::Manifest,
-    /// Borrows [`PLUGINS`], which outlives every caller.
-    resolved: esp_generate::plugin::Resolved<'static>,
-    template: Template,
-}
-
-impl Loaded {
-    fn open(source: TemplateSource) -> Result<Self> {
-        let manifest = manifest::Manifest::load(&source)?;
-        let resolved = PLUGINS
-            .resolve(&manifest.plugins)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
-
-        let root_yaml = source
-            .read("template.yaml")
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
-
-        let template = {
-            let load_include = |path: &str| source.get(path).map(std::borrow::Cow::into_owned);
-            Template::load(root_yaml.as_ref(), &resolved, load_include)
-                .map_err(|e| anyhow::anyhow!("invalid template: {e}"))?
-        };
-
-        template
-            .validate_required()
-            .map_err(|e| anyhow::anyhow!("invalid `required` list: {e}"))?;
-        template
-            .validate_capabilities(&resolved)
-            .map_err(|e| anyhow::anyhow!("invalid `requires_capabilities`: {e}"))?;
-
-        Ok(Loaded {
-            source,
-            manifest,
-            resolved,
-            template,
-        })
-    }
 }
 
 #[derive(Parser, Debug)]
@@ -194,6 +110,40 @@ enum SubCommands {
 
     /// Print information about a template option
     Explain { option: String },
+
+    /// Render a template across its option combinations, reporting what breaks
+    Check {
+        /// Options every combination is generated with. A pick for a required
+        /// group narrows the sweep to it instead of covering the whole group.
+        #[arg(short, long)]
+        option: Vec<String>,
+
+        /// Cover every valid combination of options, not just each option once
+        #[arg(short, long)]
+        all_combinations: bool,
+
+        /// Leave a selection group out of the sweep entirely
+        #[arg(long, value_name = "GROUP")]
+        exclude_group: Vec<String>,
+
+        /// Leave a category, and everything nested under it, out of the sweep
+        #[arg(long, value_name = "CATEGORY")]
+        exclude_category: Vec<String>,
+
+        /// Sweep every option once per member of this group, rather than
+        /// treating its members as ordinary options
+        #[arg(long, value_name = "GROUP")]
+        cross_group: Vec<String>,
+
+        /// Also generate each combination and run cargo check, clippy and fmt
+        /// over it
+        #[arg(short, long)]
+        build: bool,
+
+        /// Print the combinations that would be checked, and stop
+        #[arg(short, long)]
+        dry_run: bool,
+    },
 }
 
 impl SubCommands {
@@ -373,6 +323,32 @@ impl SubCommands {
                 }
                 Ok(())
             }
+            SubCommands::Check {
+                option,
+                all_combinations,
+                exclude_group,
+                exclude_category,
+                cross_group,
+                build,
+                dry_run,
+            } => validate::run(
+                loaded,
+                &validate::Request {
+                    sweep: sweep::SweepOptions {
+                        coverage: if *all_combinations {
+                            sweep::Coverage::Combinations
+                        } else {
+                            sweep::Coverage::Individual
+                        },
+                        pinned: option.clone(),
+                        excluded_groups: exclude_group.clone(),
+                        excluded_categories: exclude_category.clone(),
+                        crossed_groups: cross_group.clone(),
+                    },
+                    build: *build,
+                    dry_run: *dry_run,
+                },
+            ),
         }
     }
 }
@@ -685,22 +661,14 @@ fn main() -> Result<()> {
         loaded
             .source
             .get("Cargo.toml")
-            .expect("Cargo.toml not found in template")
+            .ok_or_else(|| anyhow::anyhow!("template has no `Cargo.toml`"))?
             .as_ref(),
     )
-    .expect("Failed to read Cargo.toml");
+    .map_err(|e| anyhow::anyhow!("template `Cargo.toml` is unreadable: {e}"))?;
 
     // TODO: do not assume esp-hal version is present
-    let esp_hal_version = versions.dependency_version("esp-hal");
-    let esp_hal_version_full = if let Some(stripped) = esp_hal_version.strip_prefix("~") {
-        let mut processed = stripped.to_string();
-        while processed.chars().filter(|c| *c == '.').count() < 2 {
-            processed.push_str(".0");
-        }
-        processed
-    } else {
-        esp_hal_version.clone()
-    };
+    let esp_hal_version_full =
+        render::esp_hal_version_full(&versions.dependency_version("esp-hal"));
 
     // A Cargo MSRV is not strict semver — `1.95` is legal — so parse leniently.
     let msrv_raw = versions.msrv();
@@ -780,7 +748,7 @@ fn main() -> Result<()> {
     let initial_facts = Some(
         loaded
             .resolved
-            .facts(&selection(
+            .facts(&plugin::selection(
                 initial_selected.clone(),
                 &flatten_options(&initial_options),
             ))
@@ -842,7 +810,8 @@ fn main() -> Result<()> {
             let scan_needs_reflecting = scan_finished && !populated_with_scan;
 
             if signature_changed || scan_needs_reflecting {
-                let picked = selection(app.selected_options(), &app.repository.config.flat_options);
+                let picked =
+                    plugin::selection(app.selected_options(), &app.repository.config.flat_options);
                 let new_facts = loaded
                     .resolved
                     .facts(&picked)
@@ -940,66 +909,19 @@ fn main() -> Result<()> {
         })
         .cloned();
 
-    // Groups with a pick, backing `group_selected(...)`. Separate from
-    // `selected` because option and group names are disjoint namespaces —
-    // `coding-agent-guidance` is both a category and a group.
-    let mut selected_groups: Vec<String> = Vec::new();
-    for name in &selected {
-        let Some((_, option)) = find_option(name, &flat_options) else {
-            bail!("selected option `{name}` is not in the template");
-        };
-        if !option.selection_group.is_empty() && !selected_groups.contains(&option.selection_group)
-        {
-            selected_groups.push(option.selection_group.clone());
-        }
-    }
+    let (facts, target) = render::facts(
+        &loaded,
+        &selected,
+        &flat_options,
+        &render::HostValues {
+            project_name: name.clone(),
+            generate_parameters: selected_options,
+            esp_hal_version_full,
+            rust_toolchain: selected_toolchain.clone(),
+        },
+    )?;
 
-    // `set_value` keeps the first writer, so these take precedence over the
-    // template `sets` merged later.
-    let mut facts = loaded
-        .resolved
-        .facts(&selection(selected.clone(), &flat_options))
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
-
-    // Every name that could be true for *some* selection, so a misspelling is
-    // distinguishable from a name that is merely false right now.
-    facts.vocabulary.options = Some(
-        loaded
-            .template
-            .all_options()
-            .iter()
-            .map(|o| o.name.clone())
-            .chain(flat_options.iter().map(|o| o.name.clone()))
-            .collect(),
-    );
-    facts.vocabulary.groups = Some(
-        loaded
-            .template
-            .all_options()
-            .iter()
-            .map(|o| o.selection_group.clone())
-            .chain(flat_options.iter().map(|o| o.selection_group.clone()))
-            .filter(|g| !g.is_empty())
-            .collect(),
-    );
-    facts.set_value("generate_version", env!("CARGO_PKG_VERSION"));
-    facts.set_value("project_name", name.clone());
-    facts.set_value("generate_parameters", selected_options);
-    facts.set_value("esp_hal_version_full", esp_hal_version_full);
-
-    // The toolchain is a host decision, so it stays here; the chip-derived
-    // half of it arrives as facts.
-    if let Some(target) = toolchain::ChipTarget::from_facts(&facts) {
-        if let Some(tc) = selected_toolchain.as_ref() {
-            facts.set_value("rust_toolchain", tc.clone());
-        }
-        // Interpolation has no fallback for an unset name, so the per-ISA
-        // default lives here. First writer wins, so an explicit pick still does.
-        facts.set_value(
-            "rust_toolchain",
-            if target.is_xtensa { "esp" } else { "stable" },
-        );
-
+    if let Some(target) = target {
         let tools = required_tools(&selected, &flat_options);
         check::check(
             target.is_xtensa,
@@ -1010,10 +932,6 @@ fn main() -> Result<()> {
             selected_toolchain.as_deref(),
         );
     }
-
-    // After every host value above — first writer wins, so this is what stops
-    // a template `sets` key from displacing one.
-    merge_template_sets(&mut facts, &selected, &flat_options);
 
     let project_dir = path.join(&name);
 
@@ -1026,48 +944,8 @@ fn main() -> Result<()> {
     // Before rendering, so an existing directory fails immediately.
     fs::create_dir(&project_dir)?;
 
-    let mut load_partial = |path: &str| loaded.source.read(path).map(std::borrow::Cow::into_owned);
-
-    // Built once: the selections and facts are the same for every file.
-    let renderer = process::Renderer::new(&selected, &selected_groups, &facts);
-
-    let mut planned: Vec<(PathBuf, String)> = Vec::new();
-    let manifest = &loaded.manifest;
-
-    for (source_path, contents) in loaded.source.files().map_err(|e| anyhow::anyhow!("{e}"))? {
-        let source_path = source_path.as_str();
-        let manifest::Emit::When { condition, output } = manifest.emit(source_path) else {
-            continue;
-        };
-        if let Some(condition) = condition {
-            let what = format!("`emit.when` condition for `{source_path}`");
-            if !renderer.evaluate(condition, &what)? {
-                continue;
-            }
-        }
-
-        let processed = renderer
-            .render(&contents, &mut load_partial)
-            .map_err(|e| anyhow::anyhow!("{source_path}:{e}"))?;
-
-        let out_path = match output {
-            Some(path) => {
-                let what = format!("`emit.as` path for `{source_path}`");
-                renderer.output_path(path, &what)?
-            }
-            None => source_path.to_string(),
-        };
-
-        // The manifest is template-authored: a rename must not walk out of
-        // the project directory.
-        if !process::is_safe_relative_path(&out_path) {
-            bail!("template file `{source_path}` resolved to unsafe output path `{out_path}`");
-        }
-
-        planned.push((project_dir.join(out_path), processed));
-    }
-
-    for (out_path, contents) in planned {
+    for (out_path, contents) in render::plan(&loaded, &selected, &flat_options, &facts)?.files {
+        let out_path = project_dir.join(out_path);
         fs::create_dir_all(out_path.parent().unwrap())?;
         fs::write(out_path, contents)?;
     }
@@ -1185,7 +1063,7 @@ fn process_options(loaded: &Loaded, template: &Template, args: &Args) -> Result<
     let facts = Some(
         loaded
             .resolved
-            .facts(&selection(args.option.clone(), &flat_options))
+            .facts(&plugin::selection(args.option.clone(), &flat_options))
             .map_err(|e| anyhow::anyhow!("{e}"))?,
     );
 
@@ -1315,13 +1193,15 @@ fn should_initialize_git_repo(mut path: &Path) -> bool {
 #[cfg(test)]
 mod test {
     use esp_generate::config::flatten_options;
+    use esp_generate::manifest;
+    use esp_generate::template::SetValue;
     use esp_template_plugin_chip::Chip;
     use strum::IntoEnumIterator;
 
     use super::*;
 
     /// The bundled template, for the tests that assert against the real thing.
-    fn bundled() -> &'static Loaded {
+    pub fn bundled() -> &'static Loaded {
         super::BUNDLED
             .as_ref()
             .expect("the bundled template must load")
@@ -1371,38 +1251,6 @@ mod test {
             "the bundled template should still have a placeholder to filter"
         );
         assert!(!option_names(template).iter().any(|n| n.is_empty()));
-    }
-
-    /// A template `sets` key must not displace a host value of the same name.
-    /// Host values are written first, and this merge never overwrites.
-    #[test]
-    fn a_template_set_cannot_displace_a_host_value() {
-        let mut opt = GeneratorOption {
-            name: "sneaky".to_string(),
-            ..Default::default()
-        };
-        opt.sets.insert(
-            "has_reserved_pins".to_string(),
-            SetValue::scalar("template-wins"),
-        );
-        opt.sets
-            .insert("its_own_key".to_string(), SetValue::scalar("kept"));
-
-        let mut facts = process::Facts::default();
-        facts.set_value("has_reserved_pins", true);
-
-        merge_template_sets(&mut facts, &["sneaky".to_string()], &[opt]);
-
-        assert_eq!(
-            facts.values.get("has_reserved_pins"),
-            Some(&process::FactValue::Bool(true)),
-            "a template `sets` key displaced a host value"
-        );
-        assert_eq!(
-            facts.values.get("its_own_key"),
-            Some(&process::FactValue::Str("kept".into())),
-            "a key the host never set must still come through"
-        );
     }
 
     /// Old-syntax directives are emitted verbatim rather than rejected, so a

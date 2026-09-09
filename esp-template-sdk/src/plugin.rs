@@ -16,7 +16,7 @@ use indexmap::IndexMap;
 use semver::Version;
 
 use crate::process::Facts;
-use crate::template::SetValue;
+use crate::template::{GeneratorOption, SetValue};
 
 /// The current selection, as plugins see it.
 #[derive(Debug, Default, Clone)]
@@ -74,6 +74,30 @@ pub trait TemplatePlugin: std::fmt::Debug + Send + Sync {
     /// The fact namespaces this plugin contributes, whatever the selection.
     fn namespaces(&self) -> Vec<String> {
         vec![self.name().to_string()]
+    }
+}
+
+/// The [`Selection`] a set of option names amounts to.
+pub fn selection(options: Vec<String>, flat: &[GeneratorOption]) -> Selection {
+    let mut groups = IndexMap::new();
+    let mut sets: IndexMap<String, SetValue> = IndexMap::new();
+    for name in &options {
+        let Some((_, opt)) = crate::config::find_option(name, flat) else {
+            continue;
+        };
+        if !opt.selection_group.is_empty() {
+            groups
+                .entry(opt.selection_group.clone())
+                .or_insert_with(|| name.clone());
+        }
+        for (key, value) in &opt.sets {
+            sets.entry(key.clone()).or_insert_with(|| value.clone());
+        }
+    }
+    Selection {
+        options,
+        groups,
+        sets,
     }
 }
 

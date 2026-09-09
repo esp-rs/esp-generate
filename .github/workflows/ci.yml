@@ -111,7 +111,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Run tests
-        run: cargo test
+        run: cargo test --workspace
+
+      - name: Check the bundled template renders for every option
+        run: cargo run -- check
 
   # --------------------------------------------------------------------------
   # Lint
@@ -126,7 +129,7 @@ jobs:
           components: clippy
 
       - name: Run clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --workspace -- -D warnings
 
   # --------------------------------------------------------------------------
   # MSRV

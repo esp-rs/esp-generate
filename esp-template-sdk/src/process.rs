@@ -294,6 +294,9 @@ struct Shared {
     /// rendering returns. Only the first: short-circuiting means later names
     /// may never have been reached.
     unknown: RefCell<Option<String>>,
+    /// Which registered predicates were called. Only ever as complete as the
+    /// selections rendered.
+    used: RefCell<Vec<&'static str>>,
 }
 
 impl Shared {
@@ -301,6 +304,13 @@ impl Shared {
         let mut slot = self.unknown.borrow_mut();
         if slot.is_none() {
             *slot = Some(reason);
+        }
+    }
+
+    fn note_used(&self, name: &'static str) {
+        let mut used = self.used.borrow_mut();
+        if !used.contains(&name) {
+            used.push(name);
         }
     }
 }
@@ -354,6 +364,7 @@ fn register_facts<'a>(sink: &mut impl FactSink<'a>, shared: &'a Rc<Shared>) {
 
     let ctx = shared.clone();
     sink.func("option", move |name: &str| {
+        ctx.note_used("option");
         if let Some(vocab) = &ctx.vocabulary.options
             && !vocab.contains(name)
         {
@@ -367,6 +378,7 @@ fn register_facts<'a>(sink: &mut impl FactSink<'a>, shared: &'a Rc<Shared>) {
 
     let ctx = shared.clone();
     sink.func("group_selected", move |group: &str| {
+        ctx.note_used("group_selected");
         if let Some(vocab) = &ctx.vocabulary.groups
             && !vocab.contains(group)
         {
@@ -448,8 +460,14 @@ impl Renderer {
                 values: facts.values.clone(),
                 vocabulary: facts.vocabulary.clone(),
                 unknown: RefCell::new(None),
+                used: RefCell::new(Vec::new()),
             }),
         }
+    }
+
+    /// The registered predicates evaluated so far, accumulated across calls.
+    pub fn predicates_used(&self) -> Vec<&'static str> {
+        self.shared.used.borrow().clone()
     }
 
     /// Render one template file.

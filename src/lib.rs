@@ -36,6 +36,7 @@ pub enum Chip {
     Esp32h2,
     Esp32s2,
     Esp32s3,
+    Esp32s31,
 }
 impl Chip {
     pub fn metadata(self) -> esp_metadata_generated::Chip {
@@ -49,6 +50,7 @@ impl Chip {
             Chip::Esp32h2 => esp_metadata_generated::Chip::Esp32h2,
             Chip::Esp32s2 => esp_metadata_generated::Chip::Esp32s2,
             Chip::Esp32s3 => esp_metadata_generated::Chip::Esp32s3,
+            Chip::Esp32s31 => esp_metadata_generated::Chip::Esp32s31,
         }
     }
 

@@ -21,7 +21,7 @@ test = false
 #ENDIF
 
 [dependencies]
-esp-hal = { version = "1.2.1", features = [
+esp-hal = { version = "1.2.0", git = "https://github.com/esp-rs/esp-hal", rev = "6872ba4e478c6fba87d626beaceefbb1c8158980", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("unstable-hal")
@@ -36,7 +36,7 @@ esp-hal = { version = "1.2.1", features = [
 ] }
 
 #IF option("embassy") || option("wifi") || option("ble-trouble")
-esp-rtos = { version = "0.4.0", features = [
+esp-rtos = { version = "0.4.0", git = "https://github.com/esp-rs/esp-hal", rev = "6872ba4e478c6fba87d626beaceefbb1c8158980", features = [
     #IF option("wifi") || option("ble-trouble")
     "esp-radio",
     #ENDIF
@@ -57,7 +57,7 @@ esp-rtos = { version = "0.4.0", features = [
 ]}
 #ENDIF
 
-esp-bootloader-esp-idf = { version = "0.6.0", features = [
+esp-bootloader-esp-idf = { version = "0.6.0", git = "https://github.com/esp-rs/esp-hal", rev = "6872ba4e478c6fba87d626beaceefbb1c8158980", features = [
     #IF option("defmt")
     #+"defmt",
     #ENDIF
@@ -114,10 +114,10 @@ panic-rtt-target = "0.2.0"
 #IF option("alloc")
 #IF option("defmt")
 #REPLACE esp32c6 mcu
-#+esp-alloc = { version = "0.11.0", features = ["esp32c6", "defmt"] }
+#+esp-alloc = { version = "0.11.0", git = "https://github.com/esp-rs/esp-hal", rev = "6872ba4e478c6fba87d626beaceefbb1c8158980", features = ["esp32c6", "defmt"] }
 #ELSE
 #REPLACE esp32c6 mcu
-esp-alloc = { version = "0.11.0", features = ["esp32c6"] }
+esp-alloc = { version = "0.11.0", git = "https://github.com/esp-rs/esp-hal", rev = "6872ba4e478c6fba87d626beaceefbb1c8158980", features = ["esp32c6"] }
 #ENDIF defmt
 #ENDIF alloc
 #IF option("wifi") || option("ble-trouble")
@@ -168,7 +168,7 @@ smoltcp = { version = "0.14.0", default-features = false, features = [
     #ENDIF
 ] }
 #ENDIF wifi
-esp-radio = { version = "1.0.0-beta.1", features = [
+esp-radio = { version = "1.0.0-beta.2", git = "https://github.com/esp-rs/esp-hal", rev = "6872ba4e478c6fba87d626beaceefbb1c8158980", features = [
     #REPLACE esp32c6 mcu
     "esp32c6",
     #IF option("wifi")

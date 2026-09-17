@@ -505,9 +505,9 @@ dependencies = [
 
 [[package]]
 name = "esp-metadata-generated"
-version = "0.6.0"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0410e0e04651e432f72c87c7e6cce0163a61d3cf65fa31975679e219e6bc11ca"
+checksum = "302e17a70ea13688fc2aba60b9c4a42855aff6ca53e77dd76570e144b90a07f5"
 
 [[package]]
 name = "etcetera"

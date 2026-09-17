@@ -28,7 +28,7 @@ strum           = { version = "0.28.0", features = ["derive"] }
 inquire         = "0.9.4"
 clap            = { version = "4.6.7", features = ["derive"] }
 env_logger      = "0.11.11"
-esp-metadata-generated = { version = "0.6.0", git = "https://github.com/esp-rs/esp-hal", rev = "6872ba4e478c6fba87d626beaceefbb1c8158980", features = ["build-script"] }
+esp-metadata-generated = { version = "0.6.0", features = ["build-script"] }
 log             = "0.4.34"
 # Ratatui 0.30.0 has a bug in the TUI display for Windows, we are using the older version until it is fixed.
 # For more details: https://github.com/esp-rs/esp-generate/issues/309

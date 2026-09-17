@@ -21,7 +21,7 @@ mod tests {
         let peripherals = esp_hal::init(esp_hal::Config::default());
 
         let timg0 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG0);
-        esp_rtos::start(timg0.timer0);
+        esp_rtos::start(timg0.timer0, peripherals.FROM_CPU_INTR0);
 
         //IF option("defmt")
         rtt_target::rtt_init_defmt!();

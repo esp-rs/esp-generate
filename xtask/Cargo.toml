@@ -9,9 +9,5 @@ anyhow.workspace = true
 clap.workspace = true
 env_logger.workspace = true
 esp-generate = { path = "..", default-features = false }
-esp-template-plugin-chip = { path = "../esp-template-plugin-chip" }
 log.workspace = true
 tempfile     = "3.23.0"
-serde_yaml.workspace = true
-itertools    = "0.14.0"
-strum = { version = "0.27.2", features = ["derive"] }

@@ -85,6 +85,22 @@ fn feature(name: &str) -> Option<Feature> {
     features().find(|f| f.name == name)
 }
 
+/// The lowest SDK version providing every one of `names`. An unrecognised name
+/// contributes nothing — it belongs to a plugin or the host.
+pub fn minimum_version<'a>(names: impl IntoIterator<Item = &'a str>) -> Version {
+    let floor = REGISTRY
+        .first()
+        .map(|(since, _)| since.clone())
+        .unwrap_or_else(|| release(0, 0, 0));
+
+    names
+        .into_iter()
+        .filter_map(feature)
+        .map(|f| f.since)
+        .max()
+        .unwrap_or(floor)
+}
+
 /// Whether `name` is one the SDK registers itself, so a template value must not
 /// be registered over it. Derived from the registry rather than a second list.
 pub(crate) fn is_reserved_name(name: &str) -> bool {

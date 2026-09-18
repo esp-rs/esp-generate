@@ -10,10 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add ESP32-S31 template support. BLE is not yet supported on this target.
+### Changed
+
+### Fixed
+
+### Removed
+
+## [1.4.0] - 2026-09-18
+
+### Added
+
 - Add an optional coding-agent guidance template submenu for selecting `AGENTS.md`, `CLAUDE.md`, `CODEX.md`, or `GEMINI.md`. (#335)
 - Generated Xtensa projects now check for the required linker and point Unix users to source espup's export file when it is missing. (#343)
 - Add an optional `Embed.toml` configuration for probe-rs projects. (#365)
+- Add ESP32-S31 template support. BLE is not yet supported on this target (#366)
 
 ### Changed
 
@@ -279,7 +289,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/esp-rs/esp-generate/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/esp-rs/esp-generate/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/esp-rs/esp-generate/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/esp-rs/esp-generate/compare/v1.0.1...v1.1.0

@@ -23,7 +23,6 @@ use std::{
     sync::LazyLock,
     time::Duration,
 };
-use taplo::formatter::Options;
 
 use esp_generate::{Loaded, TemplateSource};
 
@@ -950,29 +949,7 @@ fn main() -> Result<()> {
         fs::write(out_path, contents)?;
     }
 
-    // Run cargo fmt:
-    Command::new("cargo")
-        .args([
-            "fmt",
-            "--",
-            "--config",
-            "group_imports=StdExternalCrate",
-            "--config",
-            "imports_granularity=Module",
-        ])
-        .current_dir(&project_dir)
-        .output()?;
-
-    // Format Cargo.toml:
-    let input = fs::read_to_string(project_dir.join("Cargo.toml"))?;
-    let format_options = Options {
-        align_entries: true,
-        reorder_keys: true,
-        reorder_arrays: true,
-        ..Default::default()
-    };
-    let formated = taplo::formatter::format(&input, format_options);
-    fs::write(project_dir.join("Cargo.toml"), formated)?;
+    render::format_project(&project_dir)?;
 
     if should_initialize_git_repo(&project_dir) {
         // Run git init:

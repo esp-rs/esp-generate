@@ -65,38 +65,29 @@ fn required_picks(
     flat: &[GeneratorOption],
     pinned: &[String],
 ) -> Result<Vec<Vec<String>>, String> {
+    let mut pins: Vec<(&str, &str)> = Vec::new();
     for name in pinned {
-        if find_option(name, flat).is_none() {
-            return Err(format!("template has no option `{name}`"));
-        }
+        let (_, option) =
+            find_option(name, flat).ok_or_else(|| format!("template has no option `{name}`"))?;
+        pins.push((name.as_str(), option.selection_group.as_str()));
     }
 
-    let mut picks: Vec<Vec<String>> = vec![
-        pinned
-            .iter()
-            .filter(|name| {
-                find_option(name, flat)
-                    .is_some_and(|(_, o)| !template.required.contains(&o.selection_group))
-            })
-            .cloned()
-            .collect(),
-    ];
+    let mut picks: Vec<Vec<String>> = vec![Vec::new()];
 
     for group in &template.required {
-        let pinned_here: Vec<&String> = pinned
+        let pinned_here: Vec<&str> = pins
             .iter()
-            .filter(|name| {
-                find_option(name, flat).is_some_and(|(_, o)| &o.selection_group == group)
-            })
+            .filter(|(_, g)| g == group)
+            .map(|(name, _)| *name)
             .collect();
 
-        let members: Vec<String> = if pinned_here.is_empty() {
+        let members: Vec<&str> = if pinned_here.is_empty() {
             flat.iter()
                 .filter(|o| &o.selection_group == group)
-                .map(|o| o.name.clone())
+                .map(|o| o.name.as_str())
                 .collect()
         } else {
-            pinned_here.into_iter().cloned().collect()
+            pinned_here
         };
 
         if members.is_empty() {
@@ -108,11 +99,19 @@ fn required_picks(
             .flat_map(|base| {
                 members.iter().map(move |member| {
                     let mut next = base.clone();
-                    next.push(member.clone());
+                    next.push((*member).to_string());
                     next
                 })
             })
             .collect();
+    }
+
+    for pick in &mut picks {
+        pick.extend(
+            pins.iter()
+                .filter(|(_, g)| !template.required.iter().any(|r| r == g))
+                .map(|(name, _)| (*name).to_string()),
+        );
     }
 
     Ok(picks)
@@ -181,19 +180,27 @@ fn enumerate_for(
 ) -> Result<Vec<Vec<String>>, String> {
     let facts = resolved.facts(&selection(base.to_vec(), flat))?;
 
-    let base_idx: Vec<usize> = base
-        .iter()
-        .filter_map(|name| find_option(name, flat).map(|(idx, _)| idx))
-        .collect();
-
     // Reused rather than rebuilt: the enumeration below runs once per
     // combination, and this holds a copy of the whole option tree.
     let mut trial = ActiveConfiguration {
-        selected: base_idx.clone(),
+        selected: Vec::new(),
         flat_options: flat.to_vec(),
         options: template.options.clone(),
         facts: Some(facts.clone()),
     };
+
+    // The base goes through the same selection path as the pool, so a pinned
+    // name arrives dependency-closed. One the template cannot support is not a
+    // base at all — `wifi` on a chip without it has no combinations.
+    for name in base {
+        select_with_dependencies(&mut trial, name)?;
+    }
+    for name in base {
+        if !trial.selected.iter().any(|&idx| &flat[idx].name == name) {
+            return Ok(Vec::new());
+        }
+    }
+    let base_idx = trial.selected.clone();
 
     // Each option paired with everything its `requires` drags in, keyed by what
     // it is an alternative to: members of one selection group exclude each
@@ -225,9 +232,10 @@ fn enumerate_for(
     }
 
     let names = |selected: Vec<usize>| -> Vec<String> {
-        base.iter()
-            .cloned()
-            .chain(selected.into_iter().map(|idx| flat[idx].name.clone()))
+        base_idx
+            .iter()
+            .chain(selected.iter())
+            .map(|&idx| flat[idx].name.clone())
             .collect()
     };
 
@@ -300,17 +308,27 @@ fn collect_categories(
     }
 }
 
+/// The entry named `option` that suits the current selection.
+fn resolve_variant(config: &ActiveConfiguration, option: &str) -> Option<usize> {
+    config
+        .flat_options
+        .iter()
+        .position(|o| o.name == option && config.is_option_compatible(o))
+        .or_else(|| find_option(option, &config.flat_options).map(|(idx, _)| idx))
+}
+
 /// Select `option` and, recursively, everything its `requires` names. One the
 /// selection cannot support is skipped rather than forced.
 fn select_with_dependencies(config: &mut ActiveConfiguration, option: &str) -> Result<(), String> {
-    let (idx, found) = find_option(option, &config.flat_options)
+    let idx = resolve_variant(config, option)
         .ok_or_else(|| format!("template has no option `{option}`"))?;
+    let found = &config.flat_options[idx];
 
     if config.selected.contains(&idx) {
         return Ok(());
     }
 
-    // Cloned so the borrow from `find_option` ends before the recursion.
+    // Cloned so the borrow ends before the recursion.
     for dependency in found.requires.clone() {
         if dependency.starts_with('!') {
             continue;
@@ -384,6 +402,8 @@ options:
     name: wifi
     display_name: Wifi
     requires: [alloc]
+    compatible:
+      chip: [chip-a]
   - !Option
     name: defmt
     display_name: defmt
@@ -396,6 +416,16 @@ options:
     name: ble
     display_name: BLE
     selection_group: ble-lib
+  - !Option
+    name: dual
+    display_name: Dual (chip-a)
+    compatible:
+      chip: [chip-a]
+  - !Option
+    name: dual
+    display_name: Dual (chip-b)
+    compatible:
+      chip: [chip-b]
   - !Category
     name: editor
     display_name: Editor
@@ -547,6 +577,44 @@ options:
                 && o.contains(&"ble".to_string())),
             "an option should be swept with a member of both crossed groups: {all:?}"
         );
+    }
+
+    /// A pinned name is a selection like any other: it drags in what it
+    /// requires, and a base the template cannot support yields nothing.
+    #[test]
+    fn a_pinned_option_is_dependency_closed_and_gated() {
+        let with_wifi = options_of(SweepOptions {
+            pinned: vec!["wifi".to_string()],
+            ..Default::default()
+        });
+
+        assert!(!with_wifi.is_empty());
+        for combination in &with_wifi {
+            assert!(
+                combination.contains(&"alloc".to_string()),
+                "`wifi` requires `alloc`: {combination:?}"
+            );
+        }
+
+        // `wifi` is only compatible with chip-a, so chip-b has no combinations.
+        assert!(!with_wifi.iter().any(|o| o.contains(&"chip-b".to_string())));
+    }
+
+    /// A template may carry several entries under one name, differing only by
+    /// `compatible`. Matching the first by name alone drops the option for
+    /// every chip the first entry does not list.
+    #[test]
+    fn a_name_with_several_variants_resolves_to_the_compatible_one() {
+        for chip in ["chip-a", "chip-b"] {
+            let all = options_of(SweepOptions {
+                pinned: vec![chip.to_string()],
+                ..Default::default()
+            });
+            assert!(
+                all.iter().any(|o| o.contains(&"dual".to_string())),
+                "`dual` should be reachable on {chip}: {all:?}"
+            );
+        }
     }
 
     #[test]

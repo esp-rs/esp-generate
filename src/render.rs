@@ -121,6 +121,36 @@ fn selected_groups(selected: &[String], flat_options: &[GeneratorOption]) -> Res
     Ok(groups)
 }
 
+/// Format a freshly written project the way generation does.
+///
+/// `check --build` runs `cargo fmt --check` over the result, so it has to see
+/// the same formatting a generated project gets rather than the raw render.
+pub fn format_project(project_dir: &std::path::Path) -> Result<()> {
+    std::process::Command::new("cargo")
+        .args([
+            "fmt",
+            "--",
+            "--config",
+            "group_imports=StdExternalCrate",
+            "--config",
+            "imports_granularity=Module",
+        ])
+        .current_dir(project_dir)
+        .output()?;
+
+    let manifest = project_dir.join("Cargo.toml");
+    let input = std::fs::read_to_string(&manifest)?;
+    let options = taplo::formatter::Options {
+        align_entries: true,
+        reorder_keys: true,
+        reorder_arrays: true,
+        ..Default::default()
+    };
+    std::fs::write(manifest, taplo::formatter::format(&input, options))?;
+
+    Ok(())
+}
+
 /// What a selection would generate.
 pub struct Planned {
     /// Each file as `(output path, contents)`.

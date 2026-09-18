@@ -168,6 +168,7 @@ fn check_one(
         std::fs::create_dir_all(out_path.parent().unwrap())?;
         std::fs::write(out_path, contents)?;
     }
+    render::format_project(&project)?;
 
     cargo(&project, &["check"])?;
     if selected.iter().any(|o| o == "embedded-test") {
@@ -189,11 +190,14 @@ fn cargo(project: &Path, args: &[&str]) -> Result<()> {
         .output()?;
 
     if !output.status.success() {
-        bail!(
-            "`cargo {}` failed:\n{}",
-            args.join(" "),
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
+        // `fmt --check` reports its diff on stdout, everything else on stderr.
+        let mut report = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if !stdout.trim().is_empty() {
+            report.push('\n');
+            report.push_str(stdout.trim());
+        }
+        bail!("`cargo {}` failed:\n{}", args.join(" "), report.trim());
     }
     Ok(())
 }

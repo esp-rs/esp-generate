@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        chip: [esp32, esp32c2, esp32c3, esp32c6, esp32c5, esp32c61, esp32h2, esp32s2, esp32s3]
+        chip: [esp32, esp32c2, esp32c3, esp32c6, esp32c5, esp32c61, esp32h2, esp32s2, esp32s3, esp32s31]
 
     steps:
       - uses: actions/checkout@v6
@@ -62,14 +62,14 @@ jobs:
       - if: ${{ !contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.chip) }}
         uses: dtolnay/rust-toolchain@stable
         with:
-          target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
+          target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf,riscv32imafc-unknown-none-elf
           components: clippy,rustfmt,rust-src
 
       # Rust toolchain for RISC-V:
       - if: ${{ !contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.chip) }}
         uses: dtolnay/rust-toolchain@nightly
         with:
-          target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
+          target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf,riscv32imafc-unknown-none-elf
           components: clippy,rustfmt,rust-src
 
       # //Define a new environment variable called toolchain

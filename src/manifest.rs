@@ -1,8 +1,9 @@
 //! The template manifest — `metadata.toml`.
 //!
 //! Read by the binary before the SDK runs. The split is the parse boundary:
-//! this file decides *which* files a project gets and what they are called,
-//! `template.yaml` decides what is *in* them.
+//! this file decides *which* files a project gets, what they are called, and
+//! what the binary does around the render; `template.yaml` decides what is
+//! *in* them.
 
 use std::collections::HashSet;
 
@@ -51,6 +52,52 @@ pub struct Manifest {
     /// Per-file emission rules. Absent means "emitted, under its own path".
     #[serde(default)]
     emit: Vec<EmitRule>,
+    /// What the binary does around the render.
+    #[serde(default)]
+    project: Project,
+}
+
+/// What a template scaffolds. Decides the defaults for [`Steps`].
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectType {
+    #[default]
+    Rust,
+    Other,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Project {
+    #[serde(rename = "type", default)]
+    kind: ProjectType,
+    #[serde(default)]
+    steps: StepOverrides,
+}
+
+/// `None` is "whatever the project type implies" — the distinction a plain
+/// `bool` would lose, and what lets `type` carry the defaults.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StepOverrides {
+    toolchain_check: Option<bool>,
+    cargo_fmt: Option<bool>,
+    taplo: Option<bool>,
+    git_init: Option<bool>,
+}
+
+/// The work the binary does around the render, resolved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Steps {
+    /// Scan the installed toolchains, and pre-flight the host tools the
+    /// selection needs.
+    pub toolchain_check: bool,
+    /// Run `cargo fmt` over the generated project.
+    pub cargo_fmt: bool,
+    /// Format the generated `Cargo.toml`.
+    pub taplo: bool,
+    /// Run `git init` in the generated project.
+    pub git_init: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -125,6 +172,24 @@ impl Manifest {
         }
 
         Ok(manifest)
+    }
+
+    /// Whether the generated project is a Cargo project, so the binary may
+    /// read its `Cargo.toml` for the `esp-hal` version and the MSRV.
+    pub fn is_cargo_project(&self) -> bool {
+        self.project.kind == ProjectType::Rust
+    }
+
+    /// Which steps to run for this template.
+    pub fn steps(&self) -> Steps {
+        let rust = self.is_cargo_project();
+        let overrides = &self.project.steps;
+        Steps {
+            toolchain_check: overrides.toolchain_check.unwrap_or(rust),
+            cargo_fmt: overrides.cargo_fmt.unwrap_or(rust),
+            taplo: overrides.taplo.unwrap_or(rust),
+            git_init: overrides.git_init.unwrap_or(true),
+        }
     }
 
     /// What to do with the template file at `path`.
@@ -320,6 +385,74 @@ plugins = { chip = "0.4.0", board = "1.0.0" }
 
         let order: Vec<&str> = manifest.plugins.keys().map(String::as_str).collect();
         assert_eq!(order, ["chip", "board"], "declaration order was not kept");
+    }
+
+    #[test]
+    fn a_template_without_a_project_section_is_a_rust_one() {
+        let manifest = Manifest::parse(MINIMAL).unwrap();
+        assert!(manifest.is_cargo_project());
+        assert_eq!(
+            manifest.steps(),
+            Steps {
+                toolchain_check: true,
+                cargo_fmt: true,
+                taplo: true,
+                git_init: true,
+            }
+        );
+    }
+
+    #[test]
+    fn a_non_rust_template_keeps_only_the_language_agnostic_steps() {
+        let manifest =
+            Manifest::parse(&format!("{MINIMAL}\n[project]\ntype = \"other\"\n")).unwrap();
+        assert!(!manifest.is_cargo_project());
+        assert_eq!(
+            manifest.steps(),
+            Steps {
+                toolchain_check: false,
+                cargo_fmt: false,
+                taplo: false,
+                git_init: true,
+            }
+        );
+    }
+
+    #[test]
+    fn a_step_set_explicitly_beats_the_project_type() {
+        let manifest = Manifest::parse(
+            r#"
+sdk_version = "0.1.0"
+
+[project]
+type = "other"
+steps = { toolchain_check = true, git_init = false }
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            manifest.steps(),
+            Steps {
+                toolchain_check: true,
+                cargo_fmt: false,
+                taplo: false,
+                git_init: false,
+            }
+        );
+    }
+
+    /// A misspelled step is inert, so it must be loud.
+    #[test]
+    fn an_unknown_project_key_is_rejected() {
+        for manifest in [
+            "[project]\nkind = \"other\"\n",
+            "[project]\nsteps = { cargo_format = false }\n",
+            "[project]\ntype = \"zig\"\n",
+        ] {
+            Manifest::parse(&format!("{MINIMAL}\n{manifest}"))
+                .expect_err("{manifest} must be refused");
+        }
     }
 
     #[test]

@@ -212,7 +212,7 @@ impl ChipTarget {
 pub fn toolchains_for_chip(
     all: &[ToolchainInfo],
     chip: Option<&ChipTarget>,
-    msrv: &check::Version,
+    msrv: Option<&check::Version>,
     cli_hint: Option<&str>,
 ) -> FilteredToolchains {
     let Some(chip) = chip else {
@@ -228,7 +228,10 @@ pub fn toolchains_for_chip(
     let mut names: Vec<String> = all
         .iter()
         .filter(|tc| tc.targets.contains(target.as_str()))
-        .filter(|tc| tc.version.as_ref().is_none_or(|v| v >= msrv))
+        .filter(|tc| match (tc.version.as_ref(), msrv) {
+            (Some(version), Some(msrv)) => version >= msrv,
+            _ => true,
+        })
         .map(|tc| tc.name.clone())
         .collect();
 

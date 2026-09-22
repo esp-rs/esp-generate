@@ -65,7 +65,7 @@ enum CheckResult {
 pub fn check(
     is_xtensa: bool,
     probe_rs_required: bool,
-    msrv: Version,
+    msrv: Option<Version>,
     requires_nightly: bool,
     headless: bool,
     selected_toolchain: Option<&str>,
@@ -104,7 +104,7 @@ pub fn check(
         &[format!("+{rust_toolchain}").as_str()],
         headless,
         Some(rust_install_cmd),
-        Some(msrv.clone()),
+        msrv.clone(),
     );
 
     let espflash_version = if !probe_rs_required {
@@ -170,7 +170,7 @@ pub fn check(
 #[allow(clippy::too_many_arguments)]
 fn create_check_results(
     probe_rs_required: bool,
-    msrv: Version,
+    msrv: Option<Version>,
     rust_toolchain: &str,
     rust_version: Option<Version>,
     rust_toolchain_tool: &str,
@@ -183,14 +183,27 @@ fn create_check_results(
 
     result.push_str("\nChecking installed versions\n");
 
+    // A template that is not a Cargo project declares no MSRV, so the toolchain
+    // is checked for presence only.
+    let (rust_result, rust_too_old) = match &msrv {
+        Some(msrv) => (
+            check_version(rust_version.as_ref(), msrv),
+            format!(
+                "minimum required version is {msrv} - run `{rust_toolchain_tool} update` to upgrade"
+            ),
+        ),
+        None => (
+            rust_version.map_or(CheckResult::NotFound, CheckResult::Ok),
+            String::new(),
+        ),
+    };
+
     let mut requirements_unsatisfied = false;
     requirements_unsatisfied |= format_result(
         false,
         &format!("Rust ({rust_toolchain})"),
-        check_version(rust_version.as_ref(), &msrv),
-        format!(
-            "minimum required version is {msrv} - run `{rust_toolchain_tool} update` to upgrade"
-        ),
+        rust_result,
+        rust_too_old,
         format!("not found - use `{rust_toolchain_tool}` to install"),
         true,
         &mut result,
@@ -551,7 +564,7 @@ espflash 1.7.0"#;
             create_check_results(
                 /*probe_rs_required*/ true,
                 /*msrv*/
-                Version::new(1, 88, 0),
+                Some(Version::new(1, 88, 0)),
                 /*rust_toolchain*/ "nightly",
                 /*rust_version*/
                 Some(Version::new(1, 88, 0)),
@@ -581,7 +594,7 @@ Checking installed versions
             create_check_results(
                 /*probe_rs_required*/ false,
                 /*msrv*/
-                Version::new(1, 88, 0),
+                Some(Version::new(1, 88, 0)),
                 /*rust_toolchain*/ "nightly",
                 /*rust_version*/
                 Some(Version::new(1, 88, 0)),
@@ -610,7 +623,7 @@ Checking installed versions
             create_check_results(
                 /*probe_rs_required*/ true,
                 /*msrv*/
-                Version::new(1, 88, 0),
+                Some(Version::new(1, 88, 0)),
                 /*rust_toolchain*/ "stable",
                 /*rust_version*/ None,
                 /*rust_toolchain_tool*/ "rustup",

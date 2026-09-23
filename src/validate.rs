@@ -32,6 +32,12 @@ pub struct Request {
 }
 
 pub fn run(loaded: &Loaded, request: &Request) -> Result<()> {
+    if request.build && !loaded.manifest.is_cargo_project() {
+        bail!(
+            "`--build` runs cargo over each combination, and this template is not a Cargo project"
+        );
+    }
+
     let combinations = sweep::enumerate(&loaded.template, &loaded.resolved, &request.sweep)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
@@ -51,17 +57,21 @@ pub fn run(loaded: &Loaded, request: &Request) -> Result<()> {
     );
 
     let flat_options = flatten_options(&loaded.template.options);
-    let esp_hal_version = render::esp_hal_version_full(
-        &crate::cargo::CargoToml::load(
-            loaded
-                .source
-                .get("Cargo.toml")
-                .ok_or_else(|| anyhow::anyhow!("template has no `Cargo.toml`"))?
-                .as_ref(),
-        )
-        .map_err(|e| anyhow::anyhow!("template `Cargo.toml` is unreadable: {e}"))?
-        .dependency_version("esp-hal"),
-    );
+    let esp_hal_version = if loaded.manifest.is_cargo_project() {
+        Some(render::esp_hal_version_full(
+            &crate::cargo::CargoToml::load(
+                loaded
+                    .source
+                    .get("Cargo.toml")
+                    .ok_or_else(|| anyhow::anyhow!("template has no `Cargo.toml`"))?
+                    .as_ref(),
+            )
+            .map_err(|e| anyhow::anyhow!("template `Cargo.toml` is unreadable: {e}"))?
+            .dependency_version("esp-hal"),
+        ))
+    } else {
+        None
+    };
 
     let mut failures = Vec::new();
     let mut predicates_used: Vec<&'static str> = Vec::new();
@@ -70,7 +80,7 @@ pub fn run(loaded: &Loaded, request: &Request) -> Result<()> {
             loaded,
             combination,
             &flat_options,
-            &esp_hal_version,
+            esp_hal_version.as_deref(),
             request.build,
         ) {
             Ok(used) => {
@@ -134,7 +144,7 @@ fn check_one(
     loaded: &Loaded,
     selected: &[String],
     flat_options: &[GeneratorOption],
-    esp_hal_version: &str,
+    esp_hal_version: Option<&str>,
     build: bool,
 ) -> Result<Vec<&'static str>> {
     let (facts, _target) = render::facts(
@@ -148,7 +158,7 @@ fn check_one(
                 .map(|o| format!("-o {o}"))
                 .collect::<Vec<_>>()
                 .join(" "),
-            esp_hal_version_full: esp_hal_version.to_string(),
+            esp_hal_version_full: esp_hal_version.map(str::to_string),
             rust_toolchain: None,
         },
     )?;
@@ -168,14 +178,17 @@ fn check_one(
         std::fs::create_dir_all(out_path.parent().unwrap())?;
         std::fs::write(out_path, contents)?;
     }
-    render::format_project(&project)?;
+    let steps = loaded.manifest.steps();
+    render::format_project(&steps, &project)?;
 
     cargo(&project, &["check"])?;
     if selected.iter().any(|o| o == "embedded-test") {
         cargo(&project, &["test", "--no-run"])?;
     }
     cargo(&project, &["clippy", "--no-deps", "--", "-Dwarnings"])?;
-    cargo(&project, &["fmt", "--", "--check"])?;
+    if steps.cargo_fmt {
+        cargo(&project, &["fmt", "--", "--check"])?;
+    }
 
     Ok(planned.predicates_used)
 }
@@ -273,6 +286,42 @@ options:
         let err = run(&loaded, &request()).unwrap_err().to_string();
         assert!(err.contains("nonexistent"), "{err}");
         assert!(err.contains("-o alpha"), "{err}");
+    }
+
+    const NON_RUST: &str = "sdk_version = \"0.1.0\"\n[project]\ntype = \"other\"\n";
+
+    #[test]
+    fn a_template_with_no_cargo_manifest_is_checkable() {
+        let (_dir, loaded) = template(&[
+            ("metadata.toml", NON_RUST),
+            ("template.yaml", OPTIONS),
+            (
+                "CMakeLists.txt",
+                "#%if option(\"alpha\")\n#+set(A 1)\n#%endif\n",
+            ),
+            ("main/main.c", "int main(void) { return 0; }\n"),
+        ]);
+        run(&loaded, &request()).expect("a non-Cargo template must check like any other");
+    }
+
+    #[test]
+    fn building_a_template_that_is_not_a_cargo_project_is_refused() {
+        let (_dir, loaded) = template(&[
+            ("metadata.toml", NON_RUST),
+            ("template.yaml", OPTIONS),
+            ("main/main.c", "int main(void) { return 0; }\n"),
+        ]);
+
+        let err = run(
+            &loaded,
+            &Request {
+                build: true,
+                ..request()
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("not a Cargo project"), "{err}");
     }
 
     #[test]

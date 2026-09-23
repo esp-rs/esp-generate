@@ -37,3 +37,16 @@ emit = [
   { path = "tests/hello_test.rs",           when = 'option("embedded-test")' },
   { path = "wokwi.toml",                    when = 'option("wokwi")' },
 ]
+
+# What the binary does around the render. Every key here is optional, and the
+# defaults below are what a template gets by declaring nothing at all. It goes
+# last because it is a TOML table: any top-level key written below it, `emit`
+# included, would belong to it instead.
+#
+# `type = "other"` is for templates that do not scaffold a Cargo project: no
+# `Cargo.toml` is read, and `toolchain_check`, `cargo_fmt` and `taplo` default
+# to off. Individual steps can still be set either way.
+#
+# [project]
+# type = "rust"
+# steps = { toolchain_check = true, cargo_fmt = true, taplo = true, git_init = true }

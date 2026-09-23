@@ -477,7 +477,7 @@ impl HelpText {
 
     fn describe(loaded: &Loaded) -> Self {
         Self {
-            about: about_text(&loaded.source),
+            about: about_text(loaded),
             options: option_help(&loaded.template),
         }
     }
@@ -513,10 +513,15 @@ fn template_arg(args: impl IntoIterator<Item = String>) -> Option<String> {
 const ABOUT: &str =
     "Template generation tool to create no_std applications targeting Espressif's chips.";
 
-fn about_text(source: &TemplateSource) -> String {
+fn about_text(loaded: &Loaded) -> String {
     let mut about = ABOUT.to_string();
 
-    let Some(toml) = source
+    if !loaded.manifest.is_cargo_project() {
+        return about;
+    }
+
+    let Some(toml) = loaded
+        .source
         .get("Cargo.toml")
         .and_then(|raw| cargo::CargoToml::load(raw.as_ref()).ok())
     else {
@@ -656,30 +661,38 @@ fn main() -> Result<()> {
         bail!("Directory already exists");
     }
 
-    let versions = cargo::CargoToml::load(
-        loaded
-            .source
-            .get("Cargo.toml")
-            .ok_or_else(|| anyhow::anyhow!("template has no `Cargo.toml`"))?
-            .as_ref(),
-    )
-    .map_err(|e| anyhow::anyhow!("template `Cargo.toml` is unreadable: {e}"))?;
+    let steps = loaded.manifest.steps();
 
-    // TODO: do not assume esp-hal version is present
-    let esp_hal_version_full =
-        render::esp_hal_version_full(&versions.dependency_version("esp-hal"));
+    let (esp_hal_version_full, msrv) = if loaded.manifest.is_cargo_project() {
+        let versions = cargo::CargoToml::load(
+            loaded
+                .source
+                .get("Cargo.toml")
+                .ok_or_else(|| anyhow::anyhow!("template has no `Cargo.toml`"))?
+                .as_ref(),
+        )
+        .map_err(|e| anyhow::anyhow!("template `Cargo.toml` is unreadable: {e}"))?;
 
-    // A Cargo MSRV is not strict semver — `1.95` is legal — so parse leniently.
-    let msrv_raw = versions.msrv();
-    let Some(msrv) = check::parse_lenient(msrv_raw) else {
-        bail!("template `Cargo.toml` has an unparsable `rust-version`: `{msrv_raw}`");
+        // TODO: do not assume esp-hal version is present
+        let esp_hal_version_full =
+            render::esp_hal_version_full(&versions.dependency_version("esp-hal"));
+
+        // A Cargo MSRV is not strict semver — `1.95` is legal — so parse leniently.
+        let msrv_raw = versions.msrv();
+        let Some(msrv) = check::parse_lenient(msrv_raw) else {
+            bail!("template `Cargo.toml` has an unparsable `rust-version`: `{msrv_raw}`");
+        };
+
+        (Some(esp_hal_version_full), Some(msrv))
+    } else {
+        (None, None)
     };
 
     // Start toolchain scan as early as possible (TUI only). The scan itself is
     // chip-agnostic — chip/MSRV/CLI hint are applied later by
     // `toolchain::toolchains_for_chip` against the cached result, which makes
     // dynamic chip selection possible without re-scanning.
-    let mut toolchain_scan = if args.headless {
+    let mut toolchain_scan = if args.headless || !steps.toolchain_check {
         None
     } else {
         Some(toolchain::start_toolchain_scan())
@@ -819,7 +832,7 @@ fn main() -> Result<()> {
                 let filtered = toolchain::toolchains_for_chip(
                     &cached_toolchains,
                     toolchain::ChipTarget::from_facts(&new_facts).as_ref(),
-                    &msrv,
+                    msrv.as_ref(),
                     args.toolchain.as_deref(),
                 );
                 for warning in &filtered.warnings {
@@ -920,7 +933,7 @@ fn main() -> Result<()> {
         },
     )?;
 
-    if let Some(target) = target {
+    if let Some(target) = target.filter(|_| steps.toolchain_check) {
         let tools = required_tools(&selected, &flat_options);
         check::check(
             target.is_xtensa,
@@ -934,7 +947,7 @@ fn main() -> Result<()> {
 
     let project_dir = path.join(&name);
 
-    if check::offensive_cargo_config_check(&project_dir) {
+    if loaded.manifest.is_cargo_project() && check::offensive_cargo_config_check(&project_dir) {
         println!(
             "⚠️ `.cargo/config.toml` files found in parent directories - this can cause undesired behavior. See https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure"
         );
@@ -949,16 +962,20 @@ fn main() -> Result<()> {
         fs::write(out_path, contents)?;
     }
 
-    render::format_project(&project_dir)?;
+    render::format_project(&steps, &project_dir)?;
 
-    if should_initialize_git_repo(&project_dir) {
-        // Run git init:
-        Command::new("git")
-            .arg("init")
-            .current_dir(&project_dir)
-            .output()?;
-    } else {
-        log::warn!("Current directory is already in a git repository, skipping git initialization");
+    if steps.git_init {
+        if should_initialize_git_repo(&project_dir) {
+            // Run git init:
+            Command::new("git")
+                .arg("init")
+                .current_dir(&project_dir)
+                .output()?;
+        } else {
+            log::warn!(
+                "Current directory is already in a git repository, skipping git initialization"
+            );
+        }
     }
 
     Ok(())

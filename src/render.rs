@@ -15,7 +15,9 @@ pub struct HostValues {
     pub project_name: String,
     /// The `-o …` line that would reproduce this project.
     pub generate_parameters: String,
-    pub esp_hal_version_full: String,
+    /// `None` when the template is not a Cargo project, so no `Cargo.toml` was
+    /// read.
+    pub esp_hal_version_full: Option<String>,
     /// `None` when the template declares no toolchain-bearing target.
     pub rust_toolchain: Option<String>,
 }
@@ -86,7 +88,9 @@ pub fn facts(
     facts.set_value("generate_version", env!("CARGO_PKG_VERSION"));
     facts.set_value("project_name", host.project_name.clone());
     facts.set_value("generate_parameters", host.generate_parameters.clone());
-    facts.set_value("esp_hal_version_full", host.esp_hal_version_full.clone());
+    if let Some(version) = &host.esp_hal_version_full {
+        facts.set_value("esp_hal_version_full", version.clone());
+    }
     if let Some(toolchain) = &host.rust_toolchain {
         facts.set_value("rust_toolchain", toolchain.clone());
     }
@@ -125,28 +129,32 @@ fn selected_groups(selected: &[String], flat_options: &[GeneratorOption]) -> Res
 ///
 /// `check --build` runs `cargo fmt --check` over the result, so it has to see
 /// the same formatting a generated project gets rather than the raw render.
-pub fn format_project(project_dir: &std::path::Path) -> Result<()> {
-    std::process::Command::new("cargo")
-        .args([
-            "fmt",
-            "--",
-            "--config",
-            "group_imports=StdExternalCrate",
-            "--config",
-            "imports_granularity=Module",
-        ])
-        .current_dir(project_dir)
-        .output()?;
+pub fn format_project(steps: &manifest::Steps, project_dir: &std::path::Path) -> Result<()> {
+    if steps.cargo_fmt {
+        std::process::Command::new("cargo")
+            .args([
+                "fmt",
+                "--",
+                "--config",
+                "group_imports=StdExternalCrate",
+                "--config",
+                "imports_granularity=Module",
+            ])
+            .current_dir(project_dir)
+            .output()?;
+    }
 
-    let manifest = project_dir.join("Cargo.toml");
-    let input = std::fs::read_to_string(&manifest)?;
-    let options = taplo::formatter::Options {
-        align_entries: true,
-        reorder_keys: true,
-        reorder_arrays: true,
-        ..Default::default()
-    };
-    std::fs::write(manifest, taplo::formatter::format(&input, options))?;
+    let cargo_toml = project_dir.join("Cargo.toml");
+    if steps.taplo && cargo_toml.exists() {
+        let input = std::fs::read_to_string(&cargo_toml)?;
+        let options = taplo::formatter::Options {
+            align_entries: true,
+            reorder_keys: true,
+            reorder_arrays: true,
+            ..Default::default()
+        };
+        std::fs::write(cargo_toml, taplo::formatter::format(&input, options))?;
+    }
 
     Ok(())
 }
@@ -214,6 +222,58 @@ mod test {
     use esp_generate::template::SetValue;
 
     use super::*;
+
+    /// Unformatted on purpose: both steps would rewrite it.
+    const RAGGED: &str = "[package]\nname=\"x\"\nversion=\"0.1.0\"\n";
+
+    #[test]
+    fn a_template_that_opted_out_gets_neither_formatter() {
+        let dir = tempfile::Builder::new()
+            .prefix("esp-generate-format-test-")
+            .tempdir()
+            .unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), RAGGED).unwrap();
+
+        let off = manifest::Steps {
+            toolchain_check: false,
+            cargo_fmt: false,
+            taplo: false,
+            git_init: true,
+        };
+        format_project(&off, dir.path()).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("Cargo.toml")).unwrap(),
+            RAGGED
+        );
+
+        format_project(&manifest::Steps { taplo: true, ..off }, dir.path()).unwrap();
+        assert_ne!(
+            std::fs::read_to_string(dir.path().join("Cargo.toml")).unwrap(),
+            RAGGED,
+            "taplo was enabled and did nothing"
+        );
+    }
+
+    /// A project with no `Cargo.toml` must not make the formatting step fail.
+    #[test]
+    fn formatting_a_project_without_a_cargo_manifest_is_not_an_error() {
+        let dir = tempfile::Builder::new()
+            .prefix("esp-generate-format-test-")
+            .tempdir()
+            .unwrap();
+        std::fs::write(dir.path().join("main.c"), "int main(void){return 0;}\n").unwrap();
+
+        format_project(
+            &manifest::Steps {
+                toolchain_check: true,
+                cargo_fmt: true,
+                taplo: true,
+                git_init: true,
+            },
+            dir.path(),
+        )
+        .expect("a missing `Cargo.toml` must not be fatal");
+    }
 
     /// A template `sets` key must not displace a host value of the same name.
     /// Host values are written first, and this merge never overwrites.

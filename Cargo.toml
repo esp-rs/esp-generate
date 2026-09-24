@@ -2,18 +2,18 @@
 members = ["esp-template-plugin-chip", "esp-template-sdk", "xtask"]
 
 [workspace.dependencies]
-anyhow     = "1.0.100"
-clap       = { version = "4.6.1", features = ["derive"] }
-env_logger = "0.11.8"
-indexmap   = { version = "2.13.0", features = ["serde"] }
-log        = "0.4.29"
+anyhow     = "1.0.104"
+clap       = { version = "4.6.7", features = ["derive"] }
+env_logger = "0.11.11"
+indexmap   = { version = "2.14.2", features = ["serde"] }
+log        = "0.4.34"
 semver     = { version = "1.0.28", features = ["serde"] }
-serde      = { version = "1.0.228", features = ["derive"] }
+serde      = { version = "1.0.229", features = ["derive"] }
 serde_yaml = "0.9.33"
 
 [package]
 name         = "esp-generate"
-version      = "1.3.0"
+version      = "1.4.0"
 edition      = "2024"
 rust-version = "1.86"
 description  = "Template generation tool to create no_std applications targeting Espressif's chips"
@@ -37,10 +37,10 @@ update-informer = ["dep:update-informer"]
 
 [dependencies]
 esp-template-sdk = { version = "0.1.0", path = "esp-template-sdk"  }
-esp-template-plugin-chip = { version = "0.4.0", path = "esp-template-plugin-chip" }
+esp-template-plugin-chip = { version = "0.5.0", path = "esp-template-plugin-chip" }
 anyhow.workspace = true
-strum           = { version = "0.27.2", features = ["derive"] }
-inquire         = "0.9.1"
+strum           = { version = "0.28.0", features = ["derive"] }
+inquire         = "0.9.4"
 clap.workspace = true
 env_logger.workspace = true
 log.workspace = true
@@ -52,11 +52,11 @@ taplo           = "0.14.0"
 update-informer = { version = "1.3.0", optional = true }
 serde.workspace = true
 serde_yaml.workspace = true
-toml_edit       = { version = "0.25.11+spec-1.1.0", features = ["serde"] }
+toml_edit       = { version = "0.25.15+spec-1.1.0", features = ["serde"] }
 walkdir         = "2.5.0"
 tempfile        = "3.23.0"
 indexmap.workspace = true
 
 [build-dependencies]
-quote   = "1.0.45"
+quote   = "1.0.47"
 walkdir = "2.5.0"

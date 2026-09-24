@@ -1,6 +1,6 @@
 [package]
 name         = "esp-template-plugin-chip"
-version      = "0.4.0"
+version      = "0.5.0"
 edition      = "2024"
 rust-version = "1.86"
 description  = "Espressif chip data as an esp-template-sdk plugin"
@@ -10,6 +10,6 @@ publish      = false # till the template separation is finished
 
 [dependencies]
 esp-template-sdk = { version = "0.1.0", path = "../esp-template-sdk" }
-esp-metadata-generated = { version = "0.4.0", features = ["build-script"] }
+esp-metadata-generated = { version = "0.5.3", features = ["build-script"] }
 indexmap.workspace = true
-strum = { version = "0.27.2", features = ["derive"] }
+strum = { version = "0.28.0", features = ["derive"] }

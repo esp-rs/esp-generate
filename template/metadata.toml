@@ -14,7 +14,7 @@ description = "no_std applications for Espressif SoCs"
 # selection group (`!Include plugin:chip`) and every `chip.…` fact. The version
 # is a symbol set, not a release date — a binary that cannot provide it refuses
 # the template up front rather than failing on unknown names mid-render.
-plugins = { chip = "0.4.0" }
+plugins = { chip = "0.5.0" }
 
 # Files whose emission is conditional, or whose output path differs from their
 # source path. Anything not listed here is emitted as-is; anything under
@@ -33,6 +33,7 @@ emit = [
   { path = ".vscode/tasks.json",            when = 'option("vscode")' },
   { path = ".zed/settings.json",            when = 'option("zed")' },
   { path = "CODING_AGENT_GUIDANCE.md",      when = 'group_selected("coding-agent-guidance")', as = "{{ coding_agent_guidance_file }}" },
+  { path = "Embed.toml",                    when = 'option("cargo-embed")' },
   { path = "diagram.json",                  when = 'option("wokwi")' },
   { path = "tests/hello_test.rs",           when = 'option("embedded-test")' },
   { path = "wokwi.toml",                    when = 'option("wokwi")' },

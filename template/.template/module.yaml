@@ -361,3 +361,37 @@ options:
       chip: [esp32s3]
     sets:
       remove_pins: [spi_flash, spi_psram]
+
+  # ----- ESP32-S31 -----
+  - !Option
+    name: esp32s31-wroom-1
+    display_name: ESP32-S31-WROOM-1 (8/16/32MB flash, 16/32MB PSRAM)
+    selection_group: module
+    compatible:
+      chip: [esp32s31]
+    sets:
+      remove_pins: [spi_flash]
+  - !Option
+    name: esp32s31-wroom-1u
+    display_name: ESP32-S31-WROOM-1U (16MB flash, 16MB PSRAM)
+    selection_group: module
+    compatible:
+      chip: [esp32s31]
+    sets:
+      remove_pins: [spi_flash]
+  - !Option
+    name: esp32s31-wroom-3
+    display_name: ESP32-S31-WROOM-3 (8/16/32MB flash, 16/32MB PSRAM)
+    selection_group: module
+    compatible:
+      chip: [esp32s31]
+    sets:
+      remove_pins: [spi_flash]
+  - !Option
+    name: esp32s31-wroom-3u
+    display_name: ESP32-S31-WROOM-3U (16MB flash, 16MB PSRAM)
+    selection_group: module
+    compatible:
+      chip: [esp32s31]
+    sets:
+      remove_pins: [spi_flash]

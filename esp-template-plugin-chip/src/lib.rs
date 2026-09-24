@@ -24,7 +24,7 @@ const NAME: &str = "chip";
 
 /// Mirrors the metadata version — see the module docs. Reachable through
 /// [`TemplatePlugin::version`].
-const VERSION: Version = release(0, 4, 0);
+const VERSION: Version = release(0, 5, 0);
 
 /// The selection group the chip options belong to.
 const GROUP: &str = "chip";
@@ -43,6 +43,7 @@ pub enum Chip {
     Esp32h2,
     Esp32s2,
     Esp32s3,
+    Esp32s31,
 }
 
 impl Chip {
@@ -57,6 +58,7 @@ impl Chip {
             Chip::Esp32h2 => esp_metadata_generated::Chip::Esp32h2,
             Chip::Esp32s2 => esp_metadata_generated::Chip::Esp32s2,
             Chip::Esp32s3 => esp_metadata_generated::Chip::Esp32s3,
+            Chip::Esp32s31 => esp_metadata_generated::Chip::Esp32s31,
         }
     }
 
@@ -100,6 +102,7 @@ impl Chip {
             Chip::Esp32h2 => "ESP32-H2",
             Chip::Esp32s2 => "ESP32-S2",
             Chip::Esp32s3 => "ESP32-S3",
+            Chip::Esp32s31 => "ESP32-S31",
         }
     }
 

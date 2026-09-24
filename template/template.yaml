@@ -34,6 +34,7 @@ options:
         - esp32c61
         - esp32s2
         - esp32s3
+        - esp32s31
 
   - !Option
     name: ble-trouble
@@ -83,6 +84,7 @@ options:
         - esp32c61
         - esp32h2
         - esp32s3
+        - esp32s31
 
   - !Option
     name: probe-rs
@@ -120,6 +122,12 @@ options:
       - !Option
         name: embedded-test
         display_name: Enable embedded-test support.
+        requires:
+          - probe-rs
+      - !Option
+        name: cargo-embed
+        display_name: Add cargo-embed configuration.
+        help: Generates an Embed.toml file for flashing and monitoring with cargo-embed.
         requires:
           - probe-rs
 

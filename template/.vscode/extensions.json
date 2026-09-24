@@ -1,14 +1,13 @@
-//INCLUDEFILE option("vscode")
 {
     "recommendations": [
         "rust-lang.rust-analyzer",
         "tamasfe.even-better-toml",
-        //IF option("wokwi")
+        //%if option("wokwi")
         "Wokwi.wokwi-vscode",
-        //ENDIF
-        //IF option("probe-rs")
+        //%endif
+        //%if option("probe-rs")
         "probe-rs.probe-rs-debugger",
-        //ENDIF
+        //%endif
         "fill-labs.dependi"
     ]
 }

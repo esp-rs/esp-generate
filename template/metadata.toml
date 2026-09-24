@@ -1,0 +1,53 @@
+# The esp-generate template manifest.
+#
+# This file decides *which* files a generated project gets; `template.yaml` (the
+# option tree, read by the SDK) decides what is *in* them.
+
+# The `esp-template-sdk` version this template is written against. The binary
+# refuses a template outside its compatibility range.
+sdk_version = "0.1.0"
+
+name = "esp-generate default template"
+description = "no_std applications for Espressif SoCs"
+
+# Versioned vocabularies this template depends on. `chip` supplies the chip
+# selection group (`!Include plugin:chip`) and every `chip.…` fact. The version
+# is a symbol set, not a release date — a binary that cannot provide it refuses
+# the template up front rather than failing on unknown names mid-render.
+plugins = { chip = "0.5.0" }
+
+# Files whose emission is conditional, or whose output path differs from their
+# source path. Anything not listed here is emitted as-is; anything under
+# `.template/` is never emitted at all, which is where partials and the option
+# tree's `!Include` fragments live.
+#
+# `when` is a somni expression and `as` is ordinary template text, both over the
+# same facts a template body sees — so they mean what they mean inside a file.
+emit = [
+  { path = ".github/workflows/rust_ci.yml", when = 'option("ci")' },
+  { path = ".helix/languages.toml",         when = 'option("helix")' },
+  { path = ".nvim.lua",                     when = 'group_selected("neovim")' },
+  { path = ".vscode/extensions.json",       when = 'option("vscode")' },
+  { path = ".vscode/launch.json",           when = 'option("vscode")' },
+  { path = ".vscode/settings.json",         when = 'option("vscode")' },
+  { path = ".vscode/tasks.json",            when = 'option("vscode")' },
+  { path = ".zed/settings.json",            when = 'option("zed")' },
+  { path = "CODING_AGENT_GUIDANCE.md",      when = 'group_selected("coding-agent-guidance")', as = "{{ coding_agent_guidance_file }}" },
+  { path = "Embed.toml",                    when = 'option("cargo-embed")' },
+  { path = "diagram.json",                  when = 'option("wokwi")' },
+  { path = "tests/hello_test.rs",           when = 'option("embedded-test")' },
+  { path = "wokwi.toml",                    when = 'option("wokwi")' },
+]
+
+# What the binary does around the render. Every key here is optional, and the
+# defaults below are what a template gets by declaring nothing at all. It goes
+# last because it is a TOML table: any top-level key written below it, `emit`
+# included, would belong to it instead.
+#
+# `type = "other"` is for templates that do not scaffold a Cargo project: no
+# `Cargo.toml` is read, and `toolchain_check`, `cargo_fmt` and `taplo` default
+# to off. Individual steps can still be set either way.
+#
+# [project]
+# type = "rust"
+# steps = { toolchain_check = true, cargo_fmt = true, taplo = true, git_init = true }

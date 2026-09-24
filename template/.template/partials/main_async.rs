@@ -1,5 +1,3 @@
-//INCLUDEFILE option("embassy")
-//INCLUDE_AS src/bin/main.rs
 #![no_std]
 #![no_main]
 #![deny(
@@ -12,67 +10,67 @@
 use esp_hal::clock::CpuClock;
 use esp_hal::timer::timg::TimerGroup;
 
-//IF option("ble-trouble")
+//%if option("ble-trouble")
 use esp_radio::ble::controller::BleConnector;
-//ENDIF
-//IF option("ble-trouble")
+//%endif
+//%if option("ble-trouble")
 use bt_hci::controller::ExternalController;
 use trouble_host::prelude::*;
-//ENDIF
+//%endif
 
 use embassy_executor::Spawner;
 use embassy_time::{Duration, Timer};
 
-//IF option("defmt")
-//IF !option("probe-rs")
+//%if option("defmt")
+//%if !option("probe-rs")
 //+use esp_println as _;
-//ENDIF
+//%endif
 //+use defmt::info;
-//IF !option("panic-handler")
+//%if !group_selected("panic-handler")
 //+use defmt::error;
-//ENDIF !option("panic-handler")
-//ELIF option("log")
+//%endif !group_selected("panic-handler")
+//%else if option("log")
 use log::info;
-//IF !option("panic-handler")
+//%if !group_selected("panic-handler")
 use log::error;
-//ENDIF !option("panic-handler")
-//ELIF option("probe-rs") // without defmt
+//%endif !group_selected("panic-handler")
+//%else if option("probe-rs")
 //+use rtt_target::rprintln;
-//ENDIF !defmt
+//%endif !defmt
 
-//IF !option("panic-handler")
-//IF option("defmt") || option("log")
+//%if !group_selected("panic-handler")
+//%if option("defmt") || option("log")
 //+#[panic_handler]
 //+fn panic(panic_info: &core::panic::PanicInfo) -> ! {
 //+    error!("{}", panic_info);
 //+    loop {}
 //+}
-//ELIF option("probe-rs")
+//%else if option("probe-rs")
 //+#[panic_handler]
 //+fn panic(panic_info: &core::panic::PanicInfo) -> ! {
 //+    rprintln!("{}", panic_info);
 //+    loop {}
 //+}
-//ELSE
+//%else
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     loop {}
 }
-//ENDIF
-//ELIF option("esp-backtrace")
+//%endif
+//%else if option("esp-backtrace")
 //+use esp_backtrace as _;
-//ELIF option("panic-rtt-target")
+//%else if option("panic-rtt-target")
 //+use panic_rtt_target as _;
-//ENDIF
+//%endif
 
-//IF option("alloc")
+//%if option("alloc")
 extern crate alloc;
-//ENDIF
+//%endif
 
-//IF option("ble-trouble")
+//%if option("ble-trouble")
 const CONNECTIONS_MAX: usize = 1;
 const L2CAP_CHANNELS_MAX: usize = 1;
-//ENDIF
+//%endif
 
 // This creates a default app-descriptor required by the esp-idf bootloader.
 // For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
@@ -84,72 +82,67 @@ esp_bootloader_esp_idf::esp_app_desc!();
 )]
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
-    //REPLACE generate-version generate-version
-    // generator version: generate-version
-    //REPLACE generate-parameters generate-parameters
-    // generator parameters: generate-parameters
+    // generator version: {{ generate_version }}
+    // generator parameters: {{ generate_parameters }}
 
-    //IF option("probe-rs")
-    //IF option("defmt")
+    //%if option("probe-rs")
+    //%if option("defmt")
     rtt_target::rtt_init_defmt!();
-    //ELSE
+    //%else
     rtt_target::rtt_init_print!();
-    //ENDIF
-    //ELIF option("log")
+    //%endif
+    //%else if option("log")
     esp_println::logger::init_logger_from_env();
-    //ENDIF
+    //%endif
 
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
-    //REPLACE __RESERVED_GPIO_CODE__; reserved_gpio_code
-    __RESERVED_GPIO_CODE__;
+    {{ reserved_gpio_code }}
 
-    //IF option("alloc")
-    //REPLACE 65536 max-dram2-uninit
-    esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 65536);
-    //IF option("wifi") && option("ble-trouble")
+    //%if option("alloc")
+    esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: {{ str(chip.dram2_uninit_size) }});
+    //%if option("wifi") && option("ble-trouble")
     // COEX needs more RAM - so we've added some more
     esp_alloc::heap_allocator!(size: 64 * 1024);
-    //ENDIF
-    //ENDIF alloc
+    //%endif
+    //%endif alloc
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     esp_rtos::start(timg0.timer0, peripherals.FROM_CPU_INTR0);
 
-    //IF option("defmt") || option("log")
+    //%if option("defmt") || option("log")
     info!("Embassy initialized!");
-    //ELIF option("probe-rs") // without defmt
+    //%else if option("probe-rs")
     rprintln!("Embassy initialized!");
-    //ENDIF
+    //%endif
 
-    //IF option("wifi")
+    //%if option("wifi")
     let _wifi_controller =
         esp_radio::wifi::WifiController::new(peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
     let _wifi_interface = esp_radio::wifi::Interface::station();
-    //ENDIF
-    //IF option("ble-trouble")
+    //%endif
+    //%if option("ble-trouble")
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
     let transport = BleConnector::new(peripherals.BT, Default::default()).unwrap();
     let ble_controller = ExternalController::<_, 1>::new(transport);
     let mut resources: HostResources<_, DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
         HostResources::new();
     let _stack = trouble_host::new(ble_controller, &mut resources).build();
-    //ENDIF
+    //%endif
 
     // TODO: Spawn some tasks
     let _ = spawner;
 
     loop {
-        //IF option("defmt") || option("log")
+        //%if option("defmt") || option("log")
         info!("Hello world!");
-        //ELIF option("probe-rs") // without defmt
+        //%else if option("probe-rs")
         rprintln!("Hello world!");
-        //ENDIF
+        //%endif
         Timer::after(Duration::from_secs(1)).await;
     }
 
-    //REPLACE {current-version} esp-hal-version-full
-    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v{current-version}/examples
+    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v{{ esp_hal_version_full }}/examples
 }

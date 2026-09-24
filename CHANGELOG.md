@@ -10,11 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Templates that are not Cargo projects.** `metadata.toml` gained a `[project]` section: `type = "other"` tells the binary not to read a `Cargo.toml` — for the `esp-hal` version and the MSRV — and turns off the toolchain pre-flight, `cargo fmt` and the `Cargo.toml` reformat, leaving `git init`. Each of those is also settable on its own through `[project.steps]`, so a Rust template can drop one without dropping the rest. `type = "rust"` is the default, so existing templates are unaffected. (#372)
+- **`esp-generate check`** renders a template across its option combinations in memory and reports every failure with the selection that reaches it, without writing a project. This catches what generating once cannot: a name in a branch that selection never evaluates. `-o` pins an option (narrowing a required group instead of sweeping it), `--all-combinations` covers every valid union rather than each option once, `--exclude-group`/`--exclude-category`/`--cross-group` shape the matrix, and `--build` additionally generates each combination to a temporary directory and runs cargo check, clippy and fmt over it. It also warns when a template declares an older `sdk_version` than the features it uses require. (#369)
+- `--template` also accepts a **repository**: `owner/repo[@branch-or-tag]`, an `https://` URL, or `git@host:path`. It is cloned shallowly with `git` (reusing your existing credentials, so private template repos work) into a temporary directory that is removed when esp-generate exits, and the resolved commit is logged so a generated project can be traced back to exactly what produced it. The template need not be the repository root — esp-generate finds the directory holding a `metadata.toml` that parses as a manifest, so a template shipped inside a larger repo works. More than one is an error listing them, never a guess. A commit SHA is not supported: shallow clones cannot take one portably. (#368)
+- **Generate from an external template.** `--template <dir>` reads a template from a directory instead of the bundled one; it works with `list-options` and `explain` too. The directory is read with the same root-relative key space `build.rs` bakes in, `.git/` and `target/` are skipped, symlinks are not followed, and a path that escapes the template root is refused. Using one prints a warning, since a template decides what code and dependencies end up in your project. (#368)
+- Templates now carry a `metadata.toml` manifest. It declares the `esp-template-sdk` version the template is written against — checked before any template file is read, so an incompatible template fails with one clear line — and per-file `emit` rules: `when` is the condition a file is emitted under, `as` the path it is written to. A file with no rule is emitted as-is. (#357)
+
 ### Changed
+
+- The template contract (option tree, relationship engine, directive processor) now lives in a separate `esp-template-sdk` crate. Generated projects are unchanged. (#352)
+- **Template syntax.** File directives are now rendered by [`somni-template`](https://docs.rs/somni-template). Directive lines are marked with the file's comment prefix plus `%` (`#%if`, `//%endif`, `--%else`) so ordinary comments are never parsed as directives; `#ELIF` is now `#%else if`; and `#REPLACE` is replaced by `{{ expr }}` interpolation. Generated projects are unchanged. (#352)
+- `sets` keys that a template interpolates must be valid identifiers: `wokwi-board` is now `wokwi_board`, and `coding-agent-guidance-file` is now `coding_agent_guidance_file`. (#352)
+- Template directives evaluate against a single fact API. `option()` and `group_selected()` are the predicates, and everything the chip decides is a field on a `chip` struct: `chip.name`, `chip.rust_target`, `chip.dram2_uninit_size`, and one field per `esp-metadata` symbol (`chip.soc_has_wifi`). A misspelled field is an error naming the file and line, not a silent `false`. Value names are `snake_case`. (#352)
+- `option()` no longer matches selection-group names — use `group_selected()`. (#352)
+- **Chip data is a versioned plugin.** It lives in a new `esp-template-plugin-chip` crate whose version mirrors the `esp-metadata-generated` it wraps, so the version names a symbol set rather than a release. A template declares what it needs — `plugins = { chip = "0.5.0" }` in `metadata.toml` — and pulls the chip selection group in with `!Include plugin:chip`. A binary that cannot provide a declared plugin refuses the template with one line instead of failing on unknown names part-way through rendering, and can offer several versions at once so older templates keep working. (#357)
+- The option tree's chip list is generated from the chip plugin rather than carried as template YAML, so newly supported silicon appears in the menu without a template edit. (#357)
+- A template's `.template/` directory is reserved for machinery — option-tree fragments and `include` partials — and is never emitted. (#357)
+- What an option needs is declared in the option tree rather than hardcoded in esp-generate: `requires_nightly: true` for a nightly toolchain, `requires_tools: [probe-rs]` for a host tool. Both drive the pre-flight check before generation. (#357)
 
 ### Fixed
 
+- Malformed template directives now report a `file:line` error instead of panicking or being silently ignored.
+- A `requires_capabilities` entry that names no plugin namespace — `soc_has_wifi` rather than `chip.soc_has_wifi` — is now refused when the template loads. It previously read as false for every selection, silently hiding the option. (#357)
+
 ### Removed
+
+- The `#%includefile` and `#%include_as` directives. Which files a generated project gets, and what they are called, is the manifest's job now — a file's own body no longer decides whether that file exists. (#357)
 
 ## [1.4.0] - 2026-09-18
 

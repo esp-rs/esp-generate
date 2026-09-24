@@ -7,7 +7,8 @@ use std::thread;
 use anyhow::Result;
 use esp_generate::template::{GeneratorOption, GeneratorOptionItem};
 
-use crate::{Chip, check};
+use crate::check;
+use esp_generate::process::{FactValue, Facts};
 
 /// Chip-agnostic metadata for a single installed rustup toolchain.
 ///
@@ -187,10 +188,31 @@ fn active_rustup_toolchain() -> Option<String> {
 /// the caller decides whether to promote them (headless) or surface them in
 /// the TUI footer. Dynamic chip switching requires this: a chip switch that
 /// invalidates the CLI toolchain must not be unrecoverable.
+/// What the toolchain gates need to know about the selected chip.
+///
+/// Read off the plugin facts rather than a chip type, so it follows whichever
+/// plugin version the template pinned.
+pub struct ChipTarget {
+    pub rust_target: String,
+    pub is_xtensa: bool,
+}
+
+impl ChipTarget {
+    pub fn from_facts(facts: &Facts) -> Option<Self> {
+        let Some(FactValue::Str(rust_target)) = facts.field("chip", "rust_target") else {
+            return None;
+        };
+        Some(ChipTarget {
+            rust_target: rust_target.clone(),
+            is_xtensa: matches!(facts.field("chip", "xtensa"), Some(FactValue::Bool(true))),
+        })
+    }
+}
+
 pub fn toolchains_for_chip(
     all: &[ToolchainInfo],
-    chip: Option<Chip>,
-    msrv: &check::Version,
+    chip: Option<&ChipTarget>,
+    msrv: Option<&check::Version>,
     cli_hint: Option<&str>,
 ) -> FilteredToolchains {
     let Some(chip) = chip else {
@@ -201,17 +223,20 @@ pub fn toolchains_for_chip(
         };
     };
 
-    let target = chip.metadata().target().to_string();
+    let target = chip.rust_target.clone();
 
     let mut names: Vec<String> = all
         .iter()
         .filter(|tc| tc.targets.contains(target.as_str()))
-        .filter(|tc| tc.version.as_ref().is_none_or(|v| v.is_at_least(msrv)))
+        .filter(|tc| match (tc.version.as_ref(), msrv) {
+            (Some(version), Some(msrv)) => version >= msrv,
+            _ => true,
+        })
         .map(|tc| tc.name.clone())
         .collect();
 
     // for now, we should hide the generic toolchains for Xtensa (stable-*, beta-*, nightly-*).
-    if chip.metadata().is_xtensa() {
+    if chip.is_xtensa {
         names.retain(|name| {
             !(name.starts_with("stable") || name.starts_with("beta") || name.starts_with("nightly"))
         });
@@ -221,7 +246,7 @@ pub fn toolchains_for_chip(
 
     if names.is_empty() {
         if let Some(cli) = cli_hint {
-            if chip.metadata().is_xtensa() && is_generic_toolchain(cli) {
+            if chip.is_xtensa && is_generic_toolchain(cli) {
                 warnings.push(format!(
                     "Toolchain `{cli}` is not supported for Xtensa targets; \
                      please use different toolchain (e.g. `esp`, see \
@@ -244,7 +269,7 @@ pub fn toolchains_for_chip(
 
     if let Some(cli) = cli_hint {
         if !names.iter().any(|t| t == cli) {
-            if chip.metadata().is_xtensa() && is_generic_toolchain(cli) {
+            if chip.is_xtensa && is_generic_toolchain(cli) {
                 warnings.push(format!(
                     "Toolchain `{cli}` is not supported for Xtensa targets; \
                      please use an ESP toolchain (e.g. `esp`)"

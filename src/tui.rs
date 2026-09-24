@@ -7,6 +7,7 @@ use env_logger::{Builder, Env, Logger};
 use esp_generate::{
     append_list_as_sentence,
     config::{ActiveConfiguration, Relationships, flatten_options},
+    process::Facts,
     template::GeneratorOptionItem,
 };
 use log::{Level, LevelFilter, Log, Metadata, Record, SetLoggerError};
@@ -42,7 +43,11 @@ pub struct Repository {
 }
 
 impl Repository {
-    pub fn new(options: Vec<GeneratorOptionItem>, selected: &[String]) -> Self {
+    pub fn new(
+        options: Vec<GeneratorOptionItem>,
+        selected: &[String],
+        facts: Option<Facts>,
+    ) -> Self {
         let flat_options = flatten_options(&options);
         Self {
             config: ActiveConfiguration {
@@ -52,6 +57,7 @@ impl Repository {
                     .collect(),
                 flat_options,
                 options,
+                facts,
             },
             path: Vec::new(),
         }
@@ -228,7 +234,7 @@ impl Repository {
     /// the `chip` selection group behave as a radio — clicking the already-
     /// selected chip is a no-op; switching chips goes through the usual
     /// `select_idx` cascade.
-    fn toggle_current(&mut self, row: usize) {
+    fn toggle_current(&mut self, row: usize, required_groups: &[String]) {
         if !self.current_level_is_active() {
             return;
         }
@@ -239,12 +245,10 @@ impl Repository {
         };
 
         let option_name = option.name.clone();
-        // The chip group behaves like a required radio: there must always be
-        // exactly one chip ticked (the one backing the current options tree),
-        // so clicking the already-selected chip is a no-op instead of a
-        // deselect. Switching to a different chip still works through the
-        // usual selection_group mutex in `select_idx`.
-        let is_chip_group = option.selection_group == "chip";
+        // A required group is a radio: it must always have exactly one pick, so
+        // clicking the current one is a no-op rather than a deselect. Switching
+        // within the group still works through the `select_idx` mutex.
+        let is_required_group = required_groups.contains(&option.selection_group);
 
         if let Some(i) = self
             .config
@@ -252,7 +256,7 @@ impl Repository {
             .iter()
             .position(|s| self.config.flat_options[*s].name == option_name)
         {
-            if is_chip_group {
+            if is_required_group {
                 return;
             }
             let idx = self.config.selected[i];
@@ -374,6 +378,14 @@ impl Repository {
 }
 
 pub fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
+    // Restore the terminal on panic so a panic from the IO-free SDK
+    // doesn't leave the terminal in raw/alternate-screen mode.
+    let previous_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        ratatui::restore();
+        previous_hook(info);
+    }));
+
     enable_raw_mode()?;
     io::stdout().execute(EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(io::stdout());
@@ -628,8 +640,8 @@ impl App {
 #[cfg(test)]
 mod test {
     use super::Repository;
-    use crate::Chip;
     use esp_generate::template::{GeneratorOption, GeneratorOptionItem};
+    use esp_template_plugin_chip::Chip;
     use indexmap::IndexMap;
 
     fn option(name: &str, requires: &[&str]) -> GeneratorOptionItem {
@@ -641,6 +653,7 @@ mod test {
             requires: requires.iter().map(|r| r.to_string()).collect(),
             compatible: IndexMap::new(),
             sets: IndexMap::new(),
+            ..Default::default()
         })
     }
 
@@ -662,6 +675,7 @@ mod test {
             requires: requires.iter().map(|r| r.to_string()).collect(),
             compatible,
             sets: IndexMap::new(),
+            ..Default::default()
         })
     }
 
@@ -676,6 +690,7 @@ mod test {
             requires: Vec::new(),
             compatible: IndexMap::new(),
             sets: IndexMap::new(),
+            ..Default::default()
         })
     }
 
@@ -705,7 +720,7 @@ mod test {
             chip_group_option(Chip::Esp32c6),
             option("alloc", &[]),
         ];
-        let repository = Repository::new(options, &["alloc".to_string()]);
+        let repository = Repository::new(options, &["alloc".to_string()], None);
         let mut app = app_with(&["chip"], repository);
 
         assert!(
@@ -716,7 +731,7 @@ mod test {
 
         // Simulate the user ticking `esp32` in the chip group (`toggle_current`
         // treats the chip radio as non-deselect, so the selection sticks).
-        app.repository.toggle_current(0);
+        app.repository.toggle_current(0, &["chip".to_string()]);
         assert!(app.can_save(), "required group satisfied — save unlocked");
         assert!(app.missing_required_groups().is_empty());
     }
@@ -726,7 +741,7 @@ mod test {
         // No `required` entries → Save is never gated, regardless of
         // selection state. This is the fallback for templates that don't
         // opt into the mechanism.
-        let repository = Repository::new(vec![option("alloc", &[])], &[]);
+        let repository = Repository::new(vec![option("alloc", &[])], &[], None);
         let app = app_with(&[], repository);
         assert!(app.can_save());
         assert!(app.missing_required_groups().is_empty());
@@ -752,9 +767,10 @@ mod test {
                 "method-unselected-b".to_string(),
                 "defmt".to_string(),
             ],
+            None,
         );
 
-        repository.toggle_current(0);
+        repository.toggle_current(0, &[]);
         assert!(repository.config.is_selected("method"));
         assert!(!repository.config.is_selected("method-unselected-a"));
         assert!(!repository.config.is_selected("method-unselected-b"));
@@ -762,7 +778,7 @@ mod test {
 
         repository.config.select("method-selected-a");
 
-        repository.toggle_current(0);
+        repository.toggle_current(0, &[]);
         assert!(!repository.config.is_selected("method"));
         assert!(!repository.config.is_selected("method-selected-a"));
         // None of the previously-cleared `!method` options come back.
@@ -787,6 +803,7 @@ mod test {
         let repository = Repository::new(
             options,
             &["method".to_string(), "dependent".to_string()],
+            None,
         );
 
         let ui = plain_ui();
@@ -809,8 +826,7 @@ mod test {
         // toggling it off would cascade out `dependent`.
         let method_hover = row_text(0, Some(0));
         assert!(
-            method_hover.contains("method")
-                && method_hover.contains("- will deselect: dependent"),
+            method_hover.contains("method") && method_hover.contains("- will deselect: dependent"),
             "expected deselect-side warning on selected hovered row, got: {method_hover:?}"
         );
 
@@ -862,7 +878,7 @@ mod test {
             option("method", &[]),
             option("unmet-pos", &["needs-x", "!method"]),
         ];
-        let repository = Repository::new(options, &["method".to_string()]);
+        let repository = Repository::new(options, &["method".to_string()], None);
 
         let (actionable, line) = repository
             .current_level_desc(80, &ui, Some(1))
@@ -899,12 +915,11 @@ mod test {
                 requires: vec!["!method".to_string()],
                 compatible: wrong_chip_compat,
                 sets: IndexMap::new(),
+                ..Default::default()
             }),
         ];
-        let repository = Repository::new(
-            options,
-            &["esp32".to_string(), "method".to_string()],
-        );
+        let repository =
+            Repository::new(options, &["esp32".to_string(), "method".to_string()], None);
         let rows = repository.current_level_desc(80, &ui, Some(0));
         assert!(
             rows.iter()
@@ -944,6 +959,7 @@ mod test {
                 "loooooong-two".to_string(),
                 "loooooong-three".to_string(),
             ],
+            None,
         );
 
         let ui = plain_ui();
@@ -1005,6 +1021,7 @@ mod test {
                 "will-vanish".to_string(),
                 "dependent".to_string(),
             ],
+            None,
         );
         // Simulate the user having entered the `cat` category.
         repository.enter_group(0);
@@ -1053,15 +1070,15 @@ mod test {
             chip_group_option(Chip::Esp32),
             chip_group_option(Chip::Esp32c6),
         ];
-        let mut repository = Repository::new(options, &["esp32".to_string()]);
+        let mut repository = Repository::new(options, &["esp32".to_string()], None);
 
-        repository.toggle_current(0);
+        repository.toggle_current(0, &["chip".to_string()]);
         assert!(
             repository.config.is_selected("esp32"),
             "clicking the already-selected chip must be a no-op"
         );
 
-        repository.toggle_current(1);
+        repository.toggle_current(1, &["chip".to_string()]);
         assert!(
             repository.config.is_selected("esp32c6"),
             "clicking a different chip must swap the selection"
@@ -1103,6 +1120,7 @@ mod test {
                 "alloc".to_string(),
                 "depends-on-wroom".to_string(),
             ],
+            None,
         );
 
         // Look up the esp32c6 chip-group option as a plain `GeneratorOption`
@@ -1168,6 +1186,7 @@ mod test {
                 "only-on-esp32".to_string(),
                 "shared".to_string(),
             ],
+            None,
         );
 
         // Rebuild for the new chip as if `build_options({chip: "esp32c6"}, …)`
@@ -1182,7 +1201,7 @@ mod test {
         // Before applying `set_options`, mimic what `toggle_current` would
         // have done: swap the chip-group pick on the *old* tree. This is the
         // state the main loop sees when it triggers the rebuild.
-        repository.toggle_current(1);
+        repository.toggle_current(1, &["chip".to_string()]);
         assert!(repository.config.is_selected("esp32c6"));
 
         repository.set_options(rebuilt);
@@ -1236,7 +1255,8 @@ impl App {
                         }
 
                         if self.repository.is_option(selected) {
-                            self.repository.toggle_current(selected);
+                            self.repository
+                                .toggle_current(selected, &self.required_groups);
                         } else if !self.repository.visible_item(selected).options().is_empty() {
                             self.repository.enter_group(self.selected());
                             self.enter_menu();

@@ -1,0 +1,18 @@
+[package]
+name         = "esp-template-sdk"
+version      = "0.1.0"
+edition      = "2024"
+rust-version = "1.86"
+description  = "Versioned template contract for esp-generate: option-tree parsing, the relationship engine, and the pure file-directive processor."
+repository   = "https://github.com/esp-rs/esp-generate"
+license      = "MIT OR Apache-2.0"
+publish      = false # till the template separation is finished
+
+[dependencies]
+semver.workspace = true
+serde.workspace = true
+serde_yaml.workspace = true
+indexmap.workspace = true
+log.workspace = true
+somni-expr      = "0.3"
+somni-template  = "0.4.0"

@@ -1,5 +1,3 @@
-#INCLUDEFILE false
-
 # Each module option declares:
 #   * `compatible.chip`     — limits it to its matching chip(s); the rest
 #                             are pruned at tree-build time by

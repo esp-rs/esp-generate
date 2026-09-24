@@ -1,16 +1,14 @@
-//INCLUDEFILE option("vscode")
 {
     "version": "0.2.0",
     "configurations": [
-        //IF option("probe-rs")
+        //%if option("probe-rs")
         {
             "type": "probe-rs-debug",
             "request": "launch",
             "name": "Launch",
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "build-debug",
-            //REPLACE esp32c3 mcu
-            "chip": "esp32c3",
+            "chip": "{{ chip.name }}",
             "flashingConfig": {
                 "flashingEnabled": true,
                 "haltAfterReset": true,
@@ -22,17 +20,16 @@
             "coreConfigs": [
                 {
                     "coreIndex": 0,
-                    //REPLACE riscv32imc-unknown-none-elf rust_target
-                    "programBinary": "target/riscv32imc-unknown-none-elf/debug/${workspaceFolderBasename}",
+                    "programBinary": "target/{{ chip.rust_target }}/debug/${workspaceFolderBasename}",
                     "rttEnabled": true,
-                    //IF option("defmt")
+                    //%if option("defmt")
                     "rttChannelFormats": [
                         {
                             "channelNumber": 0,
                             "dataFormat": "Defmt",
                         }
                     ],
-                    //ENDIF
+                    //%endif
                 }
             ]
         },
@@ -41,25 +38,23 @@
             "request": "attach",
             "name": "Attach",
             "cwd": "${workspaceFolder}",
-            //REPLACE esp32c3 mcu
-            "chip": "esp32c3",
+            "chip": "{{ chip.name }}",
             "coreConfigs": [
                 {
                     "coreIndex": 0,
-                    //REPLACE riscv32imc-unknown-none-elf rust_target
-                    "programBinary": "target/riscv32imc-unknown-none-elf/debug/${workspaceFolderBasename}",
+                    "programBinary": "target/{{ chip.rust_target }}/debug/${workspaceFolderBasename}",
                     "rttEnabled": true,
-                    //IF option("defmt")
+                    //%if option("defmt")
                     "rttChannelFormats": [
                         {
                             "channelNumber": 0,
                             "dataFormat": "Defmt",
                         }
                     ],
-                    //ENDIF
+                    //%endif
                 }
             ]
         }
-        //ENDIF
+        //%endif
     ]
 }

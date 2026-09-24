@@ -1,8 +1,5 @@
-#INCLUDEFILE option("wokwi")
 [wokwi]
 version = 1
 gdbServerPort = 3333
-#REPLACE project-name project-name && rust_target rust_target
-elf = "target/rust_target/debug/project-name"
-#REPLACE project-name project-name && rust_target rust_target
-firmware = "target/rust_target/debug/project-name"
+elf = "target/{{ chip.rust_target }}/debug/{{ project_name }}"
+firmware = "target/{{ chip.rust_target }}/debug/{{ project_name }}"

@@ -1,6 +1,8 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
+use crate::plugin::{Resolved, SCHEME as PLUGIN_SCHEME};
+
 /// Map from selection-group name to the subset of options in that group that
 /// are compatible with this item. If any listed group has no current selection
 /// — or its selection is outside the allow-list — the item is considered
@@ -19,23 +21,21 @@ pub type CompatibilityRequirements = IndexMap<String, Vec<String>>;
 ///
 /// ```yaml
 /// sets:
-///   wokwi-board: board-esp32-c6-devkitc-1       # scalar -> Scalar
+///   coding_agent_guidance_file: CLAUDE.md       # scalar -> Scalar
 ///   remove_pins: [spi_flash, spi_psram]         # sequence -> List
 /// ```
 ///
 /// Consumers branch on the variant:
 ///
-///   * `#REPLACE` directives look for scalars only and silently skip list
-///     entries — list-valued data is meaningful to code-generation paths
-///     (pin reservations, etc.) but has no obvious single-string form for
-///     textual substitution.
+///   * Scalars are merged into the fact values a template interpolates; list
+///     entries are skipped, having no single-string form.
 ///   * Code-generation paths (e.g. the module pin-reservation block) read
 ///     the specific list-keys they care about, asserting via `as_list`.
 ///
 /// Keeping both shapes in one container means `sets` stays the sole
 /// mechanism for option-scoped data — no parallel fields on
 /// [`GeneratorOption`] for every new datum shape.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SetValue {
     Scalar(String),
@@ -51,8 +51,8 @@ impl SetValue {
     }
 
     /// Returns `Some(&str)` if this value is a scalar, `None` for lists.
-    /// Templates' `#REPLACE` machinery uses this to treat list-valued keys
-    /// as "not applicable" rather than producing garbage substitutions.
+    /// Value merging uses this to treat list-valued keys as "not applicable"
+    /// rather than producing garbage substitutions.
     pub fn as_scalar(&self) -> Option<&str> {
         match self {
             Self::Scalar(s) => Some(s.as_str()),
@@ -72,6 +72,7 @@ impl SetValue {
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct GeneratorOption {
     pub name: String,
     pub display_name: String,
@@ -86,24 +87,25 @@ pub struct GeneratorOption {
     /// [`CompatibilityRequirements`].
     #[serde(default)]
     pub compatible: CompatibilityRequirements,
-    /// Option-scoped template data. Each selected option's `sets` entries
-    /// are merged into the generation context, keyed by variable name. Values
-    /// can be scalars or lists ([`SetValue`]) so the same mechanism carries
-    /// heterogeneous data:
-    ///
-    ///   * scalars (`wokwi-board: board-...`) feed `#REPLACE` substitutions
-    ///     in template files — chips that have no Wokwi model simply don't
-    ///     contribute a `wokwi-board` entry;
-    ///   * lists (`remove_pins: [spi_flash, spi_psram]`) feed code-generation
-    ///     paths — the module pin-reservation block intersects `remove_pins`
-    ///     with the chip's pin metadata to emit `let _ = peripherals.GPIOn;`
-    ///     stanzas.
-    ///
-    /// Keys must not collide with the fixed set of generator-provided
-    /// variables (`project-name`, `mcu`, `rust_target`, etc.); on collision
-    /// the generator-provided value wins to preserve existing behaviour.
+    /// Option-scoped template data, merged in per selected option. Scalars
+    /// feed interpolation; lists feed code-generation paths. On a collision
+    /// with a generator-provided fact, the generator wins.
     #[serde(default)]
     pub sets: IndexMap<String, SetValue>,
+    /// Plugin fields that must be true for this option to be compatible (AND).
+    /// Each entry is `<namespace>.<field>`, e.g. `chip.soc_has_wifi`; empty =
+    /// no gate.
+    #[serde(default)]
+    pub requires_capabilities: Vec<String>,
+    /// Host tools to pre-flight when this option is selected (e.g.
+    /// `[probe-rs]`). The option only declares the need; the host owns the
+    /// check. An open list — an unrecognised name is ignored.
+    #[serde(default)]
+    pub requires_tools: Vec<String>,
+    /// When set, only nightly toolchains are offered while this option is
+    /// selected. The host reads it off the selected options.
+    #[serde(default)]
+    pub requires_nightly: bool,
 }
 
 impl GeneratorOption {
@@ -113,6 +115,7 @@ impl GeneratorOption {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct GeneratorOptionCategory {
     pub name: String,
     pub display_name: String,
@@ -168,7 +171,8 @@ impl GeneratorOptionItem {
 
     /// Per-group compatibility allow-list for this item. Categories don't
     /// currently carry their own compatibility constraints — they derive
-    /// from their children via [`ActiveConfiguration::is_active`].
+    /// from their children via
+    /// [`ActiveConfiguration::is_active`](crate::config::ActiveConfiguration::is_active).
     pub fn compatible(&self) -> Option<&CompatibilityRequirements> {
         match self {
             GeneratorOptionItem::Category(_) => None,
@@ -227,6 +231,44 @@ impl Template {
         Ok(())
     }
 
+    /// Validate that every `requires_capabilities` entry is `<namespace>.<field>`
+    /// with a namespace one of `plugins` contributes.
+    ///
+    /// The gate reads a malformed or unprovided entry as false for every
+    /// selection, so the option would silently never be offered.
+    pub fn validate_capabilities(&self, plugins: &Resolved<'_>) -> Result<(), String> {
+        let namespaces = plugins.namespaces();
+        let available = || match namespaces.as_slice() {
+            [] => "this template declares no plugins".to_string(),
+            names => format!("available: {}", names.join(", ")),
+        };
+
+        for option in self.all_options() {
+            for capability in &option.requires_capabilities {
+                let bad = |why: &str| {
+                    Err(format!(
+                        "option `{}` requires capability `{capability}`, {why} ({})",
+                        option.name,
+                        available()
+                    ))
+                };
+
+                let Some((namespace, field)) = capability.split_once('.') else {
+                    return bad("which is not of the form `<namespace>.<field>`");
+                };
+                if field.is_empty() {
+                    return bad("which names no field");
+                }
+                if !namespaces.iter().any(|n| n == namespace) {
+                    return bad(&format!(
+                        "but no declared plugin provides `{namespace}` facts"
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Return the required groups that are not satisfied by the given set
     /// of selected option names.
     pub fn missing_required_groups(&self, selected_names: &[String]) -> Vec<String> {
@@ -263,20 +305,24 @@ impl Template {
     /// must itself be a complete `!Category` (or whatever shape the
     /// call-site expects).
     ///
-    /// Paths passed to `loader` are the raw strings from the tag —
+    /// A `plugin:` path is resolved from `plugins` before `loader` is
+    /// consulted, so a fragment always comes from something the template
+    /// pinned. See [`crate::plugin`].
+    ///
+    /// Every other path passed to `loader` is the raw string from the tag —
     /// interpreted by the loader however it sees fit. The bundled-
     /// template loader treats them as keys into `TEMPLATE_FILES` (i.e.
     /// paths relative to the `template/` root); a future per-file
     /// loader could resolve them relative to the including file.
     ///
     /// Cycles are detected and rejected rather than blowing the stack.
-    pub fn load<F>(main_yaml: &str, loader: F) -> Result<Self, String>
+    pub fn load<F>(main_yaml: &str, plugins: &Resolved<'_>, loader: F) -> Result<Self, String>
     where
         F: Fn(&str) -> Option<String>,
     {
         let mut value: serde_yaml::Value =
             serde_yaml::from_str(main_yaml).map_err(|e| format!("invalid template YAML: {e}"))?;
-        expand_includes(&mut value, &loader, &mut Vec::new())?;
+        expand_includes(&mut value, plugins, &loader, &mut Vec::new())?;
         serde_yaml::from_value(value)
             .map_err(|e| format!("template does not conform to schema: {e}"))
     }
@@ -288,6 +334,7 @@ impl Template {
 /// recursed into indefinitely.
 fn expand_includes<F>(
     value: &mut serde_yaml::Value,
+    plugins: &Resolved<'_>,
     loader: &F,
     stack: &mut Vec<String>,
 ) -> Result<(), String>
@@ -311,28 +358,34 @@ where
                 return Err(format!("template-include cycle: {}", chain.join(" -> ")));
             }
 
-            let contents =
-                loader(&path).ok_or_else(|| format!("template include `{path}` not found"))?;
+            // A plugin fragment is resolved before the loader, so a template
+            // file cannot shadow one by sitting at the same path.
+            let contents = match path.strip_prefix(PLUGIN_SCHEME) {
+                Some(spec) => plugins.fragment(spec)?,
+                None => {
+                    loader(&path).ok_or_else(|| format!("template include `{path}` not found"))?
+                }
+            };
             let mut inner: Value = serde_yaml::from_str(&contents)
                 .map_err(|e| format!("failed to parse include `{path}`: {e}"))?;
 
             stack.push(path);
-            expand_includes(&mut inner, loader, stack)?;
+            expand_includes(&mut inner, plugins, loader, stack)?;
             stack.pop();
 
             *value = inner;
         }
         // Keep walking into other tagged nodes (e.g. `!Category`, `!Option`)
         // so `!Include` can appear nested inside them, not only at the top.
-        Value::Tagged(tagged) => expand_includes(&mut tagged.value, loader, stack)?,
+        Value::Tagged(tagged) => expand_includes(&mut tagged.value, plugins, loader, stack)?,
         Value::Sequence(seq) => {
             for v in seq {
-                expand_includes(v, loader, stack)?;
+                expand_includes(v, plugins, loader, stack)?;
             }
         }
         Value::Mapping(map) => {
             for (_, v) in map.iter_mut() {
-                expand_includes(v, loader, stack)?;
+                expand_includes(v, plugins, loader, stack)?;
             }
         }
         _ => {}
@@ -374,7 +427,7 @@ options:
     display_name: Demo A
 "#;
 
-        let template = Template::load(main, |path| {
+        let template = Template::load(main, &Resolved::default(), |path| {
             (path == "category.yaml").then(|| category.to_string())
         })
         .expect("include should resolve");
@@ -390,13 +443,76 @@ options:
     }
 
     #[test]
+    fn an_unknown_key_is_refused_rather_than_ignored() {
+        let on_category = r#"
+options:
+  - !Category
+    name: peripherals
+    display_name: Peripherals
+    compatible:
+      chip: [esp32c6]
+    options: []
+"#;
+        let err = Template::load(on_category, &Resolved::default(), |_| None)
+            .expect_err("a gate on a category must not be silently dropped");
+        assert!(err.contains("compatible"), "{err}");
+
+        let stale_chips = r#"
+options:
+  - !Option
+    name: wifi
+    display_name: Wi-Fi
+    chips: [esp32c6]
+"#;
+        let err = Template::load(stale_chips, &Resolved::default(), |_| None)
+            .expect_err("`chips:` was replaced by `compatible`");
+        assert!(err.contains("chips"), "{err}");
+    }
+
+    #[test]
     fn missing_include_is_reported() {
         let main = r#"
 options:
   - !Include missing.yaml
 "#;
-        let err = Template::load(main, |_| None).expect_err("should error");
+        let err = Template::load(main, &Resolved::default(), |_| None).expect_err("should error");
         assert!(err.contains("missing.yaml"), "{err}");
+    }
+
+    #[test]
+    fn an_unqualified_capability_is_rejected_at_load() {
+        let t = Template {
+            options: vec![GeneratorOptionItem::Option(GeneratorOption {
+                name: "wifi".to_string(),
+                requires_capabilities: vec!["soc_has_wifi".to_string()],
+                ..Default::default()
+            })],
+            ..Template::default()
+        };
+
+        let err = t
+            .validate_capabilities(&Resolved::default())
+            .expect_err("a name with no namespace must be refused");
+        assert!(err.contains("soc_has_wifi"), "{err}");
+        assert!(err.contains("wifi"), "{err}");
+        assert!(err.contains("<namespace>.<field>"), "{err}");
+    }
+
+    #[test]
+    fn a_capability_from_an_undeclared_plugin_is_rejected() {
+        let t = Template {
+            options: vec![GeneratorOptionItem::Option(GeneratorOption {
+                name: "wifi".to_string(),
+                requires_capabilities: vec!["chip.soc_has_wifi".to_string()],
+                ..Default::default()
+            })],
+            ..Template::default()
+        };
+
+        let err = t
+            .validate_capabilities(&Resolved::default())
+            .expect_err("a template declaring no plugins has no `chip` facts");
+        assert!(err.contains("chip"), "{err}");
     }
 
     #[test]
@@ -446,7 +562,7 @@ options:
         display_name: ESP32-C6
         selection_group: chip
 "#;
-        let template = Template::load(main, |_| None).expect("should parse");
+        let template = Template::load(main, &Resolved::default(), |_| None).expect("should parse");
         template.validate_required().expect("chip group exists");
 
         assert_eq!(
@@ -484,7 +600,7 @@ display_name: B
 options:
   - !Include a.yaml
 "#;
-        let err = Template::load(main, |path| match path {
+        let err = Template::load(main, &Resolved::default(), |path| match path {
             "a.yaml" => Some(a.to_string()),
             "b.yaml" => Some(b.to_string()),
             _ => None,

@@ -1,15 +1,13 @@
 [package]
-#REPLACE project-name project-name
-name = "project-name"
+name = "{{ project_name }}"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
 
 [[bin]]
-#REPLACE project-name project-name
-name = "project-name"
+name = "{{ project_name }}"
 path = "./src/bin/main.rs"
-#IF option("embedded-test")
+#%if option("embedded-test")
 test = false
 
 [[test]]
@@ -18,137 +16,130 @@ harness = false
 
 [lib]
 test = false
-#ENDIF
+#%endif
 
 [dependencies]
 esp-hal = { version = "~1.2.2", features = [
-    #REPLACE esp32c6 mcu
-    "esp32c6",
-    #IF option("unstable-hal")
+    "{{ chip.name }}",
+    #%if option("unstable-hal")
     "unstable",
-    #ENDIF
-    #IF option("defmt")
-    #+"defmt",
-    #ENDIF
-    #IF option("log")
+    #%endif
+    #%if option("defmt")
+    #+    "defmt",
+    #%endif
+    #%if option("log")
     "log-04",
-    #ENDIF
+    #%endif
 ] }
 
-#IF option("embassy") || option("wifi") || option("ble-trouble")
+#%if option("embassy") || option("wifi") || option("ble-trouble")
 esp-rtos = { version = "0.4.0", features = [
-    #IF option("wifi") || option("ble-trouble")
+    #%if option("wifi") || option("ble-trouble")
     "esp-radio",
-    #ENDIF
-    #IF option("alloc")
+    #%endif
+    #%if option("alloc")
     "esp-alloc",
-    #ENDIF
-    #IF option("embassy")
+    #%endif
+    #%if option("embassy")
     "embassy",
-    #ENDIF
-    #REPLACE esp32c6 mcu
-    "esp32c6",
-    #IF option("defmt")
-    #+"defmt",
-    #ENDIF
-    #IF option("log")
+    #%endif
+    "{{ chip.name }}",
+    #%if option("defmt")
+    #+    "defmt",
+    #%endif
+    #%if option("log")
     "log-04",
-    #ENDIF
+    #%endif
 ]}
-#ENDIF
+#%endif
 
 esp-bootloader-esp-idf = { version = "0.6.0", features = [
-    #IF option("defmt")
-    #+"defmt",
-    #ENDIF
-    #IF option("log")
+    #%if option("defmt")
+    #+    "defmt",
+    #%endif
+    #%if option("log")
     "log-04",
-    #ENDIF
-    #REPLACE esp32c6 mcu
-    "esp32c6",
+    #%endif
+    "{{ chip.name }}",
 ] }
-#IF option("defmt")
+#%if option("defmt")
 #+defmt = "1.0.1"
-#ELIF option("log")
+#%else if option("log")
 log = "0.4.27"
-#ENDIF
+#%endif
 
-#IF option("log-frontend") || option("panic-handler") || option("probe-rs")
-#IF option("probe-rs")
-#IF option("defmt")
+#%if group_selected("log-frontend") || group_selected("panic-handler") || option("probe-rs")
+#%if option("probe-rs")
+#%if option("defmt")
 rtt-target = { version = "0.6.2", features = ["defmt"] }
-#ELSE
+#%else
 #+rtt-target = "0.6.2"
-#ENDIF defmt
-#ELSE probe-rs
+#%endif defmt
+#%else
 esp-println = { version = "0.18.0", features = [
-    #REPLACE esp32c6 mcu
-    "esp32c6",
-    #IF option("defmt")
-    #+"defmt-espflash",
-    #ENDIF
-    #IF option("log")
+    "{{ chip.name }}",
+    #%if option("defmt")
+    #+    "defmt-espflash",
+    #%endif
+    #%if option("log")
     "log-04",
-    #ENDIF
+    #%endif
 ] }
-#ENDIF probe-rs
-#ENDIF log-frontend || panic-handler || probe-rs
-#IF option("esp-backtrace")
+#%endif probe-rs
+#%endif log-frontend || panic-handler || probe-rs
+#%if option("esp-backtrace")
 esp-backtrace = { version = "0.20.0", features = [
-    #REPLACE esp32c6 mcu
-    "esp32c6",
+    "{{ chip.name }}",
     "panic-handler",
-    #IF option("defmt")
-    #+"defmt",
-    #ELSE
+    #%if option("defmt")
+    #+    "defmt",
+    #%else
     "println",
-    #ENDIF
+    #%endif
 ] }
-#ELIF option("panic-rtt-target")
-#IF option("defmt")
+#%else if option("panic-rtt-target")
+#%if option("defmt")
 #+panic-rtt-target = { version = "0.2.0", features = ["defmt"] }
-#ELSE
+#%else
 panic-rtt-target = "0.2.0"
-#ENDIF defmt
-#ENDIF esp-backtrace
-#IF option("alloc")
-#IF option("defmt")
-#REPLACE esp32c6 mcu
-#+esp-alloc = { version = "0.11.0", features = ["esp32c6", "defmt"] }
-#ELSE
-#REPLACE esp32c6 mcu
-esp-alloc = { version = "0.11.0", features = ["esp32c6"] }
-#ENDIF defmt
-#ENDIF alloc
-#IF option("wifi") || option("ble-trouble")
-#IF option("defmt")
+#%endif defmt
+#%endif esp-backtrace
+#%if option("alloc")
+#%if option("defmt")
+#+esp-alloc = { version = "0.11.0", features = ["{{ chip.name }}", "defmt"] }
+#%else
+esp-alloc = { version = "0.11.0", features = ["{{ chip.name }}"] }
+#%endif defmt
+#%endif alloc
+#%if option("wifi") || option("ble-trouble")
+#%if option("defmt")
 #+embedded-io = { version = "0.7.1", features = ["defmt"] }
-#ELSE
+#%else
 embedded-io = "0.7.1"
-#ENDIF defmt
-#IF option("embassy")
-#IF option("defmt")
+#%endif defmt
+#%if option("embassy")
+#%if option("defmt")
 #+embedded-io-async = { version = "0.7.0", features = ["defmt"] }
-#ELSE
+#%else
 embedded-io-async = "0.7.0"
-#ENDIF defmt
-#IF option("wifi")
+#%endif defmt
+#%if option("wifi")
 embassy-net = { version = "0.9.1", features = [
     "tcp",
     "udp",
     "dhcpv4",
     "medium-ethernet",
-    #IF option("defmt")
-    #+"defmt",
-    #ENDIF
-    #IF option("log")
+    #%if option("defmt")
+    #+    "defmt",
+    #%endif
+    #%if option("log")
     "log",
-    #ENDIF
+    #%endif
 ] }
 # for more networking protocol support see https://crates.io/crates/edge-net
-#ENDIF wifi
-#ENDIF embassy
-#IF option("wifi")
+#%endif wifi
+#%endif embassy
+#%if option("wifi")
 smoltcp = { version = "0.14.0", default-features = false, features = [
     "medium-ethernet",
     "multicast",
@@ -160,83 +151,82 @@ smoltcp = { version = "0.14.0", default-features = false, features = [
     "socket-tcp",
     "socket-udp",
     "socket-icmp",
-    #IF option("defmt")
-    #+"defmt",
-    #ENDIF
-    #IF option("log")
+    #%if option("defmt")
+    #+    "defmt",
+    #%endif
+    #%if option("log")
     "log",
-    #ENDIF
+    #%endif
 ] }
-#ENDIF wifi
+#%endif wifi
 esp-radio = { version = "1.0.0-beta.1", features = [
-    #REPLACE esp32c6 mcu
-    "esp32c6",
-    #IF option("wifi")
+    "{{ chip.name }}",
+    #%if option("wifi")
     "wifi",
-    #ENDIF
-    #IF option("ble-trouble")
+    #%endif
+    #%if option("ble-trouble")
     "ble",
-    #ENDIF
-    #IF option("wifi") && option("ble-trouble")
+    #%endif
+    #%if option("wifi") && option("ble-trouble")
     "coex",
-    #ENDIF
-    #IF option("alloc")
+    #%endif
+    #%if option("alloc")
     "esp-alloc",
-    #ENDIF
+    #%endif
     "unstable",
-    #IF option("defmt")
-    #+"defmt",
-    #ENDIF
-    #IF option("log")
+    #%if option("defmt")
+    #+    "defmt",
+    #%endif
+    #%if option("log")
     "log-04",
-    #ENDIF
+    #%endif
 ] }
-#IF option("ble-trouble")
+#%if option("ble-trouble")
 #+trouble-host = { version = "0.7.0", features = ["gatt"] }
 #+bt-hci = "0.9.0"
-#ENDIF
-#ENDIF wifi || ble-trouble
-#IF option("embassy")
+#%endif
+#%endif wifi || ble-trouble
+#%if option("embassy")
 embassy-executor = { version = "0.10.0", features = [
-    #IF option("defmt")
-    #+"defmt",
-    #ENDIF
-    #IF option("log")
+    #%if option("defmt")
+    #+    "defmt",
+    #%endif
+    #%if option("log")
     "log",
-    #ENDIF
+    #%endif
 ] }
-#IF option("defmt")
+#%if option("defmt")
 #+embassy-time     = { version = "0.5.0", features = ["defmt"] }
-#ENDIF
-#IF option("log")
+#%endif
+#%if option("log")
 embassy-time = { version = "0.5.0", features = ["log"] }
-#ENDIF
-#IF !option("defmt") && !option("log")
+#%endif
+#%if !option("defmt") && !option("log")
 #+embassy-time     = "0.5.0"
-#ENDIF
+#%endif
 
 static_cell = "2.1.1"
-#ENDIF
+#%endif
 critical-section = "1.2.0"
 
-#IF option("embedded-test")
+#%if option("embedded-test")
 [dev-dependencies]
 embedded-test = { version = "0.7.1", features = [
-    #IF option("xtensa")
+    #%if chip.xtensa
     "xtensa-semihosting",
-    #ENDIF
-    #IF option("embassy")
+    #%endif
+    #%if option("embassy")
     "embassy-010",
     "external-executor",
-    #ENDIF
-    #IF option("defmt")
-    #+"defmt",
-    #ENDIF
-    #IF option("log")
+    #%endif
+    #%if option("defmt")
+    #+    "defmt",
+    #%endif
+    #%if option("log")
     "log-04",
-    #ENDIF
+    #%endif
 ] }
-#ENDIF embedded-test
+#%endif embedded-test
 
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
 [profile.dev]

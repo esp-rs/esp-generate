@@ -1,5 +1,5 @@
 # Lychee link checker configuration
-# https://lychee.cli.rs/configuration/
+# https://lychee.cli.rs/guides/config/
 
 # Skip files matching these patterns
 exclude_path = ["target"]
@@ -12,6 +12,10 @@ exclude = [
     "crates\\.io/crates",
     # marketplace URLs sometimes fail
     "marketplace\\.visualstudio\\.com",
+    # template/CODING_AGENT_GUIDANCE.md embeds unrendered `{{ esp_hal_version_full }}`
+    # placeholders in a URL; lychee's bare-URL scanner truncates at the `{` and checks
+    # this bogus prefix, which 404s. The real (substituted) URL is fine.
+    "^https://github\\.com/esp-rs/esp-hal/tree/esp-hal-v$",
 ]
 
 # Max number of concurrent link checks

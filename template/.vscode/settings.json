@@ -1,15 +1,12 @@
-//INCLUDEFILE option("vscode")
 {
   "rust-analyzer.cargo.allTargets": false,
-  //REPLACE riscv32imac-unknown-none-elf rust_target
-  "rust-analyzer.cargo.target": "riscv32imac-unknown-none-elf",
-  //IF option("xtensa")
+  "rust-analyzer.cargo.target": "{{ chip.rust_target }}",
+  //%if chip.xtensa
   "rust-analyzer.server.extraEnv": {
     "RUSTUP_TOOLCHAIN": "stable"
   },
   "rust-analyzer.cargo.extraEnv": {
-    //REPLACE esp rust_toolchain
-    "RUSTUP_TOOLCHAIN": "esp"
+    "RUSTUP_TOOLCHAIN": "{{ rust_toolchain }}"
   },
-  //ENDIF
+  //%endif
 }

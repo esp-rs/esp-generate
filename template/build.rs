@@ -1,19 +1,19 @@
 fn main() {
     linker_be_nice();
-    //IF option("xtensa")
+    //%if chip.xtensa
     check_xtensa_linker_available();
-    //ENDIF
-    //IF option("embedded-test")
+    //%endif
+    //%if option("embedded-test")
     println!("cargo:rustc-link-arg-tests=-Tembedded-test.x");
-    //ENDIF
-    //IF option("defmt")
+    //%endif
+    //%if option("defmt")
     println!("cargo:rustc-link-arg=-Tdefmt.x");
-    //ENDIF
+    //%endif
     // make sure linkall.x is the last linker script (otherwise might cause problems with flip-link)
     println!("cargo:rustc-link-arg=-Tlinkall.x");
 }
 
-//IF option("xtensa")
+//%if chip.xtensa
 #[cfg(unix)]
 fn check_xtensa_linker_available() {
     println!("cargo:rerun-if-env-changed=PATH");
@@ -75,7 +75,7 @@ fn cargo_linker_env_var(target: &str) -> String {
     format!("CARGO_TARGET_{target}_LINKER")
 }
 
-//ENDIF
+//%endif
 fn linker_be_nice() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 {
@@ -135,15 +135,15 @@ fn linker_be_nice() {
         std::process::exit(0);
     }
 
-    //IF option("xtensa")
+    //%if chip.xtensa
     println!(
         "cargo:rustc-link-arg=-Wl,--error-handling-script={}",
         std::env::current_exe().unwrap().display()
     );
-    //ELIF option("riscv")
+    //%else if chip.riscv
     println!(
         "cargo:rustc-link-arg=--error-handling-script={}",
         std::env::current_exe().unwrap().display()
     );
-    //ENDIF
+    //%endif
 }

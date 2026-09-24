@@ -1,3 +1,16 @@
+[workspace]
+members = ["esp-template-plugin-chip", "esp-template-sdk", "xtask"]
+
+[workspace.dependencies]
+anyhow     = "1.0.104"
+clap       = { version = "4.6.7", features = ["derive"] }
+env_logger = "0.11.11"
+indexmap   = { version = "2.14.2", features = ["serde"] }
+log        = "0.4.34"
+semver     = { version = "1.0.28", features = ["serde"] }
+serde      = { version = "1.0.229", features = ["derive"] }
+serde_yaml = "0.9.33"
+
 [package]
 name         = "esp-generate"
 version      = "1.4.0"
@@ -23,23 +36,26 @@ default = ["update-informer"]
 update-informer = ["dep:update-informer"]
 
 [dependencies]
-anyhow          = "1.0.104"
+esp-template-sdk = { version = "0.1.0", path = "esp-template-sdk"  }
+esp-template-plugin-chip = { version = "0.5.0", path = "esp-template-plugin-chip" }
+anyhow.workspace = true
 strum           = { version = "0.28.0", features = ["derive"] }
 inquire         = "0.9.4"
-clap            = { version = "4.6.7", features = ["derive"] }
-env_logger      = "0.11.11"
-esp-metadata-generated = { version = "0.5.3", features = ["build-script"] }
-log             = "0.4.34"
+clap.workspace = true
+env_logger.workspace = true
+log.workspace = true
 # Ratatui 0.30.0 has a bug in the TUI display for Windows, we are using the older version until it is fixed.
 # For more details: https://github.com/esp-rs/esp-generate/issues/309
 ratatui         = { version = "0.29.0", features = ["crossterm", "unstable"] }
-somni-expr      = "0.3.2"
+semver.workspace = true
 taplo           = "0.14.0"
 update-informer = { version = "1.3.0", optional = true }
-serde           = { version = "1.0.229", features = ["derive"] }
-serde_yaml      = "0.9.33"
-toml_edit       = "0.25.15+spec-1.1.0"
-indexmap = { version = "2.14.2", features = ["serde"] }
+serde.workspace = true
+serde_yaml.workspace = true
+toml_edit       = { version = "0.25.15+spec-1.1.0", features = ["serde"] }
+walkdir         = "2.5.0"
+tempfile        = "3.23.0"
+indexmap.workspace = true
 
 [build-dependencies]
 quote   = "1.0.47"

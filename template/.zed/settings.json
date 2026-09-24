@@ -1,26 +1,23 @@
-//INCLUDEFILE option("zed")
 {
     "lsp": {
         "rust-analyzer": {
             "initialization_options": {
                 "cargo": {
                     "allTargets": false,
-                    //REPLACE riscv32imac-unknown-none-elf rust_target
-                    "target": "riscv32imac-unknown-none-elf",
-                    //IF option("xtensa")
+                    "target": "{{ chip.rust_target }}",
+                    //%if chip.xtensa
                     "extraEnv": {
-                        //REPLACE esp rust_toolchain
-                        "RUSTUP_TOOLCHAIN": "esp"
+                        "RUSTUP_TOOLCHAIN": "{{ rust_toolchain }}"
                     }
-                    //ENDIF
+                    //%endif
                 },
-                //IF option("xtensa")
+                //%if chip.xtensa
                 "server": {
                     "extraEnv": {
                         "RUSTUP_TOOLCHAIN": "stable"
                     }
                 },
-                //ENDIF
+                //%endif
             }
         }
     }

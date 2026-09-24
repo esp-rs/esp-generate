@@ -1,17 +1,14 @@
-#INCLUDEFILE option("helix")
 [[language]]
 name = "rust"
 
-#IF option("xtensa")
+#%if chip.xtensa
 [language-server.rust-analyzer]
 environment.RUSTUP_TOOLCHAIN = "stable"
 
-#ENDIF
+#%endif
 [language-server.rust-analyzer.config]
 cargo.allTargets = false
-#REPLACE riscv32imac-unknown-none-elf rust_target
-cargo.target = "riscv32imac-unknown-none-elf"
-#IF option("xtensa")
-#REPLACE esp rust_toolchain
-cargo.extraEnv.RUSTUP_TOOLCHAIN = "esp"
-#ENDIF
+cargo.target = "{{ chip.rust_target }}"
+#%if chip.xtensa
+cargo.extraEnv.RUSTUP_TOOLCHAIN = "{{ rust_toolchain }}"
+#%endif

@@ -1,27 +1,24 @@
---INCLUDEFILE option("neovim")
 -- You must enable the exrc setting in neovim for this config file to be used.
 local rust_analyzer = {
     cargo = {
-        --REPLACE riscv32imac-unknown-none-elf rust_target
-        target = "riscv32imac-unknown-none-elf",
+        target = "{{ chip.rust_target }}",
         allTargets = false,
-        --IF option("xtensa")
-        --REPLACE esp rust_toolchain
-        extraEnv = { RUSTUP_TOOLCHAIN = "esp" },
-        --ENDIF
+        --%if chip.xtensa
+        extraEnv = { RUSTUP_TOOLCHAIN = "{{ rust_toolchain }}" },
+        --%endif
     },
 }
 
---IF option("neovim-rustaceanvim")
+--%if option("neovim-rustaceanvim")
 -- Note the rustaceanvim name of the language server is rust-analyzer with a dash.
 vim.lsp.config("rust-analyzer", {
---ELSE
+--%else
 -- Note the neovim name of the language server is rust_analyzer with an underscore.
 vim.lsp.config("rust_analyzer", {
---ENDIF
---IF option("xtensa")
+--%endif
+--%if chip.xtensa
 	cmd = { "rustup", "run", "stable", "rust-analyzer" },
---ENDIF
+--%endif
     settings = {
         ["rust-analyzer"] = rust_analyzer,
     },

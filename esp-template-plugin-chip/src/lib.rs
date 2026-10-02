@@ -2,10 +2,10 @@
 //! `chip` selection-group fragment, and the `chip.…` facts from
 //! `esp-metadata-generated`.
 //!
-//! **This crate's version is the vocabulary**, so bumping the metadata
-//! dependency is a version bump here every time, or the number stops meaning
-//! anything. A host keeps older templates working by depending on an older
-//! version of this crate as well and registering both.
+//! **This crate's version is the vocabulary.** Adding a chip or a `chip.…`
+//! symbol moves the patch; removing or renaming one moves the minor. A host
+//! serves both sides of a minor bump by depending on an older version of this
+//! crate as well and registering both.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write;

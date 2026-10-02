@@ -71,6 +71,8 @@ pub fn parse_template_arg(value: &str) -> Result<TemplateRef> {
 /// A cloned repository, deleted when this is dropped.
 pub struct Checkout {
     pub root: PathBuf,
+    /// In the form cargo accepts as a `git` dependency.
+    pub url: String,
     pub commit: String,
     _clone: TempDir,
 }
@@ -120,9 +122,18 @@ pub fn clone(url: &str, reference: Option<&str>) -> Result<Checkout> {
 
     Ok(Checkout {
         root,
+        url: cargo_url(url),
         commit,
         _clone: clone,
     })
+}
+
+/// Cargo rejects `scp`-style `git@host:path`, so it becomes `ssh://git@host/path`.
+fn cargo_url(url: &str) -> String {
+    match url.split_once(':') {
+        Some((host, path)) if !url.contains("://") => format!("ssh://{host}/{path}"),
+        _ => url.to_string(),
+    }
 }
 
 /// Find the one directory in `dir` holding a template manifest.
@@ -218,6 +229,21 @@ mod test {
                 reference: Some("v1.x".to_string()),
             }
         );
+    }
+
+    #[test]
+    fn a_template_reports_a_url_cargo_accepts() {
+        assert_eq!(
+            cargo_url("git@github.com:espressif/esp-hal.git"),
+            "ssh://git@github.com/espressif/esp-hal.git"
+        );
+        for url in [
+            "https://github.com/esp-rs/esp-hal",
+            "ssh://git@github.com/esp-rs/esp-hal",
+            "file:///tmp/esp-hal",
+        ] {
+            assert_eq!(cargo_url(url), url);
+        }
     }
 
     #[test]

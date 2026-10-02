@@ -1,6 +1,8 @@
 //! Turning a selection into the files a project would contain. Generation
 //! writes the result; `check` discards it and keeps the errors.
 
+use std::path::{Path, PathBuf};
+
 use anyhow::{Result, bail};
 
 use esp_generate::Loaded;
@@ -9,6 +11,15 @@ use esp_generate::manifest;
 use esp_generate::plugin::selection;
 use esp_generate::process;
 use esp_generate::template::GeneratorOption;
+
+/// Where the template was read from: a git repository on this machine, or a
+/// clone of `url` at `commit`. Exactly one side is populated.
+#[derive(Default, Clone)]
+pub struct TemplateOrigin {
+    pub repo: Option<PathBuf>,
+    pub url: String,
+    pub commit: String,
+}
 
 /// The values the host supplies to every render.
 pub struct HostValues {
@@ -20,6 +31,51 @@ pub struct HostValues {
     pub esp_hal_version_full: Option<String>,
     /// `None` when the template declares no toolchain-bearing target.
     pub rust_toolchain: Option<String>,
+    pub origin: TemplateOrigin,
+    /// Where the project will be written; need not exist yet.
+    pub project_dir: PathBuf,
+}
+
+const ORIGIN_VALUES: [&str; 3] = ["template_repo", "template_url", "template_commit"];
+
+/// `to` as a `/`-separated path relative to `from`, both canonical.
+fn relative_path(from: &Path, to: &Path) -> Result<String> {
+    let from: Vec<_> = from.components().collect();
+    let to: Vec<_> = to.components().collect();
+    if from.first() != to.first() {
+        bail!(
+            "the project at {} and the template's repository at {} are on different drives, \
+             so the project cannot refer to the repository by a relative path. Generate it on \
+             the same drive as the repository; `check --build` generates into the temporary \
+             directory, which `TMP` moves.",
+            from.iter().collect::<PathBuf>().display(),
+            to.iter().collect::<PathBuf>().display(),
+        );
+    }
+
+    let common = from.iter().zip(&to).take_while(|(a, b)| a == b).count();
+    let parts: Vec<_> = std::iter::repeat_n("..".into(), from.len() - common)
+        .chain(to[common..].iter().map(|c| c.as_os_str().to_string_lossy()))
+        .collect();
+    Ok(if parts.is_empty() {
+        ".".to_string()
+    } else {
+        parts.join("/")
+    })
+}
+
+/// `template_repo`: the repository root relative to the project, or `""` when
+/// the template is not in a local repository.
+pub fn template_repo(origin: &TemplateOrigin, project_dir: &Path) -> Result<String> {
+    let Some(repo) = &origin.repo else {
+        return Ok(String::new());
+    };
+    let (Some(parent), Some(name)) = (project_dir.parent(), project_dir.file_name()) else {
+        bail!("`{}` is not a project directory", project_dir.display());
+    };
+    let parent = std::fs::canonicalize(parent)
+        .map_err(|e| anyhow::anyhow!("cannot resolve {}: {e}", parent.display()))?;
+    relative_path(&parent.join(name), repo)
 }
 
 /// The template's `esp-hal` version, padded to the `x.y.z` docs.rs links need.
@@ -88,6 +144,14 @@ pub fn facts(
     facts.set_value("generate_version", env!("CARGO_PKG_VERSION"));
     facts.set_value("project_name", host.project_name.clone());
     facts.set_value("generate_parameters", host.generate_parameters.clone());
+    if host.origin.repo.is_some() || !host.origin.url.is_empty() {
+        facts.set_value(
+            "template_repo",
+            template_repo(&host.origin, &host.project_dir)?,
+        );
+        facts.set_value("template_url", host.origin.url.clone());
+        facts.set_value("template_commit", host.origin.commit.clone());
+    }
     if let Some(version) = &host.esp_hal_version_full {
         facts.set_value("esp_hal_version_full", version.clone());
     }
@@ -125,6 +189,14 @@ fn selected_groups(selected: &[String], flat_options: &[GeneratorOption]) -> Res
     Ok(groups)
 }
 
+/// What `cargo fmt` is given on top of any `rustfmt.toml` it finds.
+pub const RUSTFMT_CONFIG: [&str; 4] = [
+    "--config",
+    "group_imports=StdExternalCrate",
+    "--config",
+    "imports_granularity=Module",
+];
+
 /// Format a freshly written project the way generation does.
 ///
 /// `check --build` runs `cargo fmt --check` over the result, so it has to see
@@ -132,14 +204,8 @@ fn selected_groups(selected: &[String], flat_options: &[GeneratorOption]) -> Res
 pub fn format_project(steps: &manifest::Steps, project_dir: &std::path::Path) -> Result<()> {
     if steps.cargo_fmt {
         std::process::Command::new("cargo")
-            .args([
-                "fmt",
-                "--",
-                "--config",
-                "group_imports=StdExternalCrate",
-                "--config",
-                "imports_granularity=Module",
-            ])
+            .args(["fmt", "--"])
+            .args(RUSTFMT_CONFIG)
             .current_dir(project_dir)
             .output()?;
     }
@@ -191,9 +257,19 @@ pub fn plan(
             }
         }
 
-        let processed = renderer
-            .render(&contents, &mut load_partial)
-            .map_err(|e| anyhow::anyhow!("{source_path}:{e}"))?;
+        let processed = renderer.render(&contents, &mut load_partial).map_err(|e| {
+            let e = e.to_string();
+            match ORIGIN_VALUES
+                .iter()
+                .find(|v| e.contains(**v) && !facts.values.contains_key(**v))
+            {
+                Some(value) => anyhow::anyhow!(
+                    "{source_path}:{e}\n`{value}` is unavailable: the template directory is \
+                     not inside a git checkout, and was not cloned by `--template`."
+                ),
+                None => anyhow::anyhow!("{source_path}:{e}"),
+            }
+        })?;
 
         let out_path = match output {
             Some(path) => {
@@ -225,6 +301,153 @@ mod test {
 
     /// Unformatted on purpose: both steps would rewrite it.
     const RAGGED: &str = "[package]\nname=\"x\"\nversion=\"0.1.0\"\n";
+
+    #[test]
+    fn a_directory_and_a_clone_report_disjoint_origins() {
+        let dir = tempfile::Builder::new()
+            .prefix("esp-generate-origin-test-")
+            .tempdir()
+            .unwrap();
+        std::fs::write(
+            dir.path().join("metadata.toml"),
+            "sdk_version = \"0.1.0\"\n[project]\ntype = \"other\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("template.yaml"),
+            "options:\n  - !Option\n    name: pinned\n    display_name: Pinned\n",
+        )
+        .unwrap();
+
+        let loaded =
+            esp_generate::Loaded::open(esp_generate::TemplateSource::Directory(dir.path().into()))
+                .expect("fixture must load");
+        let flat = esp_generate::config::flatten_options(&loaded.template.options);
+
+        let root = std::fs::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join("esp-hal")).unwrap();
+        std::fs::create_dir_all(root.join("work/repro")).unwrap();
+
+        let host = |origin, project_dir| HostValues {
+            project_name: "p".to_string(),
+            generate_parameters: String::new(),
+            esp_hal_version_full: None,
+            rust_toolchain: None,
+            origin,
+            project_dir,
+        };
+        let value = |facts: &process::Facts, k: &str| match facts.values.get(k) {
+            Some(process::FactValue::Str(s)) => s.to_string(),
+            other => panic!("`{k}` is {other:?}"),
+        };
+
+        let (local, _) = facts(
+            &loaded,
+            &[],
+            &flat,
+            &host(
+                TemplateOrigin {
+                    repo: Some(root.join("esp-hal")),
+                    ..Default::default()
+                },
+                root.join("work/repro/p"),
+            ),
+        )
+        .unwrap();
+        assert_eq!(value(&local, "template_repo"), "../../../esp-hal");
+        assert_eq!(value(&local, "template_url"), "");
+        assert_eq!(value(&local, "template_commit"), "");
+
+        let (inside, _) = facts(
+            &loaded,
+            &[],
+            &flat,
+            &host(
+                TemplateOrigin {
+                    repo: Some(root.join("esp-hal")),
+                    ..Default::default()
+                },
+                root.join("esp-hal/p"),
+            ),
+        )
+        .unwrap();
+        assert_eq!(value(&inside, "template_repo"), "..");
+
+        let (cloned, _) = facts(
+            &loaded,
+            &[],
+            &flat,
+            &host(
+                TemplateOrigin {
+                    repo: None,
+                    url: "https://github.com/esp-rs/esp-hal".to_string(),
+                    commit: "c4e5ba70c".to_string(),
+                },
+                root.join("work/repro/p"),
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            value(&cloned, "template_url"),
+            "https://github.com/esp-rs/esp-hal"
+        );
+        assert_eq!(value(&cloned, "template_commit"), "c4e5ba70c");
+        assert_eq!(
+            value(&cloned, "template_repo"),
+            "",
+            "a clone's directory is temporary, so a template must not be given it"
+        );
+    }
+
+    #[test]
+    fn an_unknown_origin_fails_the_template_that_reads_it() {
+        let dir = tempfile::Builder::new()
+            .prefix("esp-generate-origin-test-")
+            .tempdir()
+            .unwrap();
+        std::fs::write(
+            dir.path().join("metadata.toml"),
+            "sdk_version = \"0.1.0\"\n[project]\ntype = \"other\"\n",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("template.yaml"), "options: []\n").unwrap();
+        std::fs::write(dir.path().join("deps.txt"), "{{ template_repo }}\n").unwrap();
+
+        let loaded =
+            esp_generate::Loaded::open(esp_generate::TemplateSource::Directory(dir.path().into()))
+                .expect("fixture must load");
+        let host = HostValues {
+            project_name: "p".to_string(),
+            generate_parameters: String::new(),
+            esp_hal_version_full: None,
+            rust_toolchain: None,
+            origin: TemplateOrigin::default(),
+            project_dir: dir.path().join("p"),
+        };
+
+        let (facts, _) = facts(&loaded, &[], &[], &host).unwrap();
+        for value in ORIGIN_VALUES {
+            assert!(
+                !facts.values.contains_key(value),
+                "`{value}` claims an origin"
+            );
+        }
+
+        let err = plan(&loaded, &[], &[], &facts)
+            .err()
+            .expect("reading `template_repo` must fail");
+        assert!(
+            err.to_string().contains("not inside a git checkout"),
+            "{err}"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_repository_on_another_drive_is_refused() {
+        let err = relative_path(Path::new(r"C:\work\p"), Path::new(r"D:\esp-hal")).unwrap_err();
+        assert!(err.to_string().contains("different drives"), "{err}");
+    }
 
     #[test]
     fn a_template_that_opted_out_gets_neither_formatter() {

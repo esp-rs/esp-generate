@@ -146,7 +146,7 @@ enum SubCommands {
 }
 
 impl SubCommands {
-    fn handle(&self, loaded: &Loaded) -> Result<()> {
+    fn handle(&self, loaded: &Loaded, origin: &render::TemplateOrigin) -> Result<()> {
         fn compatibility_info_text(options: &[&GeneratorOption], opt: &GeneratorOption) -> String {
             // Collect every `compatible` group key used by any variant sharing
             // this option's name (there can be more than one variant — see the
@@ -344,6 +344,7 @@ impl SubCommands {
                         excluded_categories: exclude_category.clone(),
                         crossed_groups: cross_group.clone(),
                     },
+                    origin: origin.clone(),
                     build: *build,
                     dry_run: *dry_run,
                 },
@@ -393,6 +394,34 @@ fn wants_interactive(
         return true;
     }
     user_chose_nothing && !headless
+}
+
+/// The repository a render reports as `template_repo`, or `template_url` and
+/// `template_commit`.
+fn template_origin(
+    source: &TemplateSource,
+    checkout: Option<&fetch::Checkout>,
+) -> render::TemplateOrigin {
+    if let Some(checkout) = checkout {
+        return render::TemplateOrigin {
+            repo: None,
+            url: checkout.url.clone(),
+            commit: checkout.commit.clone(),
+        };
+    }
+
+    let TemplateSource::Directory(dir) = source else {
+        return render::TemplateOrigin::default();
+    };
+
+    render::TemplateOrigin {
+        repo: fs::canonicalize(dir).ok().and_then(|dir| {
+            dir.ancestors()
+                .find(|a| a.join(".git").exists())
+                .map(Path::to_path_buf)
+        }),
+        ..Default::default()
+    }
 }
 
 /// Locate what a `--template` value names, cloning it first if it is remote.
@@ -612,8 +641,9 @@ fn main() -> Result<()> {
     let mut args = Args::parse();
 
     if let Some(subcommand) = args.subcommands.take() {
-        let (source, _checkout) = template_source(&args)?;
-        return subcommand.handle(&Loaded::open(source)?);
+        let (source, checkout) = template_source(&args)?;
+        let origin = template_origin(&source, checkout.as_ref());
+        return subcommand.handle(&Loaded::open(source)?, &origin);
     }
 
     // Only check for updates once the command-line arguments have been processed,
@@ -625,7 +655,8 @@ fn main() -> Result<()> {
     }
 
     // Held for the whole run: a cloned template is deleted when this drops.
-    let (source, _checkout) = template_source(&args)?;
+    let (source, checkout) = template_source(&args)?;
+    let origin = template_origin(&source, checkout.as_ref());
     let loaded = Loaded::open(source)?;
 
     let user_chose_nothing = args.option.is_empty();
@@ -661,18 +692,21 @@ fn main() -> Result<()> {
         bail!("Directory already exists");
     }
 
+    render::template_repo(&origin, &path.join(&name))?;
+
     let steps = loaded.manifest.steps();
 
-    let (esp_hal_version_full, msrv) = if loaded.manifest.is_cargo_project() {
-        let versions = cargo::CargoToml::load(
-            loaded
-                .source
-                .get("Cargo.toml")
-                .ok_or_else(|| anyhow::anyhow!("template has no `Cargo.toml`"))?
-                .as_ref(),
-        )
+    // A template may emit its manifest from a differently-named file, so an
+    // absent `Cargo.toml` is not an error — there is simply nothing to read.
+    let template_manifest = loaded
+        .source
+        .get("Cargo.toml")
+        .filter(|_| loaded.manifest.is_cargo_project())
+        .map(|raw| cargo::CargoToml::load(raw.as_ref()))
+        .transpose()
         .map_err(|e| anyhow::anyhow!("template `Cargo.toml` is unreadable: {e}"))?;
 
+    let (esp_hal_version_full, msrv) = if let Some(versions) = template_manifest {
         // TODO: do not assume esp-hal version is present
         let esp_hal_version_full =
             render::esp_hal_version_full(&versions.dependency_version("esp-hal"));
@@ -930,6 +964,8 @@ fn main() -> Result<()> {
             generate_parameters: selected_options,
             esp_hal_version_full,
             rust_toolchain: selected_toolchain.clone(),
+            origin,
+            project_dir: path.join(&name),
         },
     )?;
 

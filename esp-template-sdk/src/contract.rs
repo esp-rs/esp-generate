@@ -185,6 +185,9 @@ mod test {
             "rust_toolchain",
             "reserved_gpio_code",
             "has_reserved_pins",
+            "template_repo",
+            "template_url",
+            "template_commit",
         ] {
             assert!(
                 feature(name).is_none(),

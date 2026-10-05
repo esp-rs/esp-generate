@@ -12,13 +12,15 @@ use esp_generate::plugin::selection;
 use esp_generate::process;
 use esp_generate::template::GeneratorOption;
 
-/// Where the template was read from: a git repository on this machine, or a
-/// clone of `url` at `commit`. Exactly one side is populated.
-#[derive(Default, Clone)]
-pub struct TemplateOrigin {
-    pub repo: Option<PathBuf>,
-    pub url: String,
-    pub commit: String,
+/// Where the template was read from.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TemplateOrigin {
+    /// A directory inside the git repository rooted here, canonicalized.
+    Repository(PathBuf),
+    /// A clone of `url` at `commit`.
+    Clone { url: String, commit: String },
+    /// The bundled template, or a directory outside any git repository.
+    Unknown,
 }
 
 /// The values the host supplies to every render.
@@ -32,11 +34,34 @@ pub struct HostValues {
     /// `None` when the template declares no toolchain-bearing target.
     pub rust_toolchain: Option<String>,
     pub origin: TemplateOrigin,
-    /// Where the project will be written; need not exist yet.
+    /// Where the project is, or would be, written; need not exist. Read only
+    /// for a [`TemplateOrigin::Repository`].
     pub project_dir: PathBuf,
 }
 
-const ORIGIN_VALUES: [&str; 3] = ["template_repo", "template_url", "template_commit"];
+const ORIGIN_VALUES: [&str; 4] = [
+    "template_origin",
+    "template_repo",
+    "template_url",
+    "template_commit",
+];
+
+/// Why `error` names an origin value that was not set, if it does.
+fn origin_hint(facts: &process::Facts, error: &str) -> Option<String> {
+    let value = ORIGIN_VALUES
+        .iter()
+        .find(|v| error.contains(**v) && !facts.values.contains_key(**v))?;
+    Some(match facts.values.get("template_origin") {
+        Some(process::FactValue::Str(origin)) => format!(
+            "`{value}` is not set when `template_origin` is \"{origin}\"; branch on \
+             `template_origin` before using it."
+        ),
+        _ => format!(
+            "`{value}` is unavailable: the template directory is not inside a git checkout, \
+             and was not cloned by `--template`."
+        ),
+    })
+}
 
 /// `to` as a `/`-separated path relative to `from`, both canonical.
 fn relative_path(from: &Path, to: &Path) -> Result<String> {
@@ -46,17 +71,25 @@ fn relative_path(from: &Path, to: &Path) -> Result<String> {
         bail!(
             "the project at {} and the template's repository at {} are on different drives, \
              so the project cannot refer to the repository by a relative path. Generate it on \
-             the same drive as the repository; `check --build` generates into the temporary \
-             directory, which `TMP` moves.",
+             the same drive as the repository. `check` places its project in the current \
+             directory, or with `--build` in the temporary directory, which `TMP` moves.",
             from.iter().collect::<PathBuf>().display(),
             to.iter().collect::<PathBuf>().display(),
         );
     }
 
     let common = from.iter().zip(&to).take_while(|(a, b)| a == b).count();
-    let parts: Vec<_> = std::iter::repeat_n("..".into(), from.len() - common)
-        .chain(to[common..].iter().map(|c| c.as_os_str().to_string_lossy()))
-        .collect();
+    let mut parts = vec![".."; from.len() - common];
+    for component in &to[common..] {
+        match component.as_os_str().to_str() {
+            Some(part) if !part.contains(['"', '\\']) => parts.push(part),
+            _ => bail!(
+                "the template's repository at {} cannot be written into a project manifest: \
+                 its path must be UTF-8 and contain neither `\"` nor `\\`.",
+                to.iter().collect::<PathBuf>().display(),
+            ),
+        }
+    }
     Ok(if parts.is_empty() {
         ".".to_string()
     } else {
@@ -64,12 +97,8 @@ fn relative_path(from: &Path, to: &Path) -> Result<String> {
     })
 }
 
-/// `template_repo`: the repository root relative to the project, or `""` when
-/// the template is not in a local repository.
-pub fn template_repo(origin: &TemplateOrigin, project_dir: &Path) -> Result<String> {
-    let Some(repo) = &origin.repo else {
-        return Ok(String::new());
-    };
+/// `template_repo`: the repository root `repo`, relative to the project.
+pub fn template_repo(repo: &Path, project_dir: &Path) -> Result<String> {
     let (Some(parent), Some(name)) = (project_dir.parent(), project_dir.file_name()) else {
         bail!("`{}` is not a project directory", project_dir.display());
     };
@@ -144,13 +173,17 @@ pub fn facts(
     facts.set_value("generate_version", env!("CARGO_PKG_VERSION"));
     facts.set_value("project_name", host.project_name.clone());
     facts.set_value("generate_parameters", host.generate_parameters.clone());
-    if host.origin.repo.is_some() || !host.origin.url.is_empty() {
-        facts.set_value(
-            "template_repo",
-            template_repo(&host.origin, &host.project_dir)?,
-        );
-        facts.set_value("template_url", host.origin.url.clone());
-        facts.set_value("template_commit", host.origin.commit.clone());
+    match &host.origin {
+        TemplateOrigin::Repository(repo) => {
+            facts.set_value("template_origin", "repository");
+            facts.set_value("template_repo", template_repo(repo, &host.project_dir)?);
+        }
+        TemplateOrigin::Clone { url, commit } => {
+            facts.set_value("template_origin", "clone");
+            facts.set_value("template_url", url.clone());
+            facts.set_value("template_commit", commit.clone());
+        }
+        TemplateOrigin::Unknown => {}
     }
     if let Some(version) = &host.esp_hal_version_full {
         facts.set_value("esp_hal_version_full", version.clone());
@@ -257,19 +290,13 @@ pub fn plan(
             }
         }
 
-        let processed = renderer.render(&contents, &mut load_partial).map_err(|e| {
-            let e = e.to_string();
-            match ORIGIN_VALUES
-                .iter()
-                .find(|v| e.contains(**v) && !facts.values.contains_key(**v))
-            {
-                Some(value) => anyhow::anyhow!(
-                    "{source_path}:{e}\n`{value}` is unavailable: the template directory is \
-                     not inside a git checkout, and was not cloned by `--template`."
-                ),
-                None => anyhow::anyhow!("{source_path}:{e}"),
-            }
-        })?;
+        let processed =
+            renderer.render(&contents, &mut load_partial).map_err(|e| {
+                match origin_hint(facts, &e.to_string()) {
+                    Some(hint) => anyhow::anyhow!("{source_path}:{e}\n{hint}"),
+                    None => anyhow::anyhow!("{source_path}:{e}"),
+                }
+            })?;
 
         let out_path = match output {
             Some(path) => {
@@ -341,32 +368,31 @@ mod test {
             other => panic!("`{k}` is {other:?}"),
         };
 
+        let absent = |facts: &process::Facts, k: &str| {
+            assert!(!facts.values.contains_key(k), "`{k}` is set");
+        };
+
         let (local, _) = facts(
             &loaded,
             &[],
             &flat,
             &host(
-                TemplateOrigin {
-                    repo: Some(root.join("esp-hal")),
-                    ..Default::default()
-                },
+                TemplateOrigin::Repository(root.join("esp-hal")),
                 root.join("work/repro/p"),
             ),
         )
         .unwrap();
+        assert_eq!(value(&local, "template_origin"), "repository");
         assert_eq!(value(&local, "template_repo"), "../../../esp-hal");
-        assert_eq!(value(&local, "template_url"), "");
-        assert_eq!(value(&local, "template_commit"), "");
+        absent(&local, "template_url");
+        absent(&local, "template_commit");
 
         let (inside, _) = facts(
             &loaded,
             &[],
             &flat,
             &host(
-                TemplateOrigin {
-                    repo: Some(root.join("esp-hal")),
-                    ..Default::default()
-                },
+                TemplateOrigin::Repository(root.join("esp-hal")),
                 root.join("esp-hal/p"),
             ),
         )
@@ -378,8 +404,7 @@ mod test {
             &[],
             &flat,
             &host(
-                TemplateOrigin {
-                    repo: None,
+                TemplateOrigin::Clone {
                     url: "https://github.com/esp-rs/esp-hal".to_string(),
                     commit: "c4e5ba70c".to_string(),
                 },
@@ -387,20 +412,17 @@ mod test {
             ),
         )
         .unwrap();
+        assert_eq!(value(&cloned, "template_origin"), "clone");
         assert_eq!(
             value(&cloned, "template_url"),
             "https://github.com/esp-rs/esp-hal"
         );
         assert_eq!(value(&cloned, "template_commit"), "c4e5ba70c");
-        assert_eq!(
-            value(&cloned, "template_repo"),
-            "",
-            "a clone's directory is temporary, so a template must not be given it"
-        );
+        absent(&cloned, "template_repo");
     }
 
     #[test]
-    fn an_unknown_origin_fails_the_template_that_reads_it() {
+    fn reading_an_unset_origin_value_fails_with_the_reason() {
         let dir = tempfile::Builder::new()
             .prefix("esp-generate-origin-test-")
             .tempdir()
@@ -416,30 +438,64 @@ mod test {
         let loaded =
             esp_generate::Loaded::open(esp_generate::TemplateSource::Directory(dir.path().into()))
                 .expect("fixture must load");
-        let host = HostValues {
+        let host = |origin| HostValues {
             project_name: "p".to_string(),
             generate_parameters: String::new(),
             esp_hal_version_full: None,
             rust_toolchain: None,
-            origin: TemplateOrigin::default(),
+            origin,
             project_dir: dir.path().join("p"),
         };
 
-        let (facts, _) = facts(&loaded, &[], &[], &host).unwrap();
+        let (unknown, _) = facts(&loaded, &[], &[], &host(TemplateOrigin::Unknown)).unwrap();
         for value in ORIGIN_VALUES {
             assert!(
-                !facts.values.contains_key(value),
+                !unknown.values.contains_key(value),
                 "`{value}` claims an origin"
             );
         }
-
-        let err = plan(&loaded, &[], &[], &facts)
+        let err = plan(&loaded, &[], &[], &unknown)
             .err()
             .expect("reading `template_repo` must fail");
         assert!(
             err.to_string().contains("not inside a git checkout"),
             "{err}"
         );
+
+        let clone = TemplateOrigin::Clone {
+            url: "https://github.com/esp-rs/esp-hal".to_string(),
+            commit: "c4e5ba70c".to_string(),
+        };
+        let (cloned, _) = facts(&loaded, &[], &[], &host(clone)).unwrap();
+        let err = plan(&loaded, &[], &[], &cloned)
+            .err()
+            .expect("a clone has no `template_repo`");
+        assert!(
+            err.to_string().contains("branch on `template_origin`"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_repository_path_that_cannot_be_written_into_toml_is_refused() {
+        let err = relative_path(Path::new("/w/p"), Path::new("/w/a\"b")).unwrap_err();
+        assert!(err.to_string().contains("cannot be written"), "{err}");
+
+        assert_eq!(
+            relative_path(Path::new("/a\"b/p"), Path::new("/a\"b/esp-hal")).unwrap(),
+            "../esp-hal",
+            "only the part that reaches the manifest has to be writable"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_backslash_or_non_utf8_repository_path_is_refused() {
+        use std::os::unix::ffi::OsStrExt;
+
+        assert!(relative_path(Path::new("/w/p"), Path::new("/w/a\\b")).is_err());
+        let non_utf8 = Path::new("/w").join(std::ffi::OsStr::from_bytes(b"\xff"));
+        assert!(relative_path(Path::new("/w/p"), &non_utf8).is_err());
     }
 
     #[cfg(windows)]

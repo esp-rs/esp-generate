@@ -185,6 +185,7 @@ mod test {
             "rust_toolchain",
             "reserved_gpio_code",
             "has_reserved_pins",
+            "template_origin",
             "template_repo",
             "template_url",
             "template_commit",

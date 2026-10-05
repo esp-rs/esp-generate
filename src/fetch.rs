@@ -109,14 +109,20 @@ pub fn clone(url: &str, reference: Option<&str>) -> Result<Checkout> {
         }
     }
 
-    let commit = Command::new("git")
+    let rev_parse = Command::new("git")
         .args(["rev-parse", "HEAD"])
         .current_dir(path)
         .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_else(|| "unknown".to_string());
+        .context("could not run `git rev-parse` in the clone")?;
+    if !rev_parse.status.success() {
+        bail!(
+            "could not read the commit `{url}` was cloned at: {}",
+            String::from_utf8_lossy(&rev_parse.stderr).trim()
+        );
+    }
+    let commit = String::from_utf8_lossy(&rev_parse.stdout)
+        .trim()
+        .to_string();
 
     let root = find_template_root(path)?;
 

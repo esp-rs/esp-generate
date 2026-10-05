@@ -2,7 +2,7 @@
 //! what breaks, without writing anything.
 
 use std::fmt::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Result, bail};
@@ -150,9 +150,10 @@ fn check_one(
                 .tempdir()
         })
         .transpose()?;
-    let project = match &dir {
-        Some(dir) => dir.path().join("check"),
-        None => origin.repo.clone().unwrap_or_default().join("check"),
+    let project = match (&dir, origin) {
+        (Some(dir), _) => dir.path().join("check"),
+        (None, render::TemplateOrigin::Repository(_)) => std::env::current_dir()?.join("check"),
+        (None, _) => PathBuf::from("check"),
     };
 
     let (facts, _target) = render::facts(
@@ -259,7 +260,7 @@ options:
     fn request() -> Request {
         Request {
             sweep: SweepOptions::default(),
-            origin: render::TemplateOrigin::default(),
+            origin: render::TemplateOrigin::Unknown,
             build: false,
             dry_run: false,
         }

@@ -2,7 +2,7 @@
 //! what breaks, without writing anything.
 
 use std::fmt::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Result, bail};
@@ -24,6 +24,7 @@ struct Failure {
 /// How much of the template to exercise.
 pub struct Request {
     pub sweep: SweepOptions,
+    pub origin: render::TemplateOrigin,
     /// Also generate each combination to a temporary directory and run cargo
     /// over it.
     pub build: bool,
@@ -57,21 +58,14 @@ pub fn run(loaded: &Loaded, request: &Request) -> Result<()> {
     );
 
     let flat_options = flatten_options(&loaded.template.options);
-    let esp_hal_version = if loaded.manifest.is_cargo_project() {
-        Some(render::esp_hal_version_full(
-            &crate::cargo::CargoToml::load(
-                loaded
-                    .source
-                    .get("Cargo.toml")
-                    .ok_or_else(|| anyhow::anyhow!("template has no `Cargo.toml`"))?
-                    .as_ref(),
-            )
-            .map_err(|e| anyhow::anyhow!("template `Cargo.toml` is unreadable: {e}"))?
-            .dependency_version("esp-hal"),
-        ))
-    } else {
-        None
-    };
+    let esp_hal_version = loaded
+        .source
+        .get("Cargo.toml")
+        .filter(|_| loaded.manifest.is_cargo_project())
+        .map(|raw| crate::cargo::CargoToml::load(raw.as_ref()))
+        .transpose()
+        .map_err(|e| anyhow::anyhow!("template `Cargo.toml` is unreadable: {e}"))?
+        .map(|versions| render::esp_hal_version_full(&versions.dependency_version("esp-hal")));
 
     let mut failures = Vec::new();
     let mut predicates_used: Vec<&'static str> = Vec::new();
@@ -81,6 +75,7 @@ pub fn run(loaded: &Loaded, request: &Request) -> Result<()> {
             combination,
             &flat_options,
             esp_hal_version.as_deref(),
+            &request.origin,
             request.build,
         ) {
             Ok(used) => {
@@ -145,8 +140,22 @@ fn check_one(
     selected: &[String],
     flat_options: &[GeneratorOption],
     esp_hal_version: Option<&str>,
+    origin: &render::TemplateOrigin,
     build: bool,
 ) -> Result<Vec<&'static str>> {
+    let dir = build
+        .then(|| {
+            tempfile::Builder::new()
+                .prefix("esp-generate-check-")
+                .tempdir()
+        })
+        .transpose()?;
+    let project = match (&dir, origin) {
+        (Some(dir), _) => dir.path().join("check"),
+        (None, render::TemplateOrigin::Repository(_)) => std::env::current_dir()?.join("check"),
+        (None, _) => PathBuf::from("check"),
+    };
+
     let (facts, _target) = render::facts(
         loaded,
         selected,
@@ -160,6 +169,8 @@ fn check_one(
                 .join(" "),
             esp_hal_version_full: esp_hal_version.map(str::to_string),
             rust_toolchain: None,
+            origin: origin.clone(),
+            project_dir: project.clone(),
         },
     )?;
 
@@ -169,10 +180,6 @@ fn check_one(
         return Ok(planned.predicates_used);
     }
 
-    let dir = tempfile::Builder::new()
-        .prefix("esp-generate-check-")
-        .tempdir()?;
-    let project = dir.path().join("check");
     for (out_path, contents) in planned.files {
         let out_path = project.join(out_path);
         std::fs::create_dir_all(out_path.parent().unwrap())?;
@@ -187,7 +194,10 @@ fn check_one(
     }
     cargo(&project, &["clippy", "--no-deps", "--", "-Dwarnings"])?;
     if steps.cargo_fmt {
-        cargo(&project, &["fmt", "--", "--check"])?;
+        cargo(
+            &project,
+            &[&["fmt", "--", "--check"][..], &render::RUSTFMT_CONFIG].concat(),
+        )?;
     }
 
     Ok(planned.predicates_used)
@@ -250,6 +260,7 @@ options:
     fn request() -> Request {
         Request {
             sweep: SweepOptions::default(),
+            origin: render::TemplateOrigin::Unknown,
             build: false,
             dry_run: false,
         }

@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use esp_generate::plugin;
 use esp_generate::sweep;
@@ -146,7 +146,7 @@ enum SubCommands {
 }
 
 impl SubCommands {
-    fn handle(&self, loaded: &Loaded) -> Result<()> {
+    fn handle(&self, loaded: &Loaded, origin: &render::TemplateOrigin) -> Result<()> {
         fn compatibility_info_text(options: &[&GeneratorOption], opt: &GeneratorOption) -> String {
             // Collect every `compatible` group key used by any variant sharing
             // this option's name (there can be more than one variant — see the
@@ -344,6 +344,7 @@ impl SubCommands {
                         excluded_categories: exclude_category.clone(),
                         crossed_groups: cross_group.clone(),
                     },
+                    origin: origin.clone(),
                     build: *build,
                     dry_run: *dry_run,
                 },
@@ -393,6 +394,36 @@ fn wants_interactive(
         return true;
     }
     user_chose_nothing && !headless
+}
+
+/// Where the template a render sees was read from.
+fn template_origin(
+    source: &TemplateSource,
+    checkout: Option<&fetch::Checkout>,
+) -> Result<render::TemplateOrigin> {
+    if let Some(checkout) = checkout {
+        return Ok(render::TemplateOrigin::Clone {
+            url: checkout.url.clone(),
+            commit: checkout.commit.clone(),
+        });
+    }
+
+    let TemplateSource::Directory(dir) = source else {
+        return Ok(render::TemplateOrigin::Unknown);
+    };
+
+    let dir = fs::canonicalize(dir)
+        .with_context(|| format!("cannot resolve the template directory {}", dir.display()))?;
+    for ancestor in dir.ancestors() {
+        let git = ancestor.join(".git");
+        if git
+            .try_exists()
+            .with_context(|| format!("cannot check for {}", git.display()))?
+        {
+            return Ok(render::TemplateOrigin::Repository(ancestor.to_path_buf()));
+        }
+    }
+    Ok(render::TemplateOrigin::Unknown)
 }
 
 /// Locate what a `--template` value names, cloning it first if it is remote.
@@ -612,8 +643,9 @@ fn main() -> Result<()> {
     let mut args = Args::parse();
 
     if let Some(subcommand) = args.subcommands.take() {
-        let (source, _checkout) = template_source(&args)?;
-        return subcommand.handle(&Loaded::open(source)?);
+        let (source, checkout) = template_source(&args)?;
+        let origin = template_origin(&source, checkout.as_ref())?;
+        return subcommand.handle(&Loaded::open(source)?, &origin);
     }
 
     // Only check for updates once the command-line arguments have been processed,
@@ -625,7 +657,8 @@ fn main() -> Result<()> {
     }
 
     // Held for the whole run: a cloned template is deleted when this drops.
-    let (source, _checkout) = template_source(&args)?;
+    let (source, checkout) = template_source(&args)?;
+    let origin = template_origin(&source, checkout.as_ref())?;
     let loaded = Loaded::open(source)?;
 
     let user_chose_nothing = args.option.is_empty();
@@ -661,18 +694,23 @@ fn main() -> Result<()> {
         bail!("Directory already exists");
     }
 
+    if let render::TemplateOrigin::Repository(repo) = &origin {
+        render::template_repo(repo, &path.join(&name))?;
+    }
+
     let steps = loaded.manifest.steps();
 
-    let (esp_hal_version_full, msrv) = if loaded.manifest.is_cargo_project() {
-        let versions = cargo::CargoToml::load(
-            loaded
-                .source
-                .get("Cargo.toml")
-                .ok_or_else(|| anyhow::anyhow!("template has no `Cargo.toml`"))?
-                .as_ref(),
-        )
+    // A template may emit its manifest from a differently-named file, so an
+    // absent `Cargo.toml` is not an error — there is simply nothing to read.
+    let template_manifest = loaded
+        .source
+        .get("Cargo.toml")
+        .filter(|_| loaded.manifest.is_cargo_project())
+        .map(|raw| cargo::CargoToml::load(raw.as_ref()))
+        .transpose()
         .map_err(|e| anyhow::anyhow!("template `Cargo.toml` is unreadable: {e}"))?;
 
+    let (esp_hal_version_full, msrv) = if let Some(versions) = template_manifest {
         // TODO: do not assume esp-hal version is present
         let esp_hal_version_full =
             render::esp_hal_version_full(&versions.dependency_version("esp-hal"));
@@ -930,6 +968,8 @@ fn main() -> Result<()> {
             generate_parameters: selected_options,
             esp_hal_version_full,
             rust_toolchain: selected_toolchain.clone(),
+            origin,
+            project_dir: path.join(&name),
         },
     )?;
 
@@ -1523,5 +1563,91 @@ mod test {
         assert!(!requires_nightly(&[], &flat, false));
 
         assert!(!requires_nightly(&ssp, &flat, true), "Xtensa is exempt");
+    }
+
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let output = std::process::Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+            .args(["-c", "commit.gpgsign=false"])
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "git {args:?} failed");
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    fn origin_test_dir() -> tempfile::TempDir {
+        tempfile::Builder::new()
+            .prefix("esp-generate-origin-test-")
+            .tempdir()
+            .unwrap()
+    }
+
+    #[test]
+    fn the_bundled_template_has_no_origin() {
+        assert_eq!(
+            template_origin(&TemplateSource::Bundled, None).unwrap(),
+            render::TemplateOrigin::Unknown
+        );
+    }
+
+    #[test]
+    fn a_directory_inside_a_git_repository_reports_its_root() {
+        let dir = origin_test_dir();
+        git(dir.path(), &["init", "-q"]);
+        let template = dir.path().join("templates/basic");
+        fs::create_dir_all(&template).unwrap();
+
+        assert_eq!(
+            template_origin(&TemplateSource::Directory(template), None).unwrap(),
+            render::TemplateOrigin::Repository(fs::canonicalize(dir.path()).unwrap())
+        );
+    }
+
+    #[test]
+    fn a_directory_outside_git_has_no_origin() {
+        let dir = origin_test_dir();
+        assert_eq!(
+            template_origin(&TemplateSource::Directory(dir.path().into()), None).unwrap(),
+            render::TemplateOrigin::Unknown
+        );
+    }
+
+    #[test]
+    fn a_directory_that_cannot_be_resolved_is_an_error() {
+        let dir = origin_test_dir();
+        let missing = TemplateSource::Directory(dir.path().join("missing"));
+        assert!(template_origin(&missing, None).is_err());
+    }
+
+    #[test]
+    fn a_clone_reports_its_url_and_commit() {
+        let dir = origin_test_dir();
+        git(dir.path(), &["init", "-q"]);
+        fs::write(
+            dir.path().join("metadata.toml"),
+            "sdk_version = \"0.1.0\"\n",
+        )
+        .unwrap();
+        git(dir.path(), &["add", "-A"]);
+        git(
+            dir.path(),
+            &["commit", "-q", "--no-verify", "-m", "template"],
+        );
+        let commit = git(dir.path(), &["rev-parse", "HEAD"]);
+
+        let path = dir.path().display().to_string().replace('\\', "/");
+        let url = format!(
+            "file://{}{path}",
+            if path.starts_with('/') { "" } else { "/" }
+        );
+        let checkout = fetch::clone(&url, None).unwrap();
+        let source = TemplateSource::Directory(checkout.root.clone());
+
+        assert_eq!(
+            template_origin(&source, Some(&checkout)).unwrap(),
+            render::TemplateOrigin::Clone { url, commit }
+        );
     }
 }

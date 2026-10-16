@@ -12,7 +12,7 @@ use esp_generate::{
     config::{find_option, flatten_options},
 };
 use indexmap::IndexMap;
-use inquire::Text;
+use inquire::{Select, Text};
 use ratatui::crossterm::event;
 use std::collections::HashSet;
 use std::{
@@ -27,6 +27,7 @@ use std::{
 use esp_generate::{Loaded, TemplateSource};
 
 mod check;
+mod discover;
 mod fetch;
 mod render;
 mod toolchain;
@@ -86,6 +87,11 @@ struct Args {
     /// clone (`owner/repo[@branch-or-tag]`, an `https://` URL, or `git@host:path`)
     #[arg(long, global = true, value_name = "DIR_OR_REPO")]
     template: Option<PathBuf>,
+
+    /// Which template to use when `--template` holds several: its path within
+    /// the directory or repository, or the `name` in its manifest
+    #[arg(long, global = true, value_name = "NAME")]
+    template_name: Option<String>,
 
     /// Do not check for updates
     #[arg(short, long, global = true, action)]
@@ -426,9 +432,15 @@ fn template_origin(
     Ok(render::TemplateOrigin::Unknown)
 }
 
-/// Locate what a `--template` value names, cloning it first if it is remote.
-fn locate_template(value: &str) -> Result<(PathBuf, Option<fetch::Checkout>)> {
-    Ok(match fetch::parse_template_arg(value)? {
+/// Locate the template a `--template` value names, cloning it first if it is
+/// remote. `interactive` allows asking the user when it holds several and
+/// `wanted` does not say which.
+fn locate_template(
+    value: &str,
+    wanted: Option<&str>,
+    interactive: bool,
+) -> Result<(PathBuf, Option<fetch::Checkout>)> {
+    let (dir, checkout) = match fetch::parse_template_arg(value)? {
         fetch::TemplateRef::Local(dir) => (dir, None),
         fetch::TemplateRef::Repo { url, reference } => {
             log::info!(
@@ -442,17 +454,43 @@ fn locate_template(value: &str) -> Result<(PathBuf, Option<fetch::Checkout>)> {
             // The resolved commit, so a generated project can be traced back to
             // exactly what produced it even when the ref later moves.
             log::info!("Template resolved to {url}@{}", checkout.commit);
-            (checkout.root.clone(), Some(checkout))
+            (checkout.dir.clone(), Some(checkout))
         }
-    })
+    };
+
+    let chosen = match discover::select(discover::find_templates(&dir)?, wanted)? {
+        discover::Selection::One(chosen) => chosen,
+        discover::Selection::Ambiguous(all) if interactive => Select::new(
+            "This template source holds several templates. Pick one:",
+            all,
+        )
+        .prompt()?,
+        discover::Selection::Ambiguous(all) => bail!(
+            "`{value}` holds more than one template; pick one with `--template-name`:\n{}",
+            discover::list(&all)
+        ),
+    };
+
+    Ok((chosen.dir_in(&dir), checkout))
 }
 
-fn template_source(args: &Args) -> Result<(TemplateSource, Option<fetch::Checkout>)> {
+fn template_source(
+    args: &Args,
+    interactive: bool,
+) -> Result<(TemplateSource, Option<fetch::Checkout>)> {
     let Some(value) = args.template.as_ref() else {
+        // Not a clap `requires`: `subcommand_negates_reqs` would waive it.
+        if args.template_name.is_some() {
+            bail!("`--template-name` picks among the templates `--template` holds; pass that too");
+        }
         return Ok((TemplateSource::Bundled, None));
     };
 
-    let (root, checkout) = locate_template(&value.to_string_lossy())?;
+    let (root, checkout) = locate_template(
+        &value.to_string_lossy(),
+        args.template_name.as_deref(),
+        interactive,
+    )?;
 
     log::warn!(
         "⚠️  Generating from the external template at `{}`. A template controls \
@@ -475,7 +513,7 @@ static HELP: LazyLock<HelpText> = LazyLock::new(HelpText::build);
 impl HelpText {
     fn build() -> Self {
         let external = help_requested()
-            .then(template_arg_from_env)
+            .then(|| flag_value(env::args(), "--template"))
             .flatten()
             .and_then(|value| match Self::external(&value) {
                 Ok(text) => Some(text),
@@ -500,7 +538,8 @@ impl HelpText {
 
     fn external(value: &str) -> Result<Self> {
         // The checkout must outlive reading the template out of it.
-        let (root, _checkout) = locate_template(value)?;
+        let wanted = flag_value(env::args(), "--template-name");
+        let (root, _checkout) = locate_template(value, wanted.as_deref(), false)?;
         Ok(Self::describe(&Loaded::open(TemplateSource::Directory(
             root,
         ))?))
@@ -520,21 +559,17 @@ fn help_requested() -> bool {
     env::args().any(|arg| ["-h", "--help", "help"].contains(&arg.as_str()))
 }
 
-/// The `--template` value, read straight from the process arguments.
-fn template_arg_from_env() -> Option<String> {
-    template_arg(env::args())
-}
-
-fn template_arg(args: impl IntoIterator<Item = String>) -> Option<String> {
+/// The value of `flag`, read straight from the process arguments.
+fn flag_value(args: impl IntoIterator<Item = String>, flag: &str) -> Option<String> {
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
         if arg == "--" {
             return None;
         }
-        if let Some(value) = arg.strip_prefix("--template=") {
+        if let Some(value) = arg.strip_prefix(flag).and_then(|v| v.strip_prefix('=')) {
             return Some(value.to_string());
         }
-        if arg == "--template" {
+        if arg == flag {
             return args.next();
         }
     }
@@ -643,7 +678,7 @@ fn main() -> Result<()> {
     let mut args = Args::parse();
 
     if let Some(subcommand) = args.subcommands.take() {
-        let (source, checkout) = template_source(&args)?;
+        let (source, checkout) = template_source(&args, false)?;
         let origin = template_origin(&source, checkout.as_ref())?;
         return subcommand.handle(&Loaded::open(source)?, &origin);
     }
@@ -657,7 +692,7 @@ fn main() -> Result<()> {
     }
 
     // Held for the whole run: a cloned template is deleted when this drops.
-    let (source, checkout) = template_source(&args)?;
+    let (source, checkout) = template_source(&args, !args.headless)?;
     let origin = template_origin(&source, checkout.as_ref())?;
     let loaded = Loaded::open(source)?;
 
@@ -1249,7 +1284,7 @@ mod test {
     }
 
     fn template_arg_of(args: &[&str]) -> Option<String> {
-        template_arg(args.iter().map(|a| a.to_string()))
+        flag_value(args.iter().map(|a| a.to_string()), "--template")
     }
 
     #[test]
@@ -1272,6 +1307,51 @@ mod test {
         assert_eq!(
             template_arg_of(&["esp-generate", "--", "--template", "dir"]),
             None
+        );
+    }
+
+    #[test]
+    fn several_templates_without_a_name_are_refused_when_nobody_can_be_asked() {
+        let dir = discover::scratch(&[
+            ("a/metadata.toml", discover::MANIFEST),
+            ("b/metadata.toml", discover::MANIFEST),
+        ]);
+        let err = locate_template(&dir.path().to_string_lossy(), None, false)
+            .err()
+            .expect("several templates and no name must be refused")
+            .to_string();
+        assert!(err.contains("--template-name"), "{err}");
+
+        let (root, _) = locate_template(&dir.path().to_string_lossy(), Some("b"), false).unwrap();
+        assert_eq!(root, dir.path().join("b"));
+    }
+
+    /// Not `<dir>/.`, which is what a user would otherwise be shown.
+    #[test]
+    fn a_directory_that_is_a_template_is_located_as_itself() {
+        let dir = discover::scratch(&[("metadata.toml", discover::MANIFEST)]);
+        let (root, _) = locate_template(&dir.path().to_string_lossy(), None, false).unwrap();
+        assert_eq!(root, dir.path());
+    }
+
+    #[test]
+    fn a_template_name_without_a_template_is_refused() {
+        let args =
+            Args::try_parse_from(["esp-generate", "--template-name", "a", "list-options"]).unwrap();
+        let err = template_source(&args, false)
+            .err()
+            .expect("`--template-name` alone must be refused")
+            .to_string();
+        assert!(err.contains("--template-name"), "{err}");
+    }
+
+    #[test]
+    fn the_template_argument_is_not_confused_with_template_name() {
+        let args = ["esp-generate", "--template-name=a", "--template-name", "b"];
+        assert_eq!(template_arg_of(&args), None);
+        assert_eq!(
+            flag_value(args.iter().map(|a| a.to_string()), "--template-name").as_deref(),
+            Some("a")
         );
     }
 
@@ -1643,7 +1723,7 @@ mod test {
             if path.starts_with('/') { "" } else { "/" }
         );
         let checkout = fetch::clone(&url, None).unwrap();
-        let source = TemplateSource::Directory(checkout.root.clone());
+        let source = TemplateSource::Directory(checkout.dir.clone());
 
         assert_eq!(
             template_origin(&source, Some(&checkout)).unwrap(),

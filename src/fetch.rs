@@ -5,15 +5,11 @@
 //! reuses the user's existing credentials (so a private template repo works),
 //! and it costs no new dependencies or archive-extraction surface.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 use tempfile::TempDir;
-
-use esp_generate::manifest::{MANIFEST_PATH, Manifest};
-use esp_generate::source::is_skipped_dir;
-use walkdir::WalkDir;
 
 /// What a `--template` value names.
 #[derive(Debug, PartialEq, Eq)]
@@ -70,14 +66,14 @@ pub fn parse_template_arg(value: &str) -> Result<TemplateRef> {
 
 /// A cloned repository, deleted when this is dropped.
 pub struct Checkout {
-    pub root: PathBuf,
+    pub dir: PathBuf,
     /// In the form cargo accepts as a `git` dependency.
     pub url: String,
     pub commit: String,
     _clone: TempDir,
 }
 
-/// Clone `url` shallowly and locate the template inside it.
+/// Clone `url` shallowly.
 pub fn clone(url: &str, reference: Option<&str>) -> Result<Checkout> {
     let clone = tempfile::Builder::new()
         .prefix("esp-generate-template-")
@@ -124,10 +120,8 @@ pub fn clone(url: &str, reference: Option<&str>) -> Result<Checkout> {
         .trim()
         .to_string();
 
-    let root = find_template_root(path)?;
-
     Ok(Checkout {
-        root,
+        dir: path.to_path_buf(),
         url: cargo_url(url),
         commit,
         _clone: clone,
@@ -139,51 +133,6 @@ fn cargo_url(url: &str) -> String {
     match url.split_once(':') {
         Some((host, path)) if !url.contains("://") => format!("ssh://{host}/{path}"),
         _ => url.to_string(),
-    }
-}
-
-/// Find the one directory in `dir` holding a template manifest.
-fn find_template_root(dir: &Path) -> Result<PathBuf> {
-    let mut found = Vec::new();
-
-    for entry in WalkDir::new(dir)
-        .into_iter()
-        .filter_entry(|e| !is_skipped_dir(e))
-    {
-        let entry = entry.with_context(|| format!("reading {}", dir.display()))?;
-        if !entry.file_type().is_file() || entry.file_name() != MANIFEST_PATH {
-            continue;
-        }
-        let Ok(raw) = std::fs::read_to_string(entry.path()) else {
-            continue;
-        };
-        if Manifest::parse(&raw).is_err() {
-            continue;
-        }
-
-        let holder = entry.path().parent().unwrap_or(dir);
-        let relative = holder.strip_prefix(dir).unwrap_or(Path::new(""));
-        found.push(match relative.to_string_lossy().as_ref() {
-            "" => ".".to_string(),
-            other => other.replace('\\', "/"),
-        });
-    }
-
-    match found.len() {
-        0 => bail!(
-            "no template found: nothing in the repository is a directory containing a \
-             `{MANIFEST_PATH}` that parses as a template manifest"
-        ),
-        1 if found[0] == "." => Ok(dir.to_path_buf()),
-        1 => Ok(dir.join(&found[0])),
-        _ => {
-            found.sort();
-            bail!(
-                "the repository holds more than one template: {}. \
-                 Clone it and point `--template` at the one you want.",
-                found.join(", ")
-            )
-        }
     }
 }
 
@@ -267,90 +216,5 @@ mod test {
     fn something_that_is_neither_is_refused() {
         let err = parse_template_arg("./not/a/real/path").unwrap_err();
         assert!(err.to_string().contains("does not look like a repository"));
-    }
-
-    fn scratch(files: &[(&str, &str)]) -> PathBuf {
-        let root = std::env::temp_dir().join(format!(
-            "esp-generate-fetch-test-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        let _ = std::fs::remove_dir_all(&root);
-        for (path, contents) in files {
-            let full = root.join(path);
-            std::fs::create_dir_all(full.parent().unwrap()).unwrap();
-            std::fs::write(full, contents).unwrap();
-        }
-        root
-    }
-
-    const MANIFEST: &str = "sdk_version = \"0.1.0\"\n";
-
-    #[test]
-    fn the_template_may_live_in_a_subdirectory() {
-        let root = scratch(&[
-            ("README.md", "a repo that is not itself a template\n"),
-            ("templates/board/metadata.toml", MANIFEST),
-            ("templates/board/template.yaml", "options: []\n"),
-        ]);
-        assert_eq!(
-            find_template_root(&root).unwrap(),
-            root.join("templates/board")
-        );
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    /// `metadata.toml` is a common enough name that finding one proves nothing;
-    /// it has to parse as a manifest.
-    /// The common case: the repository is the template. It must not render as
-    /// `<clone>/.` in the path a user is shown.
-    #[test]
-    fn a_repository_may_itself_be_the_template() {
-        let root = scratch(&[
-            ("metadata.toml", MANIFEST),
-            ("template.yaml", "options: []\n"),
-        ]);
-        assert_eq!(find_template_root(&root).unwrap(), root);
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    /// A clone carries its own `.git`, which holds no template and is not UTF-8.
-    #[test]
-    fn the_walk_does_not_descend_into_git_or_target() {
-        let root = scratch(&[
-            ("tpl/metadata.toml", MANIFEST),
-            (".git/modules/x/metadata.toml", MANIFEST),
-            ("target/debug/metadata.toml", MANIFEST),
-        ]);
-        assert_eq!(find_template_root(&root).unwrap(), root.join("tpl"));
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    #[test]
-    fn an_unrelated_metadata_toml_is_not_a_template() {
-        let root = scratch(&[
-            ("docs/metadata.toml", "title = \"nothing to do with us\"\n"),
-            ("tpl/metadata.toml", MANIFEST),
-        ]);
-        assert_eq!(find_template_root(&root).unwrap(), root.join("tpl"));
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    #[test]
-    fn a_repository_with_no_template_says_so() {
-        let root = scratch(&[("README.md", "nothing here\n")]);
-        let err = find_template_root(&root).unwrap_err().to_string();
-        assert!(err.contains("no template found"), "{err}");
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    /// Picking one silently would make the choice depend on directory order.
-    #[test]
-    fn several_templates_are_reported_rather_than_guessed_between() {
-        let root = scratch(&[("a/metadata.toml", MANIFEST), ("b/metadata.toml", MANIFEST)]);
-        let err = find_template_root(&root).unwrap_err().to_string();
-        assert!(err.contains("more than one template"), "{err}");
-        assert!(err.contains('a') && err.contains('b'), "{err}");
-        std::fs::remove_dir_all(&root).unwrap();
     }
 }

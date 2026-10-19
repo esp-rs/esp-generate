@@ -29,39 +29,53 @@ const VERSION: Version = release(0, 5, 0);
 /// The selection group the chip options belong to.
 const GROUP: &str = "chip";
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display, strum::EnumString,
-)]
-#[strum(serialize_all = "kebab-case")]
-pub enum Chip {
-    Esp32,
-    Esp32c2,
-    Esp32c3,
-    Esp32c5,
-    Esp32c6,
-    Esp32c61,
-    Esp32h2,
-    Esp32s2,
-    Esp32s3,
-    Esp32s31,
+macro_rules! chips {
+    (
+        $($variant:ident => $display:expr,)+
+    ) => {
+        #[derive(
+            Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display, strum::EnumString,
+        )]
+        #[strum(serialize_all = "kebab-case")]
+        pub enum Chip {
+            $(
+                #[doc = $display]
+                $variant,
+            )*
+        }
+
+        impl Chip {
+            fn metadata(self) -> esp_metadata_generated::Chip {
+                match self {
+                    $(Chip::$variant => esp_metadata_generated::Chip::$variant,)*
+                }
+            }
+
+            /// The chip's name as a person writes it.
+            pub fn display_name(self) -> &'static str {
+                match self {
+                    $(Chip::$variant => $display,)*
+                }
+            }
+        }
+    }
+}
+
+chips! {
+    Esp32 => "ESP32 (v3.0 and later)",
+    Esp32c2 => "ESP32-C2",
+    Esp32c3 => "ESP32-C3",
+    Esp32c5 => "ESP32-C5",
+    Esp32c6 => "ESP32-C6",
+    Esp32c61 => "ESP32-C61",
+    Esp32h2 => "ESP32-H2",
+    Esp32s2 => "ESP32-S2",
+    Esp32s3 => "ESP32-S3",
+    Esp32s31 => "ESP32-S31",
+    Esp32p4 => "ESP32-P4 (v3.0 and later)",
 }
 
 impl Chip {
-    fn metadata(self) -> esp_metadata_generated::Chip {
-        match self {
-            Chip::Esp32 => esp_metadata_generated::Chip::Esp32,
-            Chip::Esp32c2 => esp_metadata_generated::Chip::Esp32c2,
-            Chip::Esp32c3 => esp_metadata_generated::Chip::Esp32c3,
-            Chip::Esp32c5 => esp_metadata_generated::Chip::Esp32c5,
-            Chip::Esp32c6 => esp_metadata_generated::Chip::Esp32c6,
-            Chip::Esp32c61 => esp_metadata_generated::Chip::Esp32c61,
-            Chip::Esp32h2 => esp_metadata_generated::Chip::Esp32h2,
-            Chip::Esp32s2 => esp_metadata_generated::Chip::Esp32s2,
-            Chip::Esp32s3 => esp_metadata_generated::Chip::Esp32s3,
-            Chip::Esp32s31 => esp_metadata_generated::Chip::Esp32s31,
-        }
-    }
-
     fn dram2_region(self) -> &'static MemoryRegion {
         self.metadata()
             .memory_layout()
@@ -85,25 +99,6 @@ impl Chip {
     /// Whether this chip is Xtensa rather than RISC-V.
     pub fn is_xtensa(self) -> bool {
         self.metadata().is_xtensa()
-    }
-
-    /// The chip's name as a person writes it.
-    ///
-    /// Not derivable from the variant: `Esp32c61` is "ESP32-C61", and the
-    /// hyphenation doesn't follow from the kebab-case option name either.
-    pub fn display_name(self) -> &'static str {
-        match self {
-            Chip::Esp32 => "ESP32",
-            Chip::Esp32c2 => "ESP32-C2",
-            Chip::Esp32c3 => "ESP32-C3",
-            Chip::Esp32c5 => "ESP32-C5",
-            Chip::Esp32c6 => "ESP32-C6",
-            Chip::Esp32c61 => "ESP32-C61",
-            Chip::Esp32h2 => "ESP32-H2",
-            Chip::Esp32s2 => "ESP32-S2",
-            Chip::Esp32s3 => "ESP32-S3",
-            Chip::Esp32s31 => "ESP32-S31",
-        }
     }
 
     /// This chip's `chip.…` fields. Cheap: a refcounted share of a map built

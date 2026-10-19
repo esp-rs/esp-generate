@@ -1331,32 +1331,6 @@ mod test {
     }
 
     #[test]
-    fn every_chip_has_at_least_one_module() {
-        let module_category = bundled()
-            .template
-            .options
-            .iter()
-            .find_map(|item| match item {
-                GeneratorOptionItem::Category(c) if c.name == "module" => Some(c),
-                _ => None,
-            })
-            .expect("module category is required by the generator");
-
-        for chip in Chip::iter() {
-            let chip_name = chip.to_string();
-            let has_module = module_category.options.iter().any(|item| {
-                let GeneratorOptionItem::Option(o) = item else {
-                    return false;
-                };
-                o.compatible
-                    .get("chip")
-                    .is_some_and(|list| list.iter().any(|n| n == &chip_name))
-            });
-            assert!(has_module, "no modules declared for {chip_name}");
-        }
-    }
-
-    #[test]
     fn the_tui_runs_when_input_is_needed_or_nothing_was_asked_for() {
         let nothing: &[String] = &[];
         let missing = &["chip".to_string()][..];

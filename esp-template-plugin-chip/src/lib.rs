@@ -62,7 +62,7 @@ macro_rules! chips {
 }
 
 chips! {
-    Esp32 => "ESP32",
+    Esp32 => "ESP32 (v3.0 and later)",
     Esp32c2 => "ESP32-C2",
     Esp32c3 => "ESP32-C3",
     Esp32c5 => "ESP32-C5",
@@ -72,7 +72,7 @@ chips! {
     Esp32s2 => "ESP32-S2",
     Esp32s3 => "ESP32-S3",
     Esp32s31 => "ESP32-S31",
-    Esp32p4 => "ESP32-P4",
+    Esp32p4 => "ESP32-P4 (v3.0 and later)",
 }
 
 impl Chip {

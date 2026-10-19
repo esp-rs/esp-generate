@@ -85,6 +85,7 @@ options:
         - esp32h2
         - esp32s3
         - esp32s31
+        - esp32p4
 
   - !Option
     name: probe-rs

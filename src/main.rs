@@ -458,7 +458,14 @@ fn locate_template(
         }
     };
 
-    let chosen = match discover::select(discover::find_templates(&dir)?, wanted)? {
+    let found = discover::find_templates(&dir)?;
+    if wanted.is_none() {
+        for not_a_template in &found.skipped {
+            log::warn!("Not a template, ignored: {not_a_template}");
+        }
+    }
+
+    let chosen = match discover::select(found.templates, wanted)? {
         discover::Selection::One(chosen) => chosen,
         discover::Selection::Ambiguous(all) if interactive => Select::new(
             "This template source holds several templates. Pick one:",

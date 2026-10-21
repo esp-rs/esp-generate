@@ -1,8 +1,10 @@
 //! Finding the templates in a directory, and picking one.
 //!
 //! Whatever `--template` names — a local directory or a fresh clone — may be a
-//! template, or may hold several. A directory with a manifest is a template and
-//! is not searched further, so templates do not nest.
+//! template, or may hold several. The same rule decides it everywhere, the
+//! searched directory included: a directory is a template when its manifest
+//! parses, or when it does not but an option tree sits beside it. A template is
+//! not searched further, so templates do not nest.
 
 use std::path::{Path, PathBuf};
 
@@ -24,30 +26,52 @@ pub struct Candidate {
     pub problem: Option<String>,
 }
 
+/// A `metadata.toml` that is not a template's: it does not parse as a manifest,
+/// and no option tree sits beside it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Skipped {
+    /// The manifest file, relative to the directory searched, `/`-separated.
+    pub path: String,
+    pub reason: String,
+}
+
+impl std::fmt::Display for Skipped {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "`{}`: {}", self.path, self.reason)
+    }
+}
+
 impl Candidate {
-    /// The template in `dir`, or `None` if `dir` holds no template.
+    /// What `dir` holds: `None` without a manifest, otherwise a template or a
+    /// manifest that is not one.
     ///
-    /// A manifest that parses makes one. So does one that does not, as long as
-    /// an option tree sits beside it: that is a broken template, which must be
-    /// reported rather than skipped — skipping it could leave a different
-    /// template looking like the only choice.
-    fn read(dir: &Path, path: String) -> Option<Self> {
+    /// A manifest that parses makes a template. So does one that does not, as
+    /// long as an option tree sits beside it: that is a broken template, listed
+    /// with what is wrong rather than skipped — skipping it could leave a
+    /// different template looking like the only choice.
+    fn read(dir: &Path, path: String) -> Option<Result<Self, Skipped>> {
         let raw = std::fs::read_to_string(dir.join(MANIFEST_PATH)).ok()?;
-        match Manifest::parse(&raw) {
-            Ok(manifest) => Some(Candidate {
+        Some(match Manifest::parse(&raw) {
+            Ok(manifest) => Ok(Candidate {
                 path,
                 name: manifest.name,
                 description: manifest.description,
                 problem: None,
             }),
-            Err(e) if dir.join(OPTION_TREE_PATH).is_file() => Some(Candidate {
+            Err(e) if dir.join(OPTION_TREE_PATH).is_file() => Ok(Candidate {
                 path,
                 name: String::new(),
                 description: String::new(),
-                problem: Some(format!("{e:#}")),
+                problem: Some(format!("{e}")),
             }),
-            Err(_) => None,
-        }
+            Err(e) => Err(Skipped {
+                path: match path.as_str() {
+                    "." => MANIFEST_PATH.to_string(),
+                    _ => format!("{path}/{MANIFEST_PATH}"),
+                },
+                reason: format!("{e}"),
+            }),
+        })
     }
 
     /// Where this template is, given the directory it was found in.
@@ -77,22 +101,36 @@ impl std::fmt::Display for Candidate {
     }
 }
 
-/// The templates in `dir`, sorted by path.
+/// What [`find_templates`] found.
+#[derive(Debug)]
+pub struct Found {
+    /// Sorted by path.
+    pub templates: Vec<Candidate>,
+    /// Manifests that are not templates', for the caller to mention.
+    pub skipped: Vec<Skipped>,
+}
+
+/// The templates in `dir`.
 ///
-/// A `dir` holding a manifest is the template, and is not searched further —
-/// nor is any template found below it: templates do not nest. Its manifest is
-/// not parsed here, so loading it reports exactly what is wrong.
-pub fn find_templates(dir: &Path) -> Result<Vec<Candidate>> {
-    if dir.join(MANIFEST_PATH).is_file() {
-        return Ok(vec![Candidate {
-            path: ".".to_string(),
-            name: String::new(),
-            description: String::new(),
-            problem: None,
-        }]);
+/// `dir` itself is checked first, by the same rule as any directory below it;
+/// if it is a template, nothing below it is searched. A template that is
+/// recognisable but broken is still found, so loading it reports exactly what
+/// is wrong.
+pub fn find_templates(dir: &Path) -> Result<Found> {
+    let mut templates = Vec::new();
+    let mut skipped = Vec::new();
+
+    match Candidate::read(dir, ".".to_string()) {
+        Some(Ok(template)) => {
+            return Ok(Found {
+                templates: vec![template],
+                skipped,
+            });
+        }
+        Some(Err(not_a_template)) => skipped.push(not_a_template),
+        None => {}
     }
 
-    let mut found = Vec::new();
     let mut walk = WalkDir::new(dir)
         .min_depth(1)
         .into_iter()
@@ -100,27 +138,32 @@ pub fn find_templates(dir: &Path) -> Result<Vec<Candidate>> {
 
     while let Some(entry) = walk.next() {
         let entry = entry.with_context(|| format!("reading {}", dir.display()))?;
-        if !entry.path().join(MANIFEST_PATH).is_file() {
-            continue;
-        }
         let Some(relative) = relative_path(dir, entry.path()) else {
             continue;
         };
-        if let Some(candidate) = Candidate::read(entry.path(), relative) {
-            found.push(candidate);
-            walk.skip_current_dir();
+        match Candidate::read(entry.path(), relative) {
+            Some(Ok(template)) => {
+                templates.push(template);
+                walk.skip_current_dir();
+            }
+            Some(Err(not_a_template)) => skipped.push(not_a_template),
+            None => {}
         }
     }
 
-    if found.is_empty() {
-        bail!(
+    if templates.is_empty() {
+        let mut message = format!(
             "no template found in `{}`: no directory in it holds a `{MANIFEST_PATH}` that \
              parses as a template manifest, or one beside a `{OPTION_TREE_PATH}`",
             dir.display()
         );
+        for not_a_template in &skipped {
+            message.push_str(&format!("\n  {not_a_template}"));
+        }
+        bail!("{message}");
     }
-    found.sort_by(|a, b| a.path.cmp(&b.path));
-    Ok(found)
+    templates.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(Found { templates, skipped })
 }
 
 /// The outcome of picking among [`find_templates`]' results.
@@ -160,13 +203,6 @@ pub fn select(mut candidates: Vec<Candidate>, wanted: Option<&str>) -> Result<Se
     };
 
     let path = normalise(wanted);
-    let is_root_only = matches!(candidates.as_slice(), [only] if only.path == ".");
-    if is_root_only && path != "." {
-        bail!(
-            "`--template-name {wanted}`: the directory is itself a template, and templates \
-             inside a template are not supported"
-        );
-    }
     if let Some(i) = candidates.iter().position(|c| c.path == path) {
         return Ok(Selection::One(candidates.swap_remove(i)));
     }
@@ -177,6 +213,11 @@ pub fn select(mut candidates: Vec<Candidate>, wanted: Option<&str>) -> Result<Se
         .collect();
     match named.len() {
         1 => Ok(Selection::One(named.remove(0).clone())),
+        0 if matches!(candidates.as_slice(), [only] if only.path == ".") => bail!(
+            "no template named `{wanted}`: the directory is itself a template, and templates \
+             inside a template are not supported:\n{}",
+            list(&candidates)
+        ),
         0 => bail!(
             "no template named `{wanted}`. Available:\n{}",
             list(&candidates)
@@ -219,7 +260,7 @@ mod test {
 
     /// The path of the template picked out of `dir`.
     fn picked(dir: &Path, wanted: Option<&str>) -> Result<String> {
-        match select(find_templates(dir)?, wanted)? {
+        match select(find_templates(dir)?.templates, wanted)? {
             Selection::One(c) => Ok(c.path),
             Selection::Ambiguous(all) => bail!("ambiguous:\n{}", list(&all)),
         }
@@ -279,7 +320,8 @@ mod test {
     #[test]
     fn several_templates_are_left_for_the_user_to_choose_between() {
         let root = scratch(&[("b/metadata.toml", MANIFEST), ("a/metadata.toml", MANIFEST)]);
-        let Selection::Ambiguous(all) = select(find_templates(root.path()).unwrap(), None).unwrap()
+        let Selection::Ambiguous(all) =
+            select(find_templates(root.path()).unwrap().templates, None).unwrap()
         else {
             panic!("two nested templates must not be guessed between");
         };
@@ -289,10 +331,13 @@ mod test {
 
     /// The root's manifest is not parsed during discovery, so loading it can say
     /// what is wrong — not "no template found".
+    /// Broken but recognisable by its option tree, the root is still the
+    /// template, so loading it can say what is wrong — not "no template found".
     #[test]
     fn a_template_at_the_root_is_used_without_searching_further() {
         let root = scratch(&[
             ("metadata.toml", "sdk_version = \"9.0.0\"\n"),
+            ("template.yaml", "options: []\n"),
             ("examples/x/metadata.toml", MANIFEST),
         ]);
         assert_eq!(picked(root.path(), None).unwrap(), ".");
@@ -304,6 +349,58 @@ mod test {
         assert!(err.contains("not supported"), "{err}");
     }
 
+    /// The root is held to the same rule as any directory below it: a manifest
+    /// of someone else's there must not hide the templates.
+    #[test]
+    fn an_unrelated_metadata_toml_at_the_root_does_not_hide_templates() {
+        let root = scratch(&[
+            ("metadata.toml", "title = \"another tool's file\"\n"),
+            ("nested/metadata.toml", MANIFEST),
+        ]);
+        let found = find_templates(root.path()).unwrap();
+        assert_eq!(found.skipped.len(), 1);
+        assert_eq!(found.skipped[0].path, "metadata.toml");
+        assert_eq!(picked(root.path(), None).unwrap(), "nested");
+    }
+
+    #[test]
+    fn a_template_at_the_root_is_named_by_its_manifest_name() {
+        let root = scratch(&[(
+            "metadata.toml",
+            "sdk_version = \"0.1.0\"\nname = \"solo\"\n",
+        )]);
+        assert_eq!(picked(root.path(), Some("solo")).unwrap(), ".");
+    }
+
+    /// Without an option tree beside it, a manifest that does not parse may be
+    /// another tool's file, so it is not a template — but it is not dropped
+    /// silently either: the caller gets it, with the reason, to mention.
+    #[test]
+    fn a_manifest_that_is_not_a_template_is_reported() {
+        let root = scratch(&[
+            ("a/metadata.toml", "sdk_version = \"9.0.0\"\n"),
+            ("b/metadata.toml", MANIFEST),
+        ]);
+        let found = find_templates(root.path()).unwrap();
+        assert_eq!(found.templates.len(), 1);
+        let [skipped] = found.skipped.as_slice() else {
+            panic!("expected one skipped manifest: {:?}", found.skipped);
+        };
+        assert_eq!(skipped.path, "a/metadata.toml");
+        assert!(
+            skipped.reason.contains("esp-template-sdk 9.0.0"),
+            "{skipped}"
+        );
+    }
+
+    #[test]
+    fn finding_nothing_names_what_was_passed_over() {
+        let root = scratch(&[("docs/metadata.toml", "title = \"nothing to do with us\"\n")]);
+        let err = find_templates(root.path()).unwrap_err().to_string();
+        assert!(err.contains("no template found"), "{err}");
+        assert!(err.contains("docs/metadata.toml"), "{err}");
+    }
+
     #[test]
     fn templates_do_not_nest() {
         let root = scratch(&[
@@ -313,6 +410,7 @@ mod test {
         ]);
         let paths: Vec<_> = find_templates(root.path())
             .unwrap()
+            .templates
             .into_iter()
             .map(|c| c.path)
             .collect();
@@ -328,7 +426,8 @@ mod test {
             ("a/template.yaml", "options: []\n"),
             ("b/metadata.toml", MANIFEST),
         ]);
-        let Selection::Ambiguous(all) = select(find_templates(root.path()).unwrap(), None).unwrap()
+        let Selection::Ambiguous(all) =
+            select(find_templates(root.path()).unwrap().templates, None).unwrap()
         else {
             panic!("a broken template must still be a choice");
         };
@@ -392,14 +491,22 @@ mod test {
     #[test]
     fn a_candidate_is_located_with_the_platform_separator() {
         let root = scratch(&[("templates/board/metadata.toml", MANIFEST)]);
-        let [board] = find_templates(root.path()).unwrap().try_into().unwrap();
+        let [board] = find_templates(root.path())
+            .unwrap()
+            .templates
+            .try_into()
+            .unwrap();
         assert_eq!(
             board.dir_in(root.path()),
             root.path().join("templates").join("board")
         );
 
         let root = scratch(&[("metadata.toml", MANIFEST)]);
-        let [itself] = find_templates(root.path()).unwrap().try_into().unwrap();
+        let [itself] = find_templates(root.path())
+            .unwrap()
+            .templates
+            .try_into()
+            .unwrap();
         assert_eq!(itself.dir_in(root.path()), root.path());
     }
 }

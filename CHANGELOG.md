@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [1.5.0] - 2026-10-23
+
+### Added
+
 - **Several templates in one repository or directory.** `--template` now finds every template under the path or clone and lets you choose: the TUI asks, and `--template-name` names one by its directory (`templates/board`, `./templates/board/`) or, failing that, the `name` in its `metadata.toml`. Headless runs, `list-options`, `explain` and `check` list the candidates instead of guessing. One rule decides what a template is, for the directory named and every directory below it alike: its `metadata.toml` parses as a manifest, or it does not but a `template.yaml` sits beside it — a broken template, listed with what is wrong rather than skipped. A template is not searched further, so templates do not nest. Any other `metadata.toml` is not a template, and is reported rather than silently passed over: in a warning when the template was not picked by name, and in the error when no template is found. A local directory is searched the same way as a clone.
 - **`template_origin`, `template_repo`, `template_url` and `template_commit`.** A template can now see where it was read from. `template_origin` is `"clone"` when `--template` cloned a repository, which also sets `template_url` and `template_commit` to its URL and resolved commit, and `"repository"` when it named a local directory inside a git repository, which also sets `template_repo` to that repository's root, relative to the generated project and `/`-separated. Only the values for the origin at hand are set, and a directory outside any git checkout sets none, so a template that reads one that does not apply fails instead of rendering an empty string. A template shipped inside the project it scaffolds can depend on that project either way, branching on `template_origin`: `git = "{{ template_url }}", rev = "{{ template_commit }}"`, or `path = "{{ template_repo }}/my-crate"`. (#374)
 - **Templates that are not Cargo projects.** `metadata.toml` gained a `[project]` section: `type = "other"` tells the binary not to read a `Cargo.toml` — for the `esp-hal` version and the MSRV — and turns off the toolchain pre-flight, `cargo fmt` and the `Cargo.toml` reformat, leaving `git init`. Each of those is also settable on its own through `[project.steps]`, so a Rust template can drop one without dropping the rest. `type = "rust"` is the default, so existing templates are unaffected. (#372)
@@ -314,7 +324,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/esp-rs/esp-generate/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/esp-rs/esp-generate/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/esp-rs/esp-generate/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/esp-rs/esp-generate/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/esp-rs/esp-generate/compare/v1.1.0...v1.2.0

@@ -21,7 +21,7 @@ pub const RESERVED_DIR: &str = ".template";
 /// The manifest itself, and the option tree, are the binary's and the SDK's
 /// inputs — never output.
 pub const MANIFEST_PATH: &str = "metadata.toml";
-const OPTION_TREE_PATH: &str = "template.yaml";
+pub const OPTION_TREE_PATH: &str = "template.yaml";
 
 /// Whether `path` is template machinery rather than a candidate output file.
 ///
@@ -39,10 +39,8 @@ pub struct Manifest {
     /// The `esp-template-sdk` version this template is written against.
     pub sdk_version: contract::Version,
     #[serde(default)]
-    #[allow(dead_code)]
     pub name: String,
     #[serde(default)]
-    #[allow(dead_code)]
     pub description: String,
     /// Plugins this template depends on, in declaration order — which decides
     /// which one wins if two contribute the same name, so a sorted map would

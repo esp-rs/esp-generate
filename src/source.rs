@@ -9,7 +9,7 @@
 //! lands on before `emit.as` gets a say.
 
 use std::borrow::Cow;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use walkdir::{DirEntry, WalkDir};
 
@@ -26,6 +26,14 @@ pub fn is_skipped_dir(entry: &DirEntry) -> bool {
     entry.depth() > 0
         && entry.file_type().is_dir()
         && SKIPPED_DIRS.contains(&entry.file_name().to_string_lossy().as_ref())
+}
+
+/// `path` relative to `root`, `/`-separated whatever the platform — the
+/// spelling every root-relative path in this crate uses. `None` if `path` is
+/// not under `root`.
+pub fn relative_path(root: &Path, path: &Path) -> Option<String> {
+    let relative = path.strip_prefix(root).ok()?;
+    Some(relative.to_string_lossy().replace('\\', "/"))
 }
 
 /// A template's file set.
@@ -91,14 +99,9 @@ impl TemplateSource {
                         continue;
                     }
 
-                    let relative = entry
-                        .path()
-                        .strip_prefix(root)
-                        .map_err(|_| {
-                            format!("`{}` is outside the template", entry.path().display())
-                        })?
-                        .to_string_lossy()
-                        .replace('\\', "/");
+                    let relative = relative_path(root, entry.path()).ok_or_else(|| {
+                        format!("`{}` is outside the template", entry.path().display())
+                    })?;
 
                     let contents = std::fs::read_to_string(entry.path()).map_err(|e| {
                         format!("cannot read `{relative}`: {e} (templates must be UTF-8 text)")

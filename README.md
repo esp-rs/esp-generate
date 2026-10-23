@@ -41,7 +41,7 @@ You can also directly download pre-compiled [release binaries] or use [`cargo-bi
 
 ## Writing a template
 
-`--template <dir-or-repo>` generates from a template other than the bundled one, and works with every command below.
+`--template <dir-or-repo>` generates from a template other than the bundled one, and works with every command below. A repository or directory may hold several templates: the TUI asks which to use, and `--template-name <name>` picks one by its directory or the `name` in its `metadata.toml`.
 
 ```
 esp-generate check --template ./my-template

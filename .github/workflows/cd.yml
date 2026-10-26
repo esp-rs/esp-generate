@@ -73,6 +73,8 @@ jobs:
     name: Publishing to Crates.io
     needs: publish-artifacts
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the template crate tags
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -94,5 +96,10 @@ jobs:
               echo "$crate $version is already published, skipping"
             else
               cargo publish -p "$crate" --allow-dirty
+              # esp-generate is tagged by the release itself; the template crates get their own tag
+              if [ "$crate" != esp-generate ]; then
+                git tag "$crate-v$version"
+                git push origin "$crate-v$version"
+              fi
             fi
           done

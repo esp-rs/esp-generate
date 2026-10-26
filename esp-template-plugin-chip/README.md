@@ -1,7 +1,6 @@
 # `esp-template-plugin-chip`
 
 [![Crates.io](https://img.shields.io/crates/v/esp-template-plugin-chip?labelColor=1C2C2E&color=C96329&logo=Rust&style=flat-square)](https://crates.io/crates/esp-template-plugin-chip)
-[![docs.rs](https://img.shields.io/docsrs/esp-template-plugin-chip?labelColor=1C2C2E&color=C96329&logo=rust&style=flat-square)](https://docs.rs/esp-template-plugin-chip)
 ![MSRV](https://img.shields.io/badge/MSRV-1.86-blue?labelColor=1C2C2E&logo=Rust&style=flat-square)
 ![Crates.io](https://img.shields.io/crates/l/esp-template-plugin-chip?labelColor=1C2C2E&style=flat-square)
 

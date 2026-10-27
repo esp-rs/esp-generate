@@ -41,7 +41,7 @@ jobs:
         if: matrix.job.target == 'x86_64-unknown-linux-gnu'
         run: |
           cargo build --release
-          cargo publish --dry-run --allow-dirty
+          cargo publish --workspace --dry-run --allow-dirty
       - name: Install cross and build
         if: matrix.job.target == 'aarch64-unknown-linux-gnu'
         run: |
@@ -73,6 +73,8 @@ jobs:
     name: Publishing to Crates.io
     needs: publish-artifacts
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the template crate tags
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -83,6 +85,21 @@ jobs:
       - name: Enable caching
         uses: Swatinem/rust-cache@v2
       - name: Cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_API_KEY }}
         run: |
           cargo build --release
-          cargo publish --allow-dirty --token ${{ secrets.CARGO_API_KEY }}
+          # Dependency order; crate versions that were not bumped for this release are already published
+          for crate in esp-template-sdk esp-template-plugin-chip esp-generate; do
+            version=$(cargo metadata --format-version 1 --no-deps | jq -r --arg crate "$crate" '.packages[] | select(.name == $crate) | .version')
+            if curl -sf -A "esp-generate-cd (https://github.com/esp-rs/esp-generate)" "https://crates.io/api/v1/crates/$crate/$version" > /dev/null; then
+              echo "$crate $version is already published, skipping"
+            else
+              cargo publish -p "$crate" --allow-dirty
+              # esp-generate is tagged by the release itself; the template crates get their own tag
+              if [ "$crate" != esp-generate ]; then
+                git tag "$crate-v$version"
+                git push origin "$crate-v$version"
+              fi
+            fi
+          done

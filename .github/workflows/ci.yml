@@ -145,6 +145,7 @@ jobs:
       - name: Create or update GitHub issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           ISSUE_NUMBER=$(gh issue list \
             --state open \
